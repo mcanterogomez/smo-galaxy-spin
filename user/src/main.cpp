@@ -49,7 +49,29 @@ const al::Nerve* getNerveAt(uintptr_t offset)
     return (const al::Nerve*)((((u64)malloc) - 0x00724b94) + offset);
 }
 
-const uintptr_t nrvPlayerActorHakoniwaDemo = 0x01d789f8; // Locks player in place
+const uintptr_t disallowedPlayerNrvOffsets[] = {
+    // Fall, Wait, Squat, Run
+    0x01d78930, // Slope
+    // Rolling, SpinCap, Jump, CapCatch, WallAir
+    0x01d78960, // WallCatch
+    0x01d78968, // GrabCeil
+    0x01d78970, // PoleClimb
+    0x01d78978, // HipDrop
+    //0x01d78980, // HeadSliding
+    // LongJump, SandSink, SandGeyser, Rise, Swim
+    0x01d789b0, // Damage
+    0x01d789b8, // DamageSwim
+    0x01d789c0, // DamageFire
+    0x01d789c8, // Press
+    0x01d789d0, // Hack
+    0x01d789d8, // EndHack
+    0x01d789e0, // Bind
+    0x01d789e8, // Camera
+    0x01d789f0, // Abyss
+    0x01d789f8, // Demo
+    0x01d78a00, // Dead
+};
+
 
 int framesAfterLastSpin = 0;
 
@@ -64,9 +86,15 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook>{
 
         const char* curMainAnim = player->mPlayerAnimator->mCurrentAnim;
 
-        bool isActionCanStartSpin = !al::isEqualSubString(curMainAnim, "Motorcycle") && !al::isEqualSubString(curMainAnim, "SphinxRide"); 
+        bool isInForbiddenState = false;
+        for(int i = 0; i < sizeof(disallowedPlayerNrvOffsets) / sizeof(uintptr_t); i++){
+            if (al::isNerve(player, getNerveAt(disallowedPlayerNrvOffsets[i]))) {
+                isInForbiddenState = true;
+                break;
+            }
+        }
 
-        if(!player->mPlayerHackKeeper->mCurrentHackActor && al::isPadTriggerY(100) && framesAfterLastSpin > 30 && !al::isNerve(player, getNerveAt(nrvPlayerActorHakoniwaDemo)) && isActionCanStartSpin && !PlayerFunction::isPlayerDeadStatus(player)){
+        if(al::isPadTriggerY(100) && framesAfterLastSpin > 30 && !isInForbiddenState){
             animator->startSubAnim("SpinSeparate");
             al::validateHitSensor(player, "GalaxySpin");
             framesAfterLastSpin = 0;
