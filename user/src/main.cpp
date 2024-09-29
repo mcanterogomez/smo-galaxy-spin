@@ -108,12 +108,14 @@ namespace rs {
     bool sendMsgHackAttack(al::HitSensor* receiver, al::HitSensor* sender);
     bool sendMsgCapTrampolineAttack(al::HitSensor* receiver, al::HitSensor* sender);
     bool sendMsgHammerBrosHammerEnemyAttack(al::HitSensor* receiver, al::HitSensor* sender);
+    bool sendMsgCapReflect(al::HitSensor* receiver, al::HitSensor* sender);
+    bool sendMsgCapAttack(al::HitSensor* receiver, al::HitSensor* sender);
 }
 
 struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSensorHook>{
     static void Callback(PlayerActorHakoniwa* thisPtr, al::HitSensor* target, al::HitSensor* source){
         if(al::isSensorName(target, "GalaxySpin") && thisPtr->mPlayerAnimator && al::isEqualString(thisPtr->mPlayerAnimator->mCurrentSubAnim, "SpinSeparate")){
-            if(rs::sendMsgCapTrampolineAttack(source, target) || al::sendMsgEnemyAttackFire(source, target, nullptr) || al::sendMsgExplosion(source, target, nullptr) || rs::sendMsgHackAttack(source, target) || rs::sendMsgHammerBrosHammerEnemyAttack(source, target)){
+            if(rs::sendMsgCapTrampolineAttack(source, target) || al::sendMsgEnemyAttackFire(source, target, nullptr) || al::sendMsgExplosion(source, target, nullptr) || rs::sendMsgHackAttack(source, target) || rs::sendMsgHammerBrosHammerEnemyAttack(source, target) || rs::sendMsgCapReflect(source, target) || rs::sendMsgCapAttack(source, target)){
                 //al::invalidateHitSensor(thisPtr, "GalaxySpin");
                 return;
             }
