@@ -11,6 +11,8 @@ public:
 
     bool isAnim(const sead::SafeStringBase<char>& animName) const;
 
+    bool isAnimEnd() const;
+
     f32 getAnimFrame() const;
     f32 getAnimFrameMax() const;
     f32 getAnimFrameRate() const;
