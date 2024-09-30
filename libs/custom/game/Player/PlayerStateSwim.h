@@ -4,5 +4,6 @@
 
 class PlayerStateSwim : public al::ActorStateBase {
 public:
+    void startCapThrow();
 public:
 };
