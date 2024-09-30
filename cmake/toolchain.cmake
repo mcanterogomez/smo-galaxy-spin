@@ -90,7 +90,7 @@ endif()
 if (FTP_TITLE_ID)
   set(CONFIGURE_FTP_TITLE_ID "-DFTP_TITLE_ID=${FTP_TITLE_ID}")
 endif()
-configure_file("${CMAKE_CURRENT_LIST_DIR}/../.vscode/settings.template.jsonc" "${CMAKE_CURRENT_LIST_DIR}/../.vscode/settings.json" @ONLY)
+#configure_file("${CMAKE_CURRENT_LIST_DIR}/../.vscode/settings.template.jsonc" "${CMAKE_CURRENT_LIST_DIR}/../.vscode/settings.json" @ONLY)
 
 set(CMAKE_C_COMPILER_WORKS true)
 set(CMAKE_CXX_COMPILER_WORKS true)

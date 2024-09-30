@@ -25,6 +25,8 @@
 #include "Util/PlayerCollisionUtil.h"
 #include "Library/Base/StringUtil.h"
 #include "Library/Nerve/NerveUtil.h"
+#include "Player/PlayerModelHolder.h"
+#include "Library/Effect/EffectSystemInfo.h"
 
 static void setupLogging() {
     using namespace mallow::log::sink;
@@ -326,6 +328,11 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
             if(!isInHitBuffer){
                 hitBuffer[hitBufferCount++] = source;
                 if(rs::sendMsgCapTrampolineAttack(source, target) || al::sendMsgEnemyAttackFire(source, target, nullptr) || al::sendMsgExplosion(source, target, nullptr) || rs::sendMsgHackAttack(source, target) || rs::sendMsgHammerBrosHammerEnemyAttack(source, target) || rs::sendMsgCapReflect(source, target) || rs::sendMsgCapAttack(source, target)) {
+                    al::LiveActor* playerModel = thisPtr->mPlayerModelHolder->findModelActor("Normal");
+                    if(playerModel){
+                        sead::Vector3 sourceOffsetFromPlayer = al::getTrans(al::getSensorHost(source));
+                        al::tryEmitEffect(playerModel, "Hit", &sourceOffsetFromPlayer);
+                    }
                     return;
                 }
             }
