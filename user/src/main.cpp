@@ -35,6 +35,10 @@ namespace rs {
 namespace PlayerEquipmentFunction {
     bool isEquipmentNoCapThrow(const PlayerEquipmentUser*);
 }
+class PlayerCarryKeeper {
+public:
+    bool isCarry() const;
+};
 
 static void setupLogging() {
     using namespace mallow::log::sink;
@@ -86,9 +90,17 @@ bool isGalaxyAfterStandardSpin = false;  // special case, as switching between s
 bool isStandardAfterGalaxySpin = false;
 int galaxyFakethrowRemainder = -1;  // -1 = inactive, -2 = request to start, positive = remaining frames
 bool triggerGalaxySpin = false;
+bool prevIsCarry = false;
 
 struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttack>{
     static bool Callback(PlayerActorHakoniwa* player, bool a2) {
+        // do not allow Y to trigger both pickup and spin on seeds (for picking up rocks, this function is not called)
+        bool newIsCarry = player->mPlayerCarryKeeper->isCarry();
+        if (newIsCarry && !prevIsCarry) {
+            prevIsCarry = newIsCarry;
+            return false;
+        }
+        prevIsCarry = newIsCarry;
         if (al::isPadTriggerY(-1) && !rs::is2D(player) && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mPlayerEquipmentUser)) {
             if(player->mPlayerAnimator->isAnim("SpinSeparate"))
                 return false;
@@ -371,6 +383,11 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     break;
                 }
             }
+            {
+                const al::Nerve* sourceNrv = al::getSensorHost(source)->getNerveKeeper()->getCurrentNerve();
+                isInHitBuffer |= sourceNrv == getNerveAt(0x1D03268);  // GrowPlantSeedNrvHold
+                isInHitBuffer |= sourceNrv == getNerveAt(0x1D00EC8);  // GrowFlowerSeedNrvHold
+            }
             if(!isInHitBuffer){
                 if(
                     rs::sendMsgCapTrampolineAttack(source, target) ||
@@ -384,7 +401,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     al::sendMsgKickStoneAttackReflect(source, target) ||
                     al::sendMsgPlayerSpinAttack(source, target, nullptr)
                 ) {
-                    /*logLine("hit: %s", al::getSensorHost(source)->mActorName);
+                    /*logLine("hit: %s => %s", al::getSensorHost(source)->mActorName, source->mName);
                     const char* name = al::getSensorHost(source)->mActorName;
                     while(*name != 0)
                         mallow::log::log("%d ", *name++);*/
@@ -591,4 +608,6 @@ extern "C" void userMain() {
     yButtonPatcher.WriteInst(exl::armv8::inst::Movk(exl::armv8::reg::W1, 100));  // isTriggerHackAction
     yButtonPatcher.Seek(0x44C718);
     yButtonPatcher.WriteInst(exl::armv8::inst::Movk(exl::armv8::reg::W1, 100));  // isTriggerAction
+    yButtonPatcher.Seek(0x44C5F0);
+    yButtonPatcher.WriteInst(exl::armv8::inst::Movk(exl::armv8::reg::W1, 100));  // isTriggerCarryStart
 }
