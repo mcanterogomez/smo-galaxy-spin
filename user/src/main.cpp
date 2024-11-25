@@ -1,8 +1,10 @@
 #include <exl/hook/base.hpp>
 #include <mallow/config.hpp>
+#include <mallow/init/initLogging.hpp>
 #include <mallow/logging/logger.hpp>
 #include <mallow/mallow.hpp>
 
+#include "ModOptions.h"
 #include "Player/PlayerActionGroundMoveControl.h"
 #include "Player/PlayerActorHakoniwa.h"
 #include "Player/PlayerSpinCapAttack.h"
@@ -20,7 +22,6 @@
 #include "Library/LiveActor/ActorPoseKeeper.h"
 #include "Library/Math/MathAngleUtil.h"
 #include "Library/Base/StringUtil.h"
-#include "Library/Nerve/NerveSetupUtil.h"
 #include "Project/HitSensor/HitSensor.h"
 #include "Player/PlayerAnimator.h"
 #include "Util/PlayerCollisionUtil.h"
@@ -28,6 +29,7 @@
 #include "Library/Nerve/NerveUtil.h"
 #include "Player/PlayerModelHolder.h"
 #include "Library/Effect/EffectSystemInfo.h"
+#include "Library/Nerve/NerveSetupUtil.h"
 
 namespace rs {
     bool is2D(const IUseDimension*);
@@ -40,33 +42,6 @@ public:
     bool isCarry() const;
 };
 
-static void setupLogging() {
-    using namespace mallow::log::sink;
-    // This sink writes to a file on the SD card.
-    static FileSink fileSink = FileSink("sd:/switch/mallow.log");
-    addLogSink(&fileSink);
-
-    // This sink writes to a network socket on a host computer. Raw logs are sent with no
-    auto config = mallow::config::getConfig();
-    if (config["logger"]["ip"].is<const char*>()) {
-        static NetworkSink networkSink = NetworkSink(
-            config["logger"]["ip"],
-            config["logger"]["port"] | 3080
-        );
-        if (networkSink.isSuccessfullyConnected())
-            addLogSink(&networkSink);
-        else
-            mallow::log::logLine("Failed to connect to the network sink");
-    } else {
-        mallow::log::logLine("The network logger is unconfigured.");
-        if (config["logger"].isNull()) {
-            mallow::log::logLine("Please configure the logger in config.json");
-        } else if (!config["logger"]["ip"].is<const char*>()) {
-            mallow::log::logLine("The IP address is missing or invalid.");
-        }
-    }
-}
-
 using mallow::log::logLine;
 
 //Mod code
@@ -74,6 +49,20 @@ using mallow::log::logLine;
 const al::Nerve* getNerveAt(uintptr_t offset)
 {
     return (const al::Nerve*)((((u64)malloc) - 0x00724b94) + offset);
+}
+
+bool isPadTriggerGalaxySpin(int port){
+    switch (mallow::config::getConfg<ModOptions>()->spinButton) {
+        case 'L':
+            return al::isPadTriggerL(port);
+        case 'R':
+            return al::isPadTriggerR(port);
+        case 'Y':
+            return al::isPadTriggerY(port);
+        case 'X':
+        default:
+            return al::isPadTriggerX(port);
+    }
 }
 
 al::LiveActor* hitBuffer[0x40];
@@ -101,7 +90,7 @@ struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryA
             return false;
         }
         prevIsCarry = newIsCarry;
-        if (al::isPadTriggerY(-1) && !rs::is2D(player) && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mPlayerEquipmentUser)) {
+        if (isPadTriggerGalaxySpin(-1) && !rs::is2D(player) && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mPlayerEquipmentUser)) {
             if(player->mPlayerAnimator->isAnim("SpinSeparate"))
                 return false;
             if (canGalaxySpin) {
@@ -335,7 +324,7 @@ struct PlayerStateSwimExeSwimSpinCapSurface : public mallow::hook::Trampoline<Pl
 struct PlayerStateSwimExeSwimHipDropHeadSliding : public mallow::hook::Trampoline<PlayerStateSwimExeSwimHipDropHeadSliding>{
     static void Callback(PlayerStateSwim* thisPtr){
         Orig(thisPtr);
-        if(al::isPadTriggerY(-1))
+        if(isPadTriggerGalaxySpin(-1))
             if(((PlayerActorHakoniwa*)thisPtr->mActor)->tryActionCapSpinAttackImpl(true))
                 thisPtr->startCapThrow();
     }
@@ -422,7 +411,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
 // these are not supposed to be able to switch to capthrow mode, so check Y and current state manually
 struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerActorHakoniwaExeRolling>{
     static void Callback(PlayerActorHakoniwa* thisPtr){
-        if(al::isPadTriggerY(-1) && !thisPtr->mPlayerAnimator->isAnim("SpinSeparate") && canGalaxySpin) {
+        if(isPadTriggerGalaxySpin(-1) && !thisPtr->mPlayerAnimator->isAnim("SpinSeparate") && canGalaxySpin) {
             triggerGalaxySpin = true;
             al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
             return;
@@ -432,7 +421,7 @@ struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerAct
 };
 struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActorHakoniwaExeSquat>{
     static void Callback(PlayerActorHakoniwa* thisPtr){
-        if(al::isPadTriggerY(-1) && !thisPtr->mPlayerAnimator->isAnim("SpinSeparate") && canGalaxySpin) {
+        if(isPadTriggerGalaxySpin(-1) && !thisPtr->mPlayerAnimator->isAnim("SpinSeparate") && canGalaxySpin) {
             triggerGalaxySpin = true;
             al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
             return;
@@ -456,17 +445,6 @@ struct PadTriggerYHook : public mallow::hook::Trampoline<PadTriggerYHook>{
     };
 };
 
-struct nnMainHook : public mallow::hook::Trampoline<nnMainHook>{
-    static void Callback(){
-        nn::fs::MountSdCardForDebug("sd");
-        mallow::config::loadConfig(true);
-
-        setupLogging();
-        //logLine("Hello from smo!");
-        Orig();
-    }
-};
-
 struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook>{
     static void Callback(PlayerActorHakoniwa* thisPtr){
         Orig(thisPtr);
@@ -479,7 +457,7 @@ void tryCapSpinAndRethrow(PlayerActorHakoniwa* player, bool a2) {
         if(!trySpin)
             return;
 
-        if(!al::isPadTriggerY(-1)) {  // standard throw or fakethrow
+        if(!isPadTriggerGalaxySpin(-1)) {  // standard throw or fakethrow
             if(canStandardSpin) {
                 // tries a standard spin, is allowed to do so
                 al::setNerve(player, getNerveAt(spinCapNrvOffset));
@@ -509,7 +487,7 @@ void tryCapSpinAndRethrow(PlayerActorHakoniwa* player, bool a2) {
         }
 
         // not attempting or allowed to initiate a spin, so check if should be fakethrow
-        if(al::isPadTriggerY(-1) && galaxyFakethrowRemainder == -1 && !player->mPlayerAnimator->isAnim("SpinSeparate")) {
+        if(isPadTriggerGalaxySpin(-1) && galaxyFakethrowRemainder == -1 && !player->mPlayerAnimator->isAnim("SpinSeparate")) {
             // Y button pressed, start a galaxy fakethrow
             galaxyFakethrowRemainder = -2;
             return;
@@ -520,7 +498,7 @@ void tryCapSpinAndRethrow(PlayerActorHakoniwa* player, bool a2) {
         if(!trySpin)
             return;
 
-        if(!al::isPadTriggerY(-1)) {  // standard throw or fakethrow
+        if(!isPadTriggerGalaxySpin(-1)) {  // standard throw or fakethrow
             if(canStandardSpin) {
                 // tries a standard spin, is allowed to do so => should never happen, but better safe than sorry
                 al::setNerve(player, getNerveAt(spinCapNrvOffset));
@@ -555,15 +533,33 @@ struct InputIsTriggerActionXexclusivelyHook : public mallow::hook::Trampoline<In
     static bool Callback(const al::LiveActor* actor, int port){
         if(port == 100)
             return Orig(actor, PlayerFunction::getPlayerInputPort(actor));
-        return Orig(actor, port) && al::isPadTriggerX(port);
+        bool canCapThrow = true;
+        switch (mallow::config::getConfg<ModOptions>()->spinButton) {
+            case 'Y':
+                canCapThrow = al::isPadTriggerX(port);
+            case 'X':
+                canCapThrow = al::isPadTriggerY(port);
+        }
+        return Orig(actor, port) && canCapThrow;
+    }
+};
+
+struct InputIsTriggerActionCameraResetHook : public mallow::hook::Trampoline<InputIsTriggerActionCameraResetHook>{
+    static bool Callback(const al::LiveActor* actor, int port){
+        switch (mallow::config::getConfg<ModOptions>()->spinButton) {
+            case 'L':
+                return al::isPadTriggerR(port);
+            case 'R':
+                return al::isPadTriggerL(port);
+        }
+        return Orig(actor, port);
     }
 };
 
 extern "C" void userMain() {
     exl::hook::Initialize();
-    //nnMainHook::InstallAtSymbol("nnMain");
     PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
-
+    mallow::init::installHooks();
     // trigger spin instead of cap throw
     PlayerTryActionCapSpinAttack::InstallAtSymbol("_ZN19PlayerActorHakoniwa26tryActionCapSpinAttackImplEb");
     PlayerSpinCapAttackAppear::InstallAtSymbol("_ZN18PlayerStateSpinCap6appearEv");
@@ -603,6 +599,7 @@ extern "C" void userMain() {
     // disable Y button for everything else
     //PadTriggerYHook::InstallAtSymbol("_ZN2al13isPadTriggerYEi");
     InputIsTriggerActionXexclusivelyHook::InstallAtSymbol("_ZN19PlayerInputFunction15isTriggerActionEPKN2al9LiveActorEi");
+    InputIsTriggerActionCameraResetHook::InstallAtSymbol("_ZN19PlayerInputFunction20isTriggerCameraResetEPKN2al9LiveActorEi");
     // manually allow hacks and "special things" to use Y button
     exl::patch::CodePatcher yButtonPatcher(0x44C9FC);
     yButtonPatcher.WriteInst(exl::armv8::inst::Movk(exl::armv8::reg::W1, 100));  // isTriggerHackAction
