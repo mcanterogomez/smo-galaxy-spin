@@ -424,7 +424,7 @@ struct DisallowCancelOnWaterSurfaceSpinPatch : public mallow::hook::Inline<Disal
 };
 
 namespace al {
-    //bool sendMsgPlayerTrampleReflect(HitSensor* receiver, HitSensor* sender, ComboCounter* comboCounter);  
+    bool sendMsgPlayerTrampleReflect(HitSensor* receiver, HitSensor* sender, ComboCounter* comboCounter);  
     bool sendMsgKickStoneAttackReflect(HitSensor* receiver, HitSensor* sender);
     bool sendMsgPlayerObjHipDropReflect(HitSensor *receiver, HitSensor *sender, ComboCounter *comboCounter);
 }
@@ -462,11 +462,12 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 isInHitBuffer |= sourceNrv == getNerveAt(0x1D00EC8);  // GrowFlowerSeedNrvHold
                 isInHitBuffer |= sourceNrv == getNerveAt(0x1D22B78);  // RadishNrvHold
             
-                // do not "disable" when trying to hit BlockQuestion with TenCoin & Motorcycle
+                // do not "disable" when trying to hit BlockQuestion/BlockBrick with TenCoin & Motorcycle
                 isInHitBuffer &= sourceNrv != getNerveAt(0x1CD6758);
+                isInHitBuffer &= sourceNrv != getNerveAt(0x1CD4BB0);
+                isInHitBuffer &= sourceNrv != getNerveAt(0x1CD6FA0);
                 isInHitBuffer &= sourceNrv != getNerveAt(0x1D170D0);
-            }
-            if(!isInHitBuffer){
+
                 if (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"CapSwitch")) {
                     al::setNerve(al::getSensorHost(source), getNerveAt(0x1CE3E18));
                     hitBuffer[hitBufferCount++] = al::getSensorHost(source);
@@ -478,7 +479,6 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos);
                     return;
                 }
-                const al::Nerve* sourceNrv = al::getSensorHost(source)->getNerveKeeper()->getCurrentNerve();
                 if (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Stake") &&
                     sourceNrv == getNerveAt(0x1D36D20)) {
                     hitBuffer[hitBufferCount++] = al::getSensorHost(source);
@@ -490,7 +490,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     effectPos += direction * 75.0f;
                     al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos);
                     return;
-                 }
+                }
                 if (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Radish") &&
                     sourceNrv == getNerveAt(0x1D22B70)) {
                     hitBuffer[hitBufferCount++] = al::getSensorHost(source);
@@ -502,7 +502,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     effectPos += direction * 75.0f;
                     al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos);
                     return;
-                 }
+                }
                 if (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"BossRaidRivet") &&
                     sourceNrv == getNerveAt(0x1C5F330)) {
                     hitBuffer[hitBufferCount++] = al::getSensorHost(source);
@@ -514,7 +514,9 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     effectPos += direction * 75.0f;
                     al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos);
                     return;
-                 }
+                }
+            }
+            if(!isInHitBuffer){
                 if (al::isSensorNpc(source) &&
                 !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"YoshiFruit")){
                     if (
@@ -533,10 +535,8 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
                         direction.normalize();
                         effectPos += direction * 75.0f;
-                        //(al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"RadiconCar") &&
                         (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"CollectAnimal") &&
-                        al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos));//) ||
-                        //al::tryEmitEffect(al::getSensorHost(target), "HitSmall", &effectPos));
+                        al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos));
                         return;
                     }
                 }
@@ -544,8 +544,6 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"PartsModel")){
                     sead::Vector3 fireDir = al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target));
                     fireDir.normalize();
-                    /*sead::Vector3f faceDir;
-                    al::calcQuatFront(&faceDir, al::getSensorHost(target));*/
                     if (
                         (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Breeda") &&
                         rs::sendMsgWanwanEnemyAttack(source, target)) ||
@@ -575,17 +573,13 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
                         direction.normalize();
                         effectPos += direction * 75.0f;
-                        al::deleteEffect(al::getSensorHost(source), "Kick");
-                        al::deleteEffect(al::getSensorHost(source), "HitMark");
-                        al::deleteEffect(al::getSensorHost(source), "CapReflect");
-                        al::deleteEffect(al::getSensorHost(source), "HitSmall");
-                        /*((al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"CapBeamer") ||
-                        al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"MayorItem") ||
-                        al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Kakku") ||
-                        al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Megane") ||
-                        al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Jugem")) &&
-                        al::tryEmitEffect(al::getSensorHost(target), "HitSmall", &effectPos)) ||*/
-                        //al::tryEmitEffect(al::getSensorHost(source), "Hit", &effectPos) ||
+                        if (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"BombTail")) {
+                            al::deleteEffect(al::getSensorHost(source), "CapReflect");
+                        };
+                        if (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"FireBlower")) {
+                            al::deleteEffect(al::getSensorHost(source), "HitMark");
+                            al::deleteEffect(al::getSensorHost(source), "HitSmall");
+                        };
                         (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Shibaken") &&
                         !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"MofumofuScrap") &&
                         !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"GrowerWorm") &&
@@ -601,7 +595,6 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         rs::sendMsgEnemyAttackStrong(source, target) ||
                         rs::sendMsgHackAttack(source, target) ||
 
-                        //(!al::isEqualString(al::getSensorHost(source)->mActorName, "乗れるスフィンクス") && 
                         (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ReactionObject") &&
                         !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"SphinxRide") &&
                         al::sendMsgExplosion(source, target, nullptr)) ||
@@ -619,10 +612,6 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
                         direction.normalize();
                         effectPos += direction * 75.0f;
-                        //(!al::isEqualString(al::getSensorHost(source)->mActorName, "反応するオブジェ") &&
-                        /*((al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"CapRack") ||
-                        al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Radish")) &&
-                        al::tryEmitEffect(al::getSensorHost(target), "HitSmall", &effectPos)) ||*/
                         (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ReactionObject") &&
                         !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ElectricWireTarget") &&
                         !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"VolleyballBall") &&
@@ -640,14 +629,10 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         direction.normalize();
                         effectPos += direction * 75.0f;
                         al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos);
-                        //al::tryEmitEffect(al::getSensorHost(target), "HitSmall", &effectPos);
                         return;                           
                         
                     }
                    if (
-                        /*(!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"SneakingMan") &&
-                        !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Radish") &&
-                        al::sendMsgPlayerTrampleReflect(source, target, nullptr)) ||*/
                         (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ShineTower") &&
                         al::sendMsgPlayerObjHipDropReflect(source, target, nullptr)) ||
 
@@ -663,8 +648,10 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
                         direction.normalize();
                         effectPos += direction * 75.0f;
-                        al::deleteEffect(al::getSensorHost(source), "Hit");
-                        al::deleteEffect(al::getSensorHost(source), "HitSmall");
+                        if (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Souvenir")) {
+                            al::deleteEffect(al::getSensorHost(source), "Hit");
+                            al::deleteEffect(al::getSensorHost(source), "HitSmall");
+                        };
                         (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Souvenir") &&
                         al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos));
                         return;
@@ -681,7 +668,6 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         direction.normalize();
                         effectPos += direction * 75.0f;
                         al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos);
-                        //al::tryEmitEffect(al::getSensorHost(target), "HitSmall", &effectPos);
                         return;
                     }
                 }
@@ -705,11 +691,6 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
                         direction.normalize();
                         effectPos += direction * 75.0f;
-                        al::deleteEffect(al::getSensorHost(source), "Hit");
-                        al::deleteEffect(al::getSensorHost(source), "HitSmall");
-                        //(!al::isEqualString(al::getSensorHost(source)->mActorName, "反応するオブジェ") &&
-                        /*(al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"CapBeamer") &&
-                        al::tryEmitEffect(al::getSensorHost(target), "HitSmall", &effectPos)) ||*/
                         (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ReactionObject") &&
                         !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"SphinxRide") &&
                         al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos));
@@ -723,8 +704,6 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
                         direction.normalize();
                         effectPos += direction * 75.0f;
-                        al::deleteEffect(al::getSensorHost(source), "Hit");
-                        al::deleteEffect(al::getSensorHost(source), "HitSmall");
                         (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"MofumofuScrap") &&
                         al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos));
                         return;                    
