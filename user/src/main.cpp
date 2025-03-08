@@ -83,7 +83,9 @@ bool prevIsCarry = false;
 
 int galaxySensorRemaining = -1;
 
-struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttack>{
+bool isPunchRight = false;
+
+struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttack> {
     static bool Callback(PlayerActorHakoniwa* player, bool a2) {
         // do not allow Y to trigger both pickup and spin on seeds (for picking up rocks, this function is not called)
         bool newIsCarry = player->mPlayerCarryKeeper->isCarry();
@@ -92,9 +94,14 @@ struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryA
             return false;
         }
         prevIsCarry = newIsCarry;
+
         if (isPadTriggerGalaxySpin(-1) && !rs::is2D(player) && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mPlayerEquipmentUser)) {
-            if(player->mPlayerAnimator->isAnim("SpinSeparate"))
-                return false;
+
+            if (player->mPlayerAnimator->isAnim("SpinSeparate") || 
+            player->mPlayerAnimator->isAnim("KoopaCapPunchR") || 
+            player->mPlayerAnimator->isAnim("KoopaCapPunchL"))
+            return false;
+    
             if (canGalaxySpin) {
                 triggerGalaxySpin = true;
             }
@@ -122,9 +129,14 @@ struct PlayerTryActionCapSpinAttackBindEnd : public mallow::hook::Trampoline<Pla
             return false;
         }
         prevIsCarry = newIsCarry;
+
         if (isPadTriggerGalaxySpin(-1) && !rs::is2D(player) && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mPlayerEquipmentUser)) {
-            if(player->mPlayerAnimator->isAnim("SpinSeparate"))
-                return false;
+
+            if (player->mPlayerAnimator->isAnim("SpinSeparate") || 
+            player->mPlayerAnimator->isAnim("KoopaCapPunchR") || 
+            player->mPlayerAnimator->isAnim("KoopaCapPunchL"))
+            return false;
+
             if (canGalaxySpin) {
                 triggerGalaxySpin = true;
             }
@@ -144,30 +156,38 @@ struct PlayerTryActionCapSpinAttackBindEnd : public mallow::hook::Trampoline<Pla
 };
 
 class PlayerStateSpinCapNrvGalaxySpinGround : public al::Nerve {
-public:
-    void execute(al::NerveKeeper* keeper) const override {
-        PlayerStateSpinCap* state = keeper->getParent<PlayerStateSpinCap>();
+    public:
+        void execute(al::NerveKeeper* keeper) const override {
+            PlayerStateSpinCap* state = keeper->getParent<PlayerStateSpinCap>();
+    
+            if(al::isFirstStep(state)) {
+                state->mAnimator->endSubAnim();
 
-        if(al::isFirstStep(state)) {
-            state->mAnimator->endSubAnim();
-            state->mAnimator->startAnim("SpinSeparate");
-            state->mAnimator->startSubAnim("SpinSeparate");
-            al::validateHitSensor(state->mActor, "GalaxySpin");
-            galaxySensorRemaining = 21;
+                isPunchRight = !isPunchRight;
+    
+                if (isPunchRight) {
+                    state->mAnimator->startAnim("KoopaCapPunchR");
+                    //state->mAnimator->startSubAnim("KoopaCapPunchR");
+                } else {
+                    state->mAnimator->startAnim("KoopaCapPunchL");
+                    //state->mAnimator->startSubAnim("KoopaCapPunchL");
+                }
+    
+                al::validateHitSensor(state->mActor, "GalaxySpin");
+                galaxySensorRemaining = 21;
+            }
+    
+            state->updateSpinGroundNerve();
+    
+            if(al::isGreaterStep(state, 21)) {
+                al::invalidateHitSensor(state->mActor, "GalaxySpin");
+            }
+    
+            if(state->mAnimator->isAnimEnd()) {
+                state->kill();
+            }
         }
-
-        state->updateSpinGroundNerve();
-
-        if(al::isGreaterStep(state, 21)) {
-            al::invalidateHitSensor(state->mActor, "GalaxySpin");
-        }
-
-        if(state->mAnimator->isAnimEnd()) {
-            state->kill();
-        }
-    }
-};
-
+    };
 class PlayerStateSpinCapNrvGalaxySpinAir : public al::Nerve {
 public:
     void execute(al::NerveKeeper* keeper) const override {
@@ -442,7 +462,11 @@ namespace rs {
 
 struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSensorHook>{
     static void Callback(PlayerActorHakoniwa* thisPtr, al::HitSensor* target, al::HitSensor* source){
-        if(al::isSensorName(target, "GalaxySpin") && thisPtr->mPlayerAnimator && (al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "SpinSeparate") || isGalaxySpin)){
+        if(al::isSensorName(target, "GalaxySpin") && thisPtr->mPlayerAnimator && 
+            (al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "SpinSeparate") ||  
+            al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "KoopaCapPunchR") || 
+            al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "KoopaCapPunchL") ||
+            isGalaxySpin)) {
             bool isInHitBuffer = false;
             for(int i = 0; i < hitBufferCount; i++){
                 if(hitBuffer[i] == al::getSensorHost(source)){
@@ -607,6 +631,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         direction.normalize();
                         effectPos += direction * 75.0f;
                         (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ReactionObject") &&
+                        !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"AirBubble") &&
                         !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ElectricWireTarget") &&
                         !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"VolleyballBall") &&
                         al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos));
@@ -900,7 +925,7 @@ extern "C" void userMain() {
     PlayerStateSpinCapIsEnableCancelHipDrop::InstallAtSymbol("_ZNK18PlayerStateSpinCap21isEnableCancelHipDropEv");
     PlayerStateSpinCapIsEnableCancelAir::InstallAtSymbol("_ZNK18PlayerStateSpinCap17isEnableCancelAirEv");
     PlayerStateSpinCapIsSpinAttackAir::InstallAtSymbol("_ZNK18PlayerStateSpinCap15isSpinAttackAirEv");
-    PlayerStateSpinCapIsEnableCancelGround::InstallAtSymbol("_ZNK18PlayerStateSpinCap20isEnableCancelGroundEv");
+    //PlayerStateSpinCapIsEnableCancelGround::InstallAtSymbol("_ZNK18PlayerStateSpinCap20isEnableCancelGroundEv");
     PlayerSpinCapAttackIsSeparateSingleSpin::InstallAtSymbol("_ZNK19PlayerSpinCapAttack20isSeparateSingleSpinEv");
     PlayerStateSwimExeSwimSpinCap::InstallAtSymbol("_ZN15PlayerStateSwim14exeSwimSpinCapEv");
     PlayerStateSwimExeSwimSpinCapSurface::InstallAtSymbol("_ZN15PlayerStateSwim21exeSwimSpinCapSurfaceEv");
@@ -914,7 +939,7 @@ extern "C" void userMain() {
     PlayerCarryKeeperIsCarryDuringSwimSpin::InstallAtOffset(0x489EE8);
 
     // allow triggering spin on roll and squat
-    PlayerActorHakoniwaExeRolling::InstallAtSymbol("_ZN19PlayerActorHakoniwa10exeRollingEv");
+    //PlayerActorHakoniwaExeRolling::InstallAtSymbol("_ZN19PlayerActorHakoniwa10exeRollingEv");
     PlayerActorHakoniwaExeSquat::InstallAtSymbol("_ZN19PlayerActorHakoniwa8exeSquatEv");
 
     // allow triggering another spin while falling from a spin
@@ -928,7 +953,7 @@ extern "C" void userMain() {
 
     // do not cancel momentum on spin
     PlayerConstGetSpinAirSpeedMax::InstallAtSymbol("_ZNK11PlayerConst18getSpinAirSpeedMaxEv");
-    PlayerConstGetSpinBrakeFrame::InstallAtSymbol("_ZNK11PlayerConst17getSpinBrakeFrameEv");
+    //PlayerConstGetSpinBrakeFrame::InstallAtSymbol("_ZNK11PlayerConst17getSpinBrakeFrameEv");
 
     // send out attack messages during spins
     PlayerAttackSensorHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa12attackSensorEPN2al9HitSensorES2_");
