@@ -423,12 +423,6 @@ struct DisallowCancelOnWaterSurfaceSpinPatch : public mallow::hook::Inline<Disal
     }
 };
 
-namespace al {
-    bool sendMsgPlayerTrampleReflect(HitSensor* receiver, HitSensor* sender, ComboCounter* comboCounter);  
-    bool sendMsgKickStoneAttackReflect(HitSensor* receiver, HitSensor* sender);
-    bool sendMsgPlayerObjHipDropReflect(HitSensor *receiver, HitSensor *sender, ComboCounter *comboCounter);
-}
-
 namespace rs {
     bool sendMsgHackAttack(al::HitSensor* receiver, al::HitSensor* sender);
     bool sendMsgCapAttack(al::HitSensor* receiver, al::HitSensor* sender);
@@ -448,16 +442,36 @@ namespace rs {
 
 struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSensorHook>{
     static void Callback(PlayerActorHakoniwa* thisPtr, al::HitSensor* target, al::HitSensor* source){
+
+        // Null check for thisPtr, target, and source
+        if (!thisPtr || !target || !source) {
+            return; // Exit early if any critical pointer is null
+        }
+
+        al::LiveActor* sourceHost = al::getSensorHost(source);
+        al::LiveActor* targetHost = al::getSensorHost(target);
+
+        // Null check for targetHost and sourceHost
+        if (!targetHost || !sourceHost) {
+            return; // Exit early if either targetHost or sourceHost is null
+        }
+
         if(al::isSensorName(target, "GalaxySpin") && thisPtr->mPlayerAnimator && (al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "SpinSeparate") || isGalaxySpin)){
             bool isInHitBuffer = false;
             for(int i = 0; i < hitBufferCount; i++){
-                if(hitBuffer[i] == al::getSensorHost(source)){
+                if(hitBuffer[i] == sourceHost){
                     isInHitBuffer = true;
                     break;
                 }
             }
-            if(al::getSensorHost(source) && al::getSensorHost(source)->getNerveKeeper()) {
-                const al::Nerve* sourceNrv = al::getSensorHost(source)->getNerveKeeper()->getCurrentNerve();
+
+            // Null check for sourceHost's NerveKeeper
+            if (!sourceHost->getNerveKeeper()) {
+                return; // Exit early if NerveKeeper is null
+            }
+
+            if(sourceHost && sourceHost->getNerveKeeper()) {
+                const al::Nerve* sourceNrv = sourceHost->getNerveKeeper()->getCurrentNerve();
                 isInHitBuffer |= sourceNrv == getNerveAt(0x1D03268);  // GrowPlantSeedNrvHold
                 isInHitBuffer |= sourceNrv == getNerveAt(0x1D00EC8);  // GrowFlowerSeedNrvHold
                 isInHitBuffer |= sourceNrv == getNerveAt(0x1D22B78);  // RadishNrvHold
@@ -468,60 +482,60 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 isInHitBuffer &= sourceNrv != getNerveAt(0x1CD6FA0);
                 isInHitBuffer &= sourceNrv != getNerveAt(0x1D170D0);
 
-                if (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"CapSwitch")) {
-                    al::setNerve(al::getSensorHost(source), getNerveAt(0x1CE3E18));
-                    hitBuffer[hitBufferCount++] = al::getSensorHost(source);
-                    sead::Vector3 effectPos = al::getTrans(al::getSensorHost(target));
-                    effectPos.y += 50.0f;
-                    sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
-                    direction.normalize();
-                    effectPos += direction * 75.0f;
-                    al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos);
-                    return;
-                }
-                if (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Stake") &&
+                if (al::isEqualSubString(typeid(*sourceHost).name(),"Stake") &&
                     sourceNrv == getNerveAt(0x1D36D20)) {
-                    hitBuffer[hitBufferCount++] = al::getSensorHost(source);
-                    al::setNerve(al::getSensorHost(source), getNerveAt(0x1D36D30));
-                    sead::Vector3 effectPos = al::getTrans(al::getSensorHost(target));
+                    hitBuffer[hitBufferCount++] = sourceHost;
+                    al::setNerve(sourceHost, getNerveAt(0x1D36D30));
+                    sead::Vector3 effectPos = al::getTrans(targetHost);
                     effectPos.y += 50.0f;
-                    sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
+                    sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                     direction.normalize();
                     effectPos += direction * 75.0f;
-                    al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos);
+                    al::tryEmitEffect(targetHost, "Hit", &effectPos);
                     return;
                 }
-                if (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Radish") &&
+                if (al::isEqualSubString(typeid(*sourceHost).name(),"Radish") &&
                     sourceNrv == getNerveAt(0x1D22B70)) {
-                    hitBuffer[hitBufferCount++] = al::getSensorHost(source);
-                    al::setNerve(al::getSensorHost(source), getNerveAt(0x1D22BD8));           
-                    sead::Vector3 effectPos = al::getTrans(al::getSensorHost(target));
+                    hitBuffer[hitBufferCount++] = sourceHost;
+                    al::setNerve(sourceHost, getNerveAt(0x1D22BD8));           
+                    sead::Vector3 effectPos = al::getTrans(targetHost);
                     effectPos.y += 50.0f;
-                    sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
+                    sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                     direction.normalize();
                     effectPos += direction * 75.0f;
-                    al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos);
+                    al::tryEmitEffect(targetHost, "Hit", &effectPos);
                     return;
                 }
-                if (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"BossRaidRivet") &&
+                if (al::isEqualSubString(typeid(*sourceHost).name(),"BossRaidRivet") &&
                     sourceNrv == getNerveAt(0x1C5F330)) {
-                    hitBuffer[hitBufferCount++] = al::getSensorHost(source);
-                    al::setNerve(al::getSensorHost(source), getNerveAt(0x1C5F338));
-                    sead::Vector3 effectPos = al::getTrans(al::getSensorHost(target));
+                    hitBuffer[hitBufferCount++] = sourceHost;
+                    al::setNerve(sourceHost, getNerveAt(0x1C5F338));
+                    sead::Vector3 effectPos = al::getTrans(targetHost);
                     effectPos.y += 50.0f;
-                    sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
+                    sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                     direction.normalize();
                     effectPos += direction * 75.0f;
-                    al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos);
+                    al::tryEmitEffect(targetHost, "Hit", &effectPos);
                     return;
                 }
             }
             if(!isInHitBuffer){
+                if (al::isEqualSubString(typeid(*sourceHost).name(),"CapSwitch")) {
+                    al::setNerve(sourceHost, getNerveAt(0x1CE3E18));
+                    hitBuffer[hitBufferCount++] = sourceHost;
+                    sead::Vector3 effectPos = al::getTrans(targetHost);
+                    effectPos.y += 50.0f;
+                    sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                    direction.normalize();
+                    effectPos += direction * 75.0f;
+                    al::tryEmitEffect(targetHost, "Hit", &effectPos);
+                    return;
+                }
                 if (al::isSensorNpc(source) &&
-                !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"YoshiFruit")){
+                !al::isEqualSubString(typeid(*sourceHost).name(),"YoshiFruit")){
                     if (
-                        ((al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"RadiconCar") ||
-                        al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"CollectAnimal")) &&
+                        ((al::isEqualSubString(typeid(*sourceHost).name(),"RadiconCar") ||
+                        al::isEqualSubString(typeid(*sourceHost).name(),"CollectAnimal")) &&
                         rs::sendMsgCapAttack(source, target)) ||
 
                         rs::sendMsgCapReflect(source, target) ||
@@ -529,32 +543,34 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         al::sendMsgEnemyAttack(source, target) ||
                         al::sendMsgPlayerTrampleReflect(source, target, nullptr)
                         ){
-                        hitBuffer[hitBufferCount++] = al::getSensorHost(source);
-                        sead::Vector3 effectPos = al::getTrans(al::getSensorHost(target));
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                         direction.normalize();
                         effectPos += direction * 75.0f;
-                        (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"CollectAnimal") &&
-                        al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos));
+                        if (al::isEqualSubString(typeid(*sourceHost).name(),"Frog")){
+                            al::tryDeleteEffect(targetHost, "HitSmall");}
+                        (!al::isEqualSubString(typeid(*sourceHost).name(),"CollectAnimal") &&
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos));
                         return;
                     }
                 }
                 if (al::isSensorEnemyBody(source) &&
-                    !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"PartsModel")){
-                    sead::Vector3 fireDir = al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target));
+                    !al::isEqualSubString(typeid(*sourceHost).name(),"PartsModel")){
+                    sead::Vector3 fireDir = al::getTrans(sourceHost) - al::getTrans(targetHost);
                     fireDir.normalize();
                     if (
-                        (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Breeda") &&
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"Breeda") &&
                         rs::sendMsgWanwanEnemyAttack(source, target)) ||
-                        (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"BreedaWanwan") &&
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"BreedaWanwan") &&
                         rs::sendMsgBreedaPush(source, target) &&
                         rs::sendMsgCapReflect(source, target)) ||
-                        (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ReflectBomb") &&
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"ReflectBomb") &&
                         rs::sendMsgTsukkunThrust(source, target, fireDir, 0, true)) ||
-                        (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Killer") &&
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"Killer") &&
                         rs::sendMsgKillerMagnumAttack(source, target)) ||
-                        (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"CapThrower") &&
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"CapThrower") &&
                         rs::sendMsgCapReflect(source, target)) ||
 
                         al::sendMsgKickStoneAttackReflect(source, target) ||
@@ -562,98 +578,100 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         al::sendMsgExplosion(source, target, nullptr) ||
                         rs::sendMsgCapAttack(source, target) ||
 
-                        (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ReflectBomb") &&
-                        !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Gunetter") &&
-                        !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"GunetterBody") &&
+                        (!al::isEqualSubString(typeid(*sourceHost).name(),"ReflectBomb") &&
+                        !al::isEqualSubString(typeid(*sourceHost).name(),"Gunetter") &&
+                        !al::isEqualSubString(typeid(*sourceHost).name(),"GunetterBody") &&
                         rs::sendMsgCapReflect(source, target))
                         ){
-                        hitBuffer[hitBufferCount++] = al::getSensorHost(source);
-                        sead::Vector3 effectPos = al::getTrans(al::getSensorHost(target));
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                         direction.normalize();
                         effectPos += direction * 75.0f;
-                        if (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"BombTail")) {
-                            al::deleteEffect(al::getSensorHost(source), "CapReflect");
-                        };
-                        if (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"FireBlower")) {
-                            al::deleteEffect(al::getSensorHost(source), "HitMark");
-                            al::deleteEffect(al::getSensorHost(source), "HitSmall");
-                        };
-                        (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Shibaken") &&
-                        !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"MofumofuScrap") &&
-                        !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"GrowerWorm") &&
-                        !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"FireBlowerCap") &&
-                        !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"CapThrowerCap") &&
-                        al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos));
+                        if (al::isEqualSubString(typeid(*sourceHost).name(),"BombTail")){
+                            al::tryDeleteEffect(sourceHost, "CapReflect");}
+                        if (al::isEqualSubString(typeid(*sourceHost).name(),"FireBlower")){
+                            al::tryDeleteEffect(sourceHost, "HitSmall");
+                            al::tryDeleteEffect(sourceHost, "HitMark");}
+                        (!al::isEqualSubString(typeid(*sourceHost).name(),"Shibaken") &&
+                        !al::isEqualSubString(typeid(*sourceHost).name(),"MofumofuScrap") &&
+                        !al::isEqualSubString(typeid(*sourceHost).name(),"GrowerWorm") &&
+                        !al::isEqualSubString(typeid(*sourceHost).name(),"FireBlowerCap") &&
+                        !al::isEqualSubString(typeid(*sourceHost).name(),"CapThrowerCap") &&
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos));
                         return;
                     }
                 }
                 if (al::isSensorMapObj(source) &&
-                    !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"CitySignal")){
+                    !al::isEqualSubString(typeid(*sourceHost).name(),"CitySignal")){
                     if ( 
                         rs::sendMsgEnemyAttackStrong(source, target) ||
                         rs::sendMsgHackAttack(source, target) ||
 
-                        (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ReactionObject") &&
-                        !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"SphinxRide") &&
+                        (!al::isEqualSubString(typeid(*sourceHost).name(),"ReactionObject") &&
+                        !al::isEqualSubString(typeid(*sourceHost).name(),"SphinxRide") &&
                         al::sendMsgExplosion(source, target, nullptr)) ||
 
-                        (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Radish") &&
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"Radish") &&
                         rs::sendMsgCapReflect(source, target)) ||
-                        (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"SneakingMan") &&
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"SneakingMan") &&
                         rs::sendMsgCapAttack(source, target)) ||
 
                         al::sendMsgPlayerSpinAttack(source, target, nullptr)
                         ){
-                        hitBuffer[hitBufferCount++] = al::getSensorHost(source);
-                        sead::Vector3 effectPos = al::getTrans(al::getSensorHost(target));
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                         direction.normalize();
                         effectPos += direction * 75.0f;
-                        (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ReactionObject") &&
-                        !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ElectricWireTarget") &&
-                        !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"VolleyballBall") &&
-                        al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos));
+                        if (al::isEqualSubString(typeid(*sourceHost).name(),"VolleyballBall")) {
+                            if (!al::isEffectEmitting(sourceHost, "SmashHit")) {
+                                al::tryEmitEffect(targetHost, "Hit", &effectPos);
+                            }
+                            return;
+                        }
+                        (!al::isEqualSubString(typeid(*sourceHost).name(),"ReactionObject") &&
+                        !al::isEqualSubString(typeid(*sourceHost).name(),"AirBubble") &&
+                        !al::isEqualSubString(typeid(*sourceHost).name(),"ElectricWireTarget") &&
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos));
                         return;
                     }
                     if (
-                        (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ShineTower") &&
+                        (!al::isEqualSubString(typeid(*sourceHost).name(),"ShineTower") &&
                         rs::sendMsgCapReflect(source, target))
                         ){
-                        hitBuffer[hitBufferCount++] = al::getSensorHost(source);
-                        sead::Vector3 effectPos = al::getTrans(al::getSensorHost(target));
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                         direction.normalize();
                         effectPos += direction * 75.0f;
-                        al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos);
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos);
                         return;                           
                         
                     }
                    if (
-                        (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ShineTower") &&
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"ShineTower") &&
                         al::sendMsgPlayerObjHipDropReflect(source, target, nullptr)) ||
 
-                        (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"HackFork") &&
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"HackFork") &&
                         al::sendMsgKickStoneAttackReflect(source, target)) ||
 
                         rs::sendMsgCapAttack(source, target) ||
                         rs::sendMsgCapItemGet(source, target)
                         ){
-                        hitBuffer[hitBufferCount++] = al::getSensorHost(source);
-                        sead::Vector3 effectPos = al::getTrans(al::getSensorHost(target));
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                         direction.normalize();
                         effectPos += direction * 75.0f;
-                        if (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Souvenir")) {
-                            al::deleteEffect(al::getSensorHost(source), "Hit");
-                            al::deleteEffect(al::getSensorHost(source), "HitSmall");
-                        };
-                        (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Souvenir") &&
-                        al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos));
+                        if (al::isEqualSubString(typeid(*sourceHost).name(),"Souvenir")){
+                            al::tryDeleteEffect(sourceHost, "HitSmall");}
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"Souvenir") &&
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos));
                         return;
                     }
                 }   
@@ -661,51 +679,52 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     if (
                         rs::sendMsgCapReflect(source, target)
                         ){
-                        hitBuffer[hitBufferCount++] = al::getSensorHost(source);
-                        sead::Vector3 effectPos = al::getTrans(al::getSensorHost(target));
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                         direction.normalize();
                         effectPos += direction * 75.0f;
-                        al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos);
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos);
                         return;
                     }
                 }
                 if (rs::tryGetCollidedWallSensor(thisPtr->mPlayerColliderHakoniwa) &&
-                    !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"FixMapParts") &&
-                    !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"CitySignal")){
+                    !al::isEqualSubString(typeid(*sourceHost).name(),"FixMapParts") &&
+                    !al::isEqualSubString(typeid(*sourceHost).name(),"CitySignal")){
                     if (
-                        (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Doshi") &&
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"Doshi") &&
                         rs::sendMsgCapAttackCollide(source, target)) ||   
-                        (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"Car") &&
+                        (!al::isSensorName(source, "Brake") &&
+                        al::isEqualSubString(typeid(*sourceHost).name(),"Car") &&
                         rs::sendMsgCapReflectCollide(source, target)) ||
-                        (al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ChurchDoor") &&
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"ChurchDoor") &&
                         rs::sendMsgCapTouchWall(source, target, sead::Vector3f{0,0,0}, sead::Vector3f{0,0,0})) ||
 
                         rs::sendMsgHackAttack(source, target) ||
                         al::sendMsgExplosion(source, target, nullptr)
                         ){
-                        hitBuffer[hitBufferCount++] = al::getSensorHost(source);
-                        sead::Vector3 effectPos = al::getTrans(al::getSensorHost(target));
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                         direction.normalize();
                         effectPos += direction * 75.0f;
-                        (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"ReactionObject") &&
-                        !al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"SphinxRide") &&
-                        al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos));
+                        (!al::isEqualSubString(typeid(*sourceHost).name(),"ReactionObject") &&
+                        !al::isEqualSubString(typeid(*sourceHost).name(),"SphinxRide") &&
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos));
                     }
                     if (
                         rs::sendMsgCapReflect(source, target)
                         ){
-                        hitBuffer[hitBufferCount++] = al::getSensorHost(source);
-                        sead::Vector3 effectPos = al::getTrans(al::getSensorHost(target));
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(al::getSensorHost(source)) - al::getTrans(al::getSensorHost(target)));
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                         direction.normalize();
                         effectPos += direction * 75.0f;
                         (!al::isEqualSubString(typeid(*al::getSensorHost(source)).name(),"MofumofuScrap") &&
-                        al::tryEmitEffect(al::getSensorHost(target), "Hit", &effectPos));
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos));
                         return;                    
                     }
                 }
@@ -953,9 +972,9 @@ extern "C" void userMain() {
     yButtonPatcher.Seek(0x44C5F0);
     yButtonPatcher.WriteInst(exl::armv8::inst::Movk(exl::armv8::reg::W1, 100));  // isTriggerCarryStart
     
-    /*// Remove Cappy eyes while ide
-    exl::patch::CodePatcher eyePatcher(0x41F7E4);
-    eyePatcher.WriteInst(exl::armv8::inst::Movk(exl::armv8::reg::W0, 0));*/
+    // Remove Cappy eyes while ide
+    //exl::patch::CodePatcher eyePatcher(0x41F7E4);
+    //eyePatcher.WriteInst(exl::armv8::inst::Movk(exl::armv8::reg::W0, 0));
     
     DisallowCancelOnUnderwaterSpinPatch::InstallAtOffset(0x489F30);
     DisallowCancelOnWaterSurfaceSpinPatch::InstallAtOffset(0x48A3C8);
