@@ -83,6 +83,7 @@ bool prevIsCarry = false;
 
 int galaxySensorRemaining = -1;
 
+bool isPunching = false; // Global flag to track punch state
 bool isPunchRight = false;
 
 struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttack> {
@@ -160,21 +161,15 @@ class PlayerStateSpinCapNrvGalaxySpinGround : public al::Nerve {
         void execute(al::NerveKeeper* keeper) const override {
             PlayerStateSpinCap* state = keeper->getParent<PlayerStateSpinCap>();
             PlayerActorHakoniwa* player = static_cast<PlayerActorHakoniwa*>(state->mActor);
+            
             bool isCarrying = player->mPlayerCarryKeeper->isCarry();
-    
+            bool isRotating = state->mAnimator->isAnim("SpinGroundL") || state->mAnimator->isAnim("SpinGroundR");
+
             if (al::isFirstStep(state)) {
                 state->mAnimator->endSubAnim();
-    
                 isPunchRight = !isPunchRight;
     
-                bool isRotating = state->mAnimator->isAnim("SpinGroundL") || state->mAnimator->isAnim("SpinGroundR");
-    
-                if (isCarrying) {
-                    state->mAnimator->startSubAnim("SpinSeparate");
-                    state->mAnimator->startAnim("SpinSeparate");
-                    al::validateHitSensor(state->mActor, "GalaxySpin");
-                    galaxySensorRemaining = 21;
-                } else if (isRotating) {
+                if (isCarrying || isRotating) {
                     state->mAnimator->startSubAnim("SpinSeparate");
                     state->mAnimator->startAnim("SpinSeparate");
                     al::validateHitSensor(state->mActor, "GalaxySpin");
@@ -191,6 +186,8 @@ class PlayerStateSpinCapNrvGalaxySpinGround : public al::Nerve {
                     al::invalidateHitSensor(state->mActor, "Foot");
                     al::invalidateHitSensor(state->mActor, "Body");
                     al::invalidateHitSensor(state->mActor, "Head");
+
+                    isPunching = true; // Validate punch animations
                 }
             }
             
@@ -231,7 +228,7 @@ class PlayerStateSpinCapNrvGalaxySpinGround : public al::Nerve {
             state->updateSpinGroundNerve();
     
             if (al::isGreaterStep(state, 21)) {
-                if (isCarrying) {
+                if (isCarrying || isRotating) {
                     al::invalidateHitSensor(state->mActor, "GalaxySpin");
                 } else {
                     al::invalidateHitSensor(state->mActor, "Punch");
@@ -349,6 +346,8 @@ struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinC
         canStandardSpin = true;
         canGalaxySpin = true;
         galaxyFakethrowRemainder = -1;
+
+        isPunching = false; // Invalidate punch animations
         // do not invalidate hitsensor/clear `isGalaxySpin`,
         // because Mario might go into a jump, which should continue the spin
     }
@@ -404,7 +403,7 @@ struct PlayerStateSpinCapIsEnableCancelGround : public mallow::hook::Trampoline<
 
 struct PlayerConstGetSpinAirSpeedMax : public mallow::hook::Trampoline<PlayerConstGetSpinAirSpeedMax> {
     static float Callback(PlayerConst* playerConst) {
-        if(isGalaxySpin)
+        if(isGalaxySpin && !isPunching)
             return playerConst->getNormalMaxSpeed();
         return Orig(playerConst);
     }
@@ -412,7 +411,7 @@ struct PlayerConstGetSpinAirSpeedMax : public mallow::hook::Trampoline<PlayerCon
 
 struct PlayerConstGetSpinBrakeFrame : public mallow::hook::Trampoline<PlayerConstGetSpinBrakeFrame> {
     static s32 Callback(PlayerConst* playerConst) {
-        if(isGalaxySpin)
+        if(isGalaxySpin && !isPunching)
             return 0;
         return Orig(playerConst);
     }
@@ -1045,7 +1044,7 @@ extern "C" void userMain() {
     fakethrowPatcher.BranchInst(reinterpret_cast<void*>(&tryCapSpinAndRethrow));
 
     // do not cancel momentum on spin
-    PlayerConstGetSpinAirSpeedMax::InstallAtSymbol("_ZNK11PlayerConst18getSpinAirSpeedMaxEv");
+    //PlayerConstGetSpinAirSpeedMax::InstallAtSymbol("_ZNK11PlayerConst18getSpinAirSpeedMaxEv");
     //PlayerConstGetSpinBrakeFrame::InstallAtSymbol("_ZNK11PlayerConst17getSpinBrakeFrameEv");
 
     // send out attack messages during spins
