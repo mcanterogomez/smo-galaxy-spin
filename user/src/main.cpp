@@ -520,18 +520,29 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 }
             }
             if(!isInHitBuffer){
-                if (al::isEqualSubString(typeid(*sourceHost).name(),"CapSwitch")) {
-                    al::setNerve(sourceHost, getNerveAt(0x1CE3E18));
-                    hitBuffer[hitBufferCount++] = sourceHost;
-                    sead::Vector3 effectPos = al::getTrans(targetHost);
-                    effectPos.y += 50.0f;
-                    sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                    direction.normalize();
-                    effectPos += direction * 75.0f;
-                    al::tryEmitEffect(targetHost, "Hit", &effectPos);
-                    return;
-                }
-                if (al::isSensorNpc(source) &&
+                    if (al::isEqualSubString(typeid(*sourceHost).name(),"CapSwitchTimer")) {
+                        al::setNerve(sourceHost, getNerveAt(0x1CE4338));
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
+                        effectPos.y += 50.0f;
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                        direction.normalize();
+                        effectPos += direction * 75.0f;
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos);
+                        return;
+                    }
+                    if (al::isEqualSubString(typeid(*sourceHost).name(),"CapSwitch")) {
+                        al::setNerve(sourceHost, getNerveAt(0x1CE3E18));
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
+                        effectPos.y += 50.0f;
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                        direction.normalize();
+                        effectPos += direction * 75.0f;
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos);
+                        return;
+                    }
+                    if (al::isSensorNpc(source) &&
                 !al::isEqualSubString(typeid(*sourceHost).name(),"YoshiFruit")){
                     if (
                         ((al::isEqualSubString(typeid(*sourceHost).name(),"RadiconCar") ||
