@@ -247,6 +247,7 @@ public:
         PlayerStateSpinCap* state = keeper->getParent<PlayerStateSpinCap>();
 
         if(al::isFirstStep(state)) {
+            state->mAnimator->startSubAnim("SpinSeparate");
             state->mAnimator->startAnim("SpinSeparate");
             al::validateHitSensor(state->mActor, "GalaxySpin");
             galaxySensorRemaining = 21;
@@ -264,79 +265,77 @@ public:
 PlayerStateSpinCapNrvGalaxySpinAir GalaxySpinAir;
 PlayerStateSpinCapNrvGalaxySpinGround GalaxySpinGround;
 
-struct PlayerSpinCapAttackAppear : public mallow::hook::Trampoline<PlayerSpinCapAttackAppear>{
-    static void Callback(PlayerStateSpinCap* state){
-        if(isGalaxyAfterStandardSpin){
+struct PlayerSpinCapAttackAppear : public mallow::hook::Trampoline<PlayerSpinCapAttackAppear> {
+    static void Callback(PlayerStateSpinCap* state) {
+        // Safety fix: clear leftover spin state from area load mid-spin
+        if (galaxyFakethrowRemainder != -1 &&
+            !al::isNerve(state, &GalaxySpinGround) &&
+            !al::isNerve(state, &GalaxySpinAir)) {
+            galaxyFakethrowRemainder = -1;
+            isGalaxySpin = false;
+            // DO NOT reset triggerGalaxySpin here!
+        }
+
+        // Handle cross-spin transition flags
+        if (isGalaxyAfterStandardSpin) {
             isGalaxyAfterStandardSpin = false;
             canStandardSpin = false;
             triggerGalaxySpin = true;
         }
-        if(isStandardAfterGalaxySpin) {
+        if (isStandardAfterGalaxySpin) {
             isStandardAfterGalaxySpin = false;
             canGalaxySpin = false;
             triggerGalaxySpin = false;
         }
 
-        if(!triggerGalaxySpin){
+        // If not a GalaxySpin, run original cap throw logic
+        if (!triggerGalaxySpin) {
             canStandardSpin = false;
             isGalaxySpin = false;
-            Orig(state);
+            Orig(state); // Mario goes full 2017
             return;
         }
+
+        // Now we’re in GalaxySpin mode
         hitBufferCount = 0;
-        canGalaxySpin = false;
         isGalaxySpin = true;
+        canGalaxySpin = false;
         triggerGalaxySpin = false;
 
-        // ----------------
-        // MODIFIED FROM PlayerStateSpinCap::appear
-        bool v2 = state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val33);
+        // Reset internal flags
         state->mIsDead = false;
         state->mIsInWater = false;
         state->_99 = 0;
         state->_80 = 0;
         state->_9C = {0.0f, 0.0f, 0.0f};
         state->_A8 = 0;
-        // TODO set something on JudgeWaterSurfaceRun
         state->_A9 = state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val0);
-        bool v10 =
-            rs::isOnGround(state->mActor, state->mCollider) && !state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val2);
 
-        if (v2 || v10) {
-            /*if (rs::isOnGroundSkateCode(mActor, mCollider))
-                mSpinCapAttack->clearAttackInfo();*/
+        // Decide between ground or air Galaxy spin
+        const bool isGrounded =
+            rs::isOnGround(state->mActor, state->mCollider) &&
+            !state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val2);
+        const bool forcedGroundSpin =
+            state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val33);
 
+        if (forcedGroundSpin || isGrounded) {
             if (state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val1)) {
-                al::alongVectorNormalH(al::getVelocityPtr(state->mActor), al::getVelocity(state->mActor),
-                                        -al::getGravity(state->mActor), rs::getCollidedGroundNormal(state->mCollider));
+                al::alongVectorNormalH(
+                    al::getVelocityPtr(state->mActor),
+                    al::getVelocity(state->mActor),
+                    -al::getGravity(state->mActor),
+                    rs::getCollidedGroundNormal(state->mCollider)
+                );
             }
-
             state->mActionGroundMoveControl->appear();
-            /*mSpinCapAttack->setupAttackInfo();
-
-            if (mSpinCapAttack->isSeparateSingleSpin())
-                al::setNerve(this, &SpinGroundSeparate);
-            else
-                al::setNerve(this, &SpinGround);
-            return;*/
-            al::setNerve(state, &GalaxySpinGround); // <- new
+            al::setNerve(state, &GalaxySpinGround);
         } else {
             state->_78 = 1;
-            /*mSpinCapAttack->setupAttackInfo();
-            if (mSpinCapAttack->isSeparateSingleSpin())
-                al::setNerve(this, &SpinAirSeparate);
-            else
-                al::setNerve(this, &SpinAir);*/
-            // ------- new:
-            if(isGalaxySpin && galaxyFakethrowRemainder == -2)
+            if (isGalaxySpin && galaxyFakethrowRemainder == -2)
                 al::setNerve(state, getNerveAt(nrvSpinCapFall));
             else
                 al::setNerve(state, &GalaxySpinAir);
-            // -------
-            return;
         }
-        // ----------------------
-        // END MODIFIED CODE
     }
 };
 
@@ -360,6 +359,7 @@ struct PlayerStateSpinCapFall : public mallow::hook::Trampoline<PlayerStateSpinC
         if(galaxyFakethrowRemainder == -2) {
             galaxyFakethrowRemainder = 21;
             al::validateHitSensor(state->mActor, "GalaxySpin");
+            state->mAnimator->startSubAnim("SpinSeparate");
             state->mAnimator->startAnim("SpinSeparate");
             galaxySensorRemaining = 21;
         }
@@ -483,8 +483,8 @@ struct PlayerSpinCapAttackStartSpinSeparateSwimSurface : public mallow::hook::Tr
             return;
         }
 
-        animator->startAnim("SpinSeparateSwim");
         animator->startSubAnim("SpinSeparateSwim");
+        animator->startAnim("SpinSeparateSwim");
     }
 };
 
