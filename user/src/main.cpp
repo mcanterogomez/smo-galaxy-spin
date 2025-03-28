@@ -14,16 +14,16 @@
 #include "Player/PlayerTrigger.h"
 #include "Player/PlayerHackKeeper.h"
 #include "Player/PlayerFunction.h"
-#include "Library/LiveActor/ActorSensorMsgFunction.h"
 #include "Library/LiveActor/ActorActionFunction.h"
 #include "Library/Controller/InputFunction.h"
 #include "Library/LiveActor/ActorMovementFunction.h"
+#include "Library/LiveActor/ActorSensorUtil.h"
 #include "Library/LiveActor/ActorSensorFunction.h"
-#include "Library/LiveActor/ActorPoseKeeper.h"
-#include "Library/Math/MathAngleUtil.h"
+#include "Library/LiveActor/ActorPoseUtil.h"
+#include "Library/Math/MathUtil.h"
 #include "Library/Base/StringUtil.h"
 #include "Project/HitSensor/HitSensor.h"
-#include "Player/PlayerAnimator.h"
+#include "../../libs/smo/game/Player/PlayerAnimator.h"
 #include "Util/PlayerCollisionUtil.h"
 #include "Library/Base/StringUtil.h"
 #include "Library/Nerve/NerveUtil.h"
@@ -536,9 +536,9 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
         }
 
         if((al::isSensorName(target, "GalaxySpin") || al::isSensorName(target, "Punch")) && thisPtr->mPlayerAnimator && 
-            (al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "SpinSeparate") ||  
-            al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "KoopaCapPunchR") || 
-            al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "KoopaCapPunchL") ||
+            (al::isEqualString(thisPtr->mPlayerAnimator->mCurAnim, "SpinSeparate") ||  
+            al::isEqualString(thisPtr->mPlayerAnimator->mCurAnim, "KoopaCapPunchR") || 
+            al::isEqualString(thisPtr->mPlayerAnimator->mCurAnim, "KoopaCapPunchL") ||
             isGalaxySpin)) {
             bool isInHitBuffer = false;
             for(int i = 0; i < hitBufferCount; i++){
