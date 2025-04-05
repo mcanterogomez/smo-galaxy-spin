@@ -148,28 +148,31 @@ public:
     void execute(al::NerveKeeper* keeper) const override {
         PlayerStateSpinCap* state = keeper->getParent<PlayerStateSpinCap>();
 
-        if(al::isFirstStep(state)) {
+        bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
+
+        if (al::isFirstStep(state)) {
             state->mAnimator->endSubAnim();
-
-            state->mAnimator->startSubAnim("SpinSeparate");
-            state->mAnimator->startAnim("SpinSeparate");
-
-            al::validateHitSensor(state->mActor, "GalaxySpin");
-            galaxySensorRemaining = 21;
+            // Only start SpinSeparate if it isn't already playing.
+            if (!isSpinning) {
+                state->mAnimator->startSubAnim("SpinSeparate");
+                state->mAnimator->startAnim("SpinSeparate");
+                al::validateHitSensor(state->mActor, "GalaxySpin");
+                galaxySensorRemaining = 21;
+            }
         }
 
         state->updateSpinGroundNerve();
 
-        if(al::isGreaterStep(state, 21)) {
+        if (al::isGreaterStep(state, 21)) {
             al::invalidateHitSensor(state->mActor, "GalaxySpin");
         }
 
-        if(state->mAnimator->isAnimEnd()) {
+        if (state->mAnimator->isAnimEnd()) {
             state->kill();
         }
     }
 };
-
+    
 class PlayerStateSpinCapNrvGalaxySpinAir : public al::Nerve {
 public:
     void execute(al::NerveKeeper* keeper) const override {
@@ -279,26 +282,38 @@ struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinC
     }
 };
 
-struct PlayerStateSpinCapFall : public mallow::hook::Trampoline<PlayerStateSpinCapFall>{
-    static void Callback(PlayerStateSpinCap* state){
+struct PlayerStateSpinCapFall : public mallow::hook::Trampoline<PlayerStateSpinCapFall> {
+    static void Callback(PlayerStateSpinCap* state) {
         Orig(state);
 
-        if(galaxyFakethrowRemainder == -2) {
+        // If fakethrow is active and the current animation is "SpinSeparate"
+        if (galaxyFakethrowRemainder != -1 && state->mAnimator->isAnim("SpinSeparate")) {
+            bool onGround = rs::isOnGround(state->mActor, state->mCollider);
+            if (onGround) {
+                // Transition to the ground spin nerve without restarting the animation.
+                state->mActionGroundMoveControl->appear();
+                al::setNerve(state, &GalaxySpinGround);
+                return;
+            }
+        }
+
+        // Normal FakeSpin timer logic for when still airborne:
+        if (galaxyFakethrowRemainder == -2) {
             galaxyFakethrowRemainder = 21;
             al::validateHitSensor(state->mActor, "GalaxySpin");
-            state->mAnimator->startSubAnim("SpinSeparate");
+            // Start the SpinSeparate animation if it hasn't been started yet.
+            //state->mAnimator->startSubAnim("SpinSeparate");
             state->mAnimator->startAnim("SpinSeparate");
             galaxySensorRemaining = 21;
-        }
-        else if(galaxyFakethrowRemainder > 0) {
+        } else if (galaxyFakethrowRemainder > 0) {
             galaxyFakethrowRemainder--;
-        }
-        else if(galaxyFakethrowRemainder == 0) {
+        } else if (galaxyFakethrowRemainder == 0) {
             galaxyFakethrowRemainder = -1;
             al::invalidateHitSensor(state->mActor, "GalaxySpin");
         }
     }
 };
+
 
 struct PlayerStateSpinCapIsEnableCancelHipDrop : public mallow::hook::Trampoline<PlayerStateSpinCapIsEnableCancelHipDrop>{
     static bool Callback(PlayerStateSpinCap* state){
