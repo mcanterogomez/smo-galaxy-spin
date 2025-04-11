@@ -164,71 +164,65 @@ class PlayerStateSpinCapNrvGalaxySpinGround : public al::Nerve {
             
             bool isCarrying = player->mPlayerCarryKeeper->isCarry();
             bool isRotating = state->mAnimator->isAnim("SpinGroundL") || state->mAnimator->isAnim("SpinGroundR");
+            bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
 
             if (al::isFirstStep(state)) {
                 state->mAnimator->endSubAnim();
                 isPunchRight = !isPunchRight;
-    
-                if (isCarrying || isRotating) {
-                    state->mAnimator->startSubAnim("SpinSeparate");
-                    state->mAnimator->startAnim("SpinSeparate");
-                    al::validateHitSensor(state->mActor, "GalaxySpin");
-                    galaxySensorRemaining = 21;
-                } else {
-                    if (isPunchRight) {
-                        state->mAnimator->startSubAnim("KoopaCapPunchRStart");
-                        state->mAnimator->startAnim("KoopaCapPunchR");
-                    } else {
-                        state->mAnimator->startSubAnim("KoopaCapPunchLStart");
-                        state->mAnimator->startAnim("KoopaCapPunchL");
-                    }
-                    // Make winding up invincible
-                    al::invalidateHitSensor(state->mActor, "Foot");
-                    al::invalidateHitSensor(state->mActor, "Body");
-                    al::invalidateHitSensor(state->mActor, "Head");
 
-                    isPunching = true; // Validate punch animations
+                if (!isSpinning) {
+                    if (isCarrying || isRotating) {
+                        state->mAnimator->startSubAnim("SpinSeparate");
+                        state->mAnimator->startAnim("SpinSeparate");
+                        al::validateHitSensor(state->mActor, "GalaxySpin");
+                        galaxySensorRemaining = 21;
+                    } else {
+                        if (isPunchRight) {
+                            state->mAnimator->startSubAnim("KoopaCapPunchRStart");
+                            state->mAnimator->startAnim("KoopaCapPunchR");
+                        } else {
+                            state->mAnimator->startSubAnim("KoopaCapPunchLStart");
+                            state->mAnimator->startAnim("KoopaCapPunchL");
+                        }
+                        // Make winding up invincible
+                        al::invalidateHitSensor(state->mActor, "Foot");
+                        al::invalidateHitSensor(state->mActor, "Body");
+                        al::invalidateHitSensor(state->mActor, "Head");
+
+                        isPunching = true; // Validate punch animations
+                    }
                 }
             }
             
-            if (!isCarrying && al::isStep(state, 6)) {
-                // Make Mario vulnerable again
-                al::validateHitSensor(state->mActor, "Foot");
-                al::validateHitSensor(state->mActor, "Body");
-                al::validateHitSensor(state->mActor, "Head");
-
-                al::validateHitSensor(state->mActor, "Punch");
-                galaxySensorRemaining = 15;
-
-                // Reset Mario's velocity to kill running momentum
-                //al::setVelocity(player, sead::Vector3f::zero);
-    
-                // Reduce Mario's existing momentum by 75%
-                sead::Vector3f currentVelocity = al::getVelocity(player);
-                currentVelocity *= 0.25f;
-                al::setVelocity(player, currentVelocity);
-    
-                // Apply a small forward movement during the punch
-                sead::Vector3f forward;
-                al::calcQuatFront(&forward, player);
-                forward.normalize();
-                forward *= 5.0f;
-                al::addVelocity(player, forward);
+            if (!isSpinning && !isCarrying) {
+                if (al::isStep(state, 2)) {
+                    // Reduce Mario's existing momentum by 75%
+                    sead::Vector3f currentVelocity = al::getVelocity(player);
+                    currentVelocity *= 0.5f;
+                    al::setVelocity(player, currentVelocity);
+        
+                    // Apply a small forward movement during the punch
+                    sead::Vector3f forward;
+                    al::calcQuatFront(&forward, player);
+                    forward.normalize();
+                    forward *= 5.0f;
+                    al::addVelocity(player, forward);
+                }
+            
+                if (al::isStep(state, 6)) {
+                    // Make Mario vulnerable again
+                    al::validateHitSensor(state->mActor, "Foot");
+                    al::validateHitSensor(state->mActor, "Body");
+                    al::validateHitSensor(state->mActor, "Head");
+                    al::validateHitSensor(state->mActor, "Punch");
+                    galaxySensorRemaining = 15;
+                }
             }
-
-            // Give Mario a spinning uppercut
-            /*if (!isCarrying && player->mPlayerInput->isTriggerJump()) {                
-                // Start the air spin animation
-                state->mAnimator->startSubAnim("SpinSeparate");
-                state->mAnimator->startAnim("SpinSeparate");
-                al::validateHitSensor(state->mActor, "GalaxySpin");
-                galaxySensorRemaining = 21;
-            }*/ // If not then disable the PlayerStateSpinCapIsEnableCancelGround
-
+                        
             state->updateSpinGroundNerve();
     
             if (al::isGreaterStep(state, 21)) {
-                if (isCarrying || isRotating) {
+                if (isSpinning || isCarrying) {
                     al::invalidateHitSensor(state->mActor, "GalaxySpin");
                 } else {
                     al::invalidateHitSensor(state->mActor, "Punch");
@@ -352,21 +346,32 @@ struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinC
     }
 };
 
-struct PlayerStateSpinCapFall : public mallow::hook::Trampoline<PlayerStateSpinCapFall>{
-    static void Callback(PlayerStateSpinCap* state){
+struct PlayerStateSpinCapFall : public mallow::hook::Trampoline<PlayerStateSpinCapFall> {
+    static void Callback(PlayerStateSpinCap* state) {
         Orig(state);
 
-        if(galaxyFakethrowRemainder == -2) {
+        // If fakethrow is active and the current animation is "SpinSeparate"
+        if (galaxyFakethrowRemainder != -1 && state->mAnimator->isAnim("SpinSeparate")) {
+            bool onGround = rs::isOnGround(state->mActor, state->mCollider);
+            if (onGround) {
+                // Transition to the ground spin nerve without restarting the animation.
+                state->mActionGroundMoveControl->appear();
+                al::setNerve(state, &GalaxySpinGround);
+                return;
+            }
+        }
+
+        // Normal FakeSpin timer logic for when still airborne:
+        if (galaxyFakethrowRemainder == -2) {
             galaxyFakethrowRemainder = 21;
             al::validateHitSensor(state->mActor, "GalaxySpin");
-            state->mAnimator->startSubAnim("SpinSeparate");
+            // Start the SpinSeparate animation if it hasn't been started yet.
+            //state->mAnimator->startSubAnim("SpinSeparate");
             state->mAnimator->startAnim("SpinSeparate");
             galaxySensorRemaining = 21;
-        }
-        else if(galaxyFakethrowRemainder > 0) {
+        } else if (galaxyFakethrowRemainder > 0) {
             galaxyFakethrowRemainder--;
-        }
-        else if(galaxyFakethrowRemainder == 0) {
+        } else if (galaxyFakethrowRemainder == 0) {
             galaxyFakethrowRemainder = -1;
             al::invalidateHitSensor(state->mActor, "GalaxySpin");
         }
