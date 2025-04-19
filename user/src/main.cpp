@@ -447,7 +447,7 @@ struct PlayerStateSwimExeSwimSpinCap : public mallow::hook::Trampoline<PlayerSta
             triggerGalaxySpin = false;
             isSpinActive = true;
         }
-        if(isGalaxySpin && (al::isGreaterStep(thisPtr, 62) || al::isStep(thisPtr, -1))) {
+        if(isGalaxySpin && (al::isGreaterStep(thisPtr, 32) || al::isStep(thisPtr, -1))) {
             al::invalidateHitSensor(thisPtr->mActor, "GalaxySpin");
             isGalaxySpin = false;
             isSpinActive = false;
@@ -465,7 +465,7 @@ struct PlayerStateSwimExeSwimSpinCapSurface : public mallow::hook::Trampoline<Pl
             triggerGalaxySpin = false;
             isSpinActive = true;
         }
-        if(isGalaxySpin && (al::isGreaterStep(thisPtr, 62) || al::isStep(thisPtr, -1))) {
+        if(isGalaxySpin && (al::isGreaterStep(thisPtr, 32) || al::isStep(thisPtr, -1))) {
             al::invalidateHitSensor(thisPtr->mActor, "GalaxySpin");
             isGalaxySpin = false;
             isSpinActive = false;
