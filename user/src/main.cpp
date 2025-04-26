@@ -685,6 +685,8 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         rs::sendMsgKillerMagnumAttack(source, target)) ||
                         (al::isEqualSubString(typeid(*sourceHost).name(),"CapThrower") &&
                         rs::sendMsgCapReflect(source, target)) ||
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"Koopa") &&
+                        al::sendMsgPlayerObjHipDropReflect(source, target, nullptr)) ||
 
                         al::sendMsgKickStoneAttackReflect(source, target) ||
                         rs::sendMsgHackAttack(source, target) ||
@@ -712,6 +714,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         !al::isEqualSubString(typeid(*sourceHost).name(),"GrowerWorm") &&
                         !al::isEqualSubString(typeid(*sourceHost).name(),"FireBlowerCap") &&
                         !al::isEqualSubString(typeid(*sourceHost).name(),"CapThrowerCap") &&
+                        !al::isEqualSubString(typeid(*sourceHost).name(),"Koopa") &&
                         al::tryEmitEffect(targetHost, "Hit", &effectPos));
                         return;
                     }
