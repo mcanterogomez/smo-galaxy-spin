@@ -71,7 +71,6 @@ int hitBufferCount = 0;
 const uintptr_t spinCapNrvOffset = 0x1d78940;
 const uintptr_t nrvSpinCapFall = 0x1d7ff70;
 
-
 bool isGalaxySpin = false;
 bool canGalaxySpin = true;
 bool canStandardSpin = true;
@@ -87,6 +86,7 @@ bool isPunching = false; // Global flag to track punch state
 bool isPunchRight = false;
 
 bool isSpinActive = false; // Global flag to track spin state
+bool isNearCollectible = false; // Global flag to track if near a collectible
 
 struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttack>{
     static bool Callback(PlayerActorHakoniwa* player, bool a2) {
@@ -180,6 +180,13 @@ class PlayerStateSpinCapNrvGalaxySpinGround : public al::Nerve {
                         state->mAnimator->startAnim("SpinSeparate");
                         al::validateHitSensor(state->mActor, "GalaxySpin");
                         galaxySensorRemaining = 21;
+                        
+                    } else if (isNearCollectible) {
+                            state->mAnimator->startAnim("RabbitGet");
+                            al::validateHitSensor(state->mActor, "Punch");
+                            galaxySensorRemaining = 13;
+                            //isPunching = false;  
+                            //return;                                     
                     } else {
                         if (isPunchRight) {
                             state->mAnimator->startSubAnim("KoopaCapPunchRStart");
@@ -198,7 +205,7 @@ class PlayerStateSpinCapNrvGalaxySpinGround : public al::Nerve {
                 }
             }
             
-            if (!isSpinning && !isCarrying) {
+            if (!isSpinning && !isCarrying && !isNearCollectible) {
                 if (al::isStep(state, 2)) {
                     // Reduce Mario's existing momentum by 75%
                     sead::Vector3f currentVelocity = al::getVelocity(player);
@@ -219,7 +226,7 @@ class PlayerStateSpinCapNrvGalaxySpinGround : public al::Nerve {
                     al::validateHitSensor(state->mActor, "Body");
                     al::validateHitSensor(state->mActor, "Head");
                     al::validateHitSensor(state->mActor, "Punch");
-                    galaxySensorRemaining = 15;
+                    galaxySensorRemaining = 13;
                 }
             }
                         
@@ -246,7 +253,7 @@ public:
 
         if(al::isFirstStep(state)) {
             state->mAnimator->endSubAnim();
-
+            
             //state->mAnimator->startSubAnim("SpinSeparate");
             state->mAnimator->startAnim("SpinSeparate");
             al::validateHitSensor(state->mActor, "GalaxySpin");
@@ -348,6 +355,7 @@ struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinC
         galaxyFakethrowRemainder = -1; 
         isPunching = false;
         isSpinActive = false;
+        isNearCollectible = false;
     }
 };
 
@@ -556,6 +564,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
             (al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "SpinSeparate") ||  
             al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "KoopaCapPunchR") || 
             al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "KoopaCapPunchL") ||
+            al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "RabbitGet") ||
             isGalaxySpin)) {
             bool isInHitBuffer = false;
             for(int i = 0; i < hitBufferCount; i++) {
@@ -584,41 +593,44 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     isInHitBuffer &= sourceNrv != getNerveAt(0x1D170D0);
                 }
 
-                if (al::isEqualSubString(typeid(*sourceHost).name(),"Stake") &&
-                    sourceNrv == getNerveAt(0x1D36D20)) {
-                    hitBuffer[hitBufferCount++] = sourceHost;
-                    al::setNerve(sourceHost, getNerveAt(0x1D36D30));
-                    sead::Vector3 effectPos = al::getTrans(targetHost);
-                    effectPos.y += 50.0f;
-                    sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                    direction.normalize();
-                    effectPos += direction * 75.0f;
-                    al::tryEmitEffect(targetHost, "Hit", &effectPos);
-                    return;
-                }
-                if (al::isEqualSubString(typeid(*sourceHost).name(),"Radish") &&
-                    sourceNrv == getNerveAt(0x1D22B70)) {
-                    hitBuffer[hitBufferCount++] = sourceHost;
-                    al::setNerve(sourceHost, getNerveAt(0x1D22BD8));           
-                    sead::Vector3 effectPos = al::getTrans(targetHost);
-                    effectPos.y += 50.0f;
-                    sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                    direction.normalize();
-                    effectPos += direction * 75.0f;
-                    al::tryEmitEffect(targetHost, "Hit", &effectPos);
-                    return;
-                }
-                if (al::isEqualSubString(typeid(*sourceHost).name(),"BossRaidRivet") &&
-                    sourceNrv == getNerveAt(0x1C5F330)) {
-                    hitBuffer[hitBufferCount++] = sourceHost;
-                    al::setNerve(sourceHost, getNerveAt(0x1C5F338));
-                    sead::Vector3 effectPos = al::getTrans(targetHost);
-                    effectPos.y += 50.0f;
-                    sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                    direction.normalize();
-                    effectPos += direction * 75.0f;
-                    al::tryEmitEffect(targetHost, "Hit", &effectPos);
-                    return;
+                if (al::isSensorName(target, "Punch") && !isPunching) {
+
+                    if (al::isEqualSubString(typeid(*sourceHost).name(),"Stake") &&
+                        sourceNrv == getNerveAt(0x1D36D20)) {
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        al::setNerve(sourceHost, getNerveAt(0x1D36D30));
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
+                        effectPos.y += 50.0f;
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                        direction.normalize();
+                        effectPos += direction * 75.0f;
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos);
+                        return;
+                    }
+                    if (al::isEqualSubString(typeid(*sourceHost).name(),"Radish") &&
+                        sourceNrv == getNerveAt(0x1D22B70)) {
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        al::setNerve(sourceHost, getNerveAt(0x1D22BD8));           
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
+                        effectPos.y += 50.0f;
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                        direction.normalize();
+                        effectPos += direction * 75.0f;
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos);
+                        return;
+                    }    
+                    if (al::isEqualSubString(typeid(*sourceHost).name(),"BossRaidRivet") &&
+                        sourceNrv == getNerveAt(0x1C5F330)) {
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        al::setNerve(sourceHost, getNerveAt(0x1C5F338));
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
+                        effectPos.y += 50.0f;
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                        direction.normalize();
+                        effectPos += direction * 75.0f;
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos);
+                        return;
+                    }
                 }
             }
             if(!isInHitBuffer) {
@@ -910,6 +922,30 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook>{
         Orig(thisPtr);
         al::HitSensor* sensorSpin = al::getHitSensor(thisPtr, "GalaxySpin");
         al::HitSensor* sensorPunch = al::getHitSensor(thisPtr, "Punch");
+
+        // Reset proximity flag
+        isNearCollectible = false;
+
+        // Get Mario's Carry sensor
+        al::HitSensor* carrySensor = al::getHitSensor(thisPtr, "Carry");
+        if (carrySensor && carrySensor->mIsValid) {
+            // Check all sensors colliding with Carry sensor
+            for (int i = 0; i < carrySensor->mSensorCount; i++) {
+                al::HitSensor* other = carrySensor->mSensors[i];
+                al::LiveActor* actor = al::getSensorHost(other);
+                
+                if (actor) {
+                    // Check if sensor belongs to target object type
+                    const char* typeName = typeid(*actor).name();
+                    if (al::isEqualSubString(typeName, "Radish") ||
+                        al::isEqualSubString(typeName, "Stake") ||
+                        al::isEqualSubString(typeName, "BossRaidRivet")) {
+                        isNearCollectible = true;
+                        break; // Exit early if found
+                    }
+                }
+            }
+        }
 
         if((sensorSpin && sensorSpin->mIsValid) ||
         (sensorPunch && sensorPunch->mIsValid)) {
