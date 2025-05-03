@@ -252,7 +252,6 @@ public:
         isSpinActive = true;
 
         if(al::isFirstStep(state)) {
-            state->mAnimator->endSubAnim();
             
             //state->mAnimator->startSubAnim("SpinSeparate");
             state->mAnimator->startAnim("SpinSeparate");
@@ -639,9 +638,16 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     hitBuffer[hitBufferCount++] = sourceHost;
                     sead::Vector3 effectPos = al::getTrans(targetHost);
                     effectPos.y += 50.0f;
-                    sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                    direction.normalize();
-                    effectPos += direction * 75.0f;
+                    if (al::isSensorName(target, "Punch")) {
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                        direction.normalize();
+                        effectPos += direction * 100.0f;
+                    }
+                    if (al::isSensorName(target, "GalaxySpin")) {
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                        direction.normalize();
+                        effectPos += direction * 75.0f;
+                    }
                     al::tryEmitEffect(targetHost, "Hit", &effectPos);
                     return;
                 }
@@ -650,9 +656,16 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     hitBuffer[hitBufferCount++] = sourceHost;
                     sead::Vector3 effectPos = al::getTrans(targetHost);
                     effectPos.y += 50.0f;
-                    sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                    direction.normalize();
-                    effectPos += direction * 75.0f;
+                    if (al::isSensorName(target, "Punch")) {
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                        direction.normalize();
+                        effectPos += direction * 100.0f;
+                    }
+                    if (al::isSensorName(target, "GalaxySpin")) {
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                        direction.normalize();
+                        effectPos += direction * 75.0f;
+                    }
                     al::tryEmitEffect(targetHost, "Hit", &effectPos);
                     return;
                 }
@@ -671,9 +684,16 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                        direction.normalize();
-                        effectPos += direction * 75.0f;
+                        if (al::isSensorName(target, "Punch")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 100.0f;
+                        }
+                        if (al::isSensorName(target, "GalaxySpin")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 75.0f;
+                        }
                         if (al::isEqualSubString(typeid(*sourceHost).name(),"Frog")) {
                             al::tryDeleteEffect(targetHost, "HitSmall");}
                         (!al::isEqualSubString(typeid(*sourceHost).name(),"CollectAnimal") &&
@@ -713,9 +733,16 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                        direction.normalize();
-                        effectPos += direction * 75.0f;
+                        if (al::isSensorName(target, "Punch")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 100.0f;
+                        }
+                        if (al::isSensorName(target, "GalaxySpin")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 75.0f;
+                        }
                         if (al::isEqualSubString(typeid(*sourceHost).name(),"BombTail")) {
                             al::tryDeleteEffect(sourceHost, "CapReflect");}
                         if (al::isEqualSubString(typeid(*sourceHost).name(),"FireBlower")) {
@@ -727,7 +754,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         !al::isEqualSubString(typeid(*sourceHost).name(),"FireBlowerCap") &&
                         !al::isEqualSubString(typeid(*sourceHost).name(),"CapThrowerCap") &&
                         !al::isEqualSubString(typeid(*sourceHost).name(),"Koopa") &&
-                        al::tryEmitEffect(targetHost, "Hit", &effectPos));
+                        al::tryEmitEffect(targetHost, "PunchHit", &effectPos));
                         return;
                     }
                 }
@@ -751,9 +778,16 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                        direction.normalize();
-                        effectPos += direction * 75.0f;
+                        if (al::isSensorName(target, "Punch")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 100.0f;
+                        }
+                        if (al::isSensorName(target, "GalaxySpin")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 75.0f;
+                        }
                         if (al::isEqualSubString(typeid(*sourceHost).name(),"VolleyballBall")) {
                             if (!al::isEffectEmitting(sourceHost, "SmashHit")) {
                                 al::tryEmitEffect(targetHost, "Hit", &effectPos);
@@ -773,9 +807,16 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                        direction.normalize();
-                        effectPos += direction * 75.0f;
+                        if (al::isSensorName(target, "Punch")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 100.0f;
+                        }
+                        if (al::isSensorName(target, "GalaxySpin")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 75.0f;
+                        }
                         al::tryEmitEffect(targetHost, "Hit", &effectPos);
                         return;                           
                         
@@ -793,11 +834,19 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                        direction.normalize();
-                        effectPos += direction * 75.0f;
+                        if (al::isSensorName(target, "Punch")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 100.0f;
+                        }
+                        if (al::isSensorName(target, "GalaxySpin")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 75.0f;
+                        }
                         if (al::isEqualSubString(typeid(*sourceHost).name(),"Souvenir")) {
-                            al::tryDeleteEffect(sourceHost, "HitSmall");}
+                            al::tryDeleteEffect(sourceHost, "HitSmall");
+                        }
                         (al::isEqualSubString(typeid(*sourceHost).name(),"Souvenir") &&
                         al::tryEmitEffect(targetHost, "Hit", &effectPos));
                         return;
@@ -810,9 +859,16 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                        direction.normalize();
-                        effectPos += direction * 75.0f;
+                        if (al::isSensorName(target, "Punch")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 100.0f;
+                        }
+                        if (al::isSensorName(target, "GalaxySpin")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 75.0f;
+                        }
                         al::tryEmitEffect(targetHost, "Hit", &effectPos);
                         return;
                     }
@@ -835,9 +891,16 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                        direction.normalize();
-                        effectPos += direction * 75.0f;
+                        if (al::isSensorName(target, "Punch")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 100.0f;
+                        }
+                        if (al::isSensorName(target, "GalaxySpin")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 75.0f;
+                        }
                         (!al::isEqualSubString(typeid(*sourceHost).name(),"ReactionObject") &&
                         !al::isEqualSubString(typeid(*sourceHost).name(),"SphinxRide") &&
                         al::tryEmitEffect(targetHost, "Hit", &effectPos));
@@ -848,9 +911,16 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                        direction.normalize();
-                        effectPos += direction * 75.0f;
+                        if (al::isSensorName(target, "Punch")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 100.0f;
+                        }
+                        if (al::isSensorName(target, "GalaxySpin")) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 75.0f;
+                        }
                         (!al::isEqualSubString(typeid(*sourceHost).name(),"MofumofuScrap") &&
                         al::tryEmitEffect(targetHost, "Hit", &effectPos));
                         return;                    
