@@ -202,7 +202,6 @@ public:
         isSpinActive = true;
 
         if(al::isFirstStep(state)) {
-            state->mAnimator->endSubAnim();
 
             //state->mAnimator->startSubAnim("SpinSeparate");
             state->mAnimator->startAnim("SpinSeparate");
@@ -674,7 +673,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         !al::isEqualSubString(typeid(*sourceHost).name(),"FireBlowerCap") &&
                         !al::isEqualSubString(typeid(*sourceHost).name(),"CapThrowerCap") &&
                         !al::isEqualSubString(typeid(*sourceHost).name(),"Koopa") &&
-                        al::tryEmitEffect(targetHost, "Hit", &effectPos));
+                        al::tryEmitEffect(targetHost, "PunchHit", &effectPos));
                         return;
                     }
                 }
