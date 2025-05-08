@@ -539,6 +539,7 @@ namespace rs {
     bool sendMsgTsukkunThrust(al::HitSensor*, al::HitSensor*, sead::Vector3<float> const&, int, bool);
     bool sendMsgCapTouchWall(al::HitSensor*, al::HitSensor*, sead::Vector3<float> const&, sead::Vector3<float> const&);
     al::HitSensor* tryGetCollidedWallSensor(IUsePlayerCollision const* collider);
+    al::HitSensor* tryGetCollidedGroundSensor(IUsePlayerCollision const* collider);    
 }
 
 struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSensorHook>{
@@ -555,6 +556,40 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
         // Null check for targetHost and sourceHost
         if (!targetHost || !sourceHost) {
             return; // Exit early if either targetHost or sourceHost is null
+        }
+
+        if((al::isSensorName(target, "HipDropKnockDown")) &&
+            thisPtr->mPlayerAnimator && 
+            (al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "HipDrop") ||
+            al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "HipDropReaction") ||
+            al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "SpinJumpDownFallL") ||
+            al::isEqualString(thisPtr->mPlayerAnimator->mCurrentAnim, "SpinJumpDownFallR"))) {
+            bool isInHitBuffer = false;
+            for(int i = 0; i < hitBufferCount; i++) {
+                if(hitBuffer[i] == sourceHost) {
+                    isInHitBuffer = true;
+                    break;
+                }
+            }
+            if (rs::tryGetCollidedGroundSensor(thisPtr->mPlayerColliderHakoniwa) &&
+            !al::isEqualSubString(typeid(*sourceHost).name(),"FixMapParts") &&
+            !al::isEqualSubString(typeid(*sourceHost).name(),"CitySignal")) {
+                if(!isInHitBuffer) {
+                    if (al::sendMsgExplosion(source, target, nullptr)) {
+                        hitBuffer[hitBufferCount++] = al::getSensorHost(source);
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
+                        effectPos.y += 50.0f;
+                        sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                        direction.normalize();
+                        effectPos += direction * 75.0f;
+                        (!al::isEqualSubString(typeid(*sourceHost).name(),"ReactionObject") &&
+                        !al::isEqualSubString(typeid(*sourceHost).name(),"SphinxRide") &&
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos));
+                        return;
+                    }
+                }
+            }
+            return;
         }
 
         if((al::isSensorName(target, "GalaxySpin") ||
@@ -992,6 +1027,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook>{
         Orig(thisPtr);
         al::HitSensor* sensorSpin = al::getHitSensor(thisPtr, "GalaxySpin");
         al::HitSensor* sensorPunch = al::getHitSensor(thisPtr, "Punch");
+        al::HitSensor* sensorHipDrop = al::getHitSensor(thisPtr, "HipDropKnockDown");        
 
         // Reset proximity flag
         isNearCollectible = false;
@@ -1018,12 +1054,16 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook>{
         }
 
         if((sensorSpin && sensorSpin->mIsValid) ||
-        (sensorPunch && sensorPunch->mIsValid)) {
+        (sensorPunch && sensorPunch->mIsValid) ||
+        (sensorHipDrop && sensorHipDrop->mIsValid)) {
             if (sensorSpin && sensorSpin->mIsValid) {
                 thisPtr->attackSensor(sensorSpin, rs::tryGetCollidedWallSensor(thisPtr->mPlayerColliderHakoniwa));
             }
             if (sensorPunch && sensorPunch->mIsValid) {
                 thisPtr->attackSensor(sensorPunch, rs::tryGetCollidedWallSensor(thisPtr->mPlayerColliderHakoniwa));
+            }
+            if (sensorHipDrop && sensorHipDrop->mIsValid) {
+                thisPtr->attackSensor(sensorHipDrop, rs::tryGetCollidedGroundSensor(thisPtr->mPlayerColliderHakoniwa));
             }
         }
         
