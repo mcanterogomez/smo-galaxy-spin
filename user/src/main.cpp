@@ -31,6 +31,10 @@
 #include "Library/Effect/EffectSystemInfo.h"
 #include "Library/Nerve/NerveSetupUtil.h"
 
+#include "System/GameDataFunction.h"
+#include "Player/PlayerDamageKeeper.h"
+#include <limits.h>
+
 namespace rs {
     bool is2D(const IUseDimension*);
 }
@@ -70,6 +74,8 @@ int hitBufferCount = 0;
 
 const uintptr_t spinCapNrvOffset = 0x1d78940;
 const uintptr_t nrvSpinCapFall = 0x1d7ff70;
+const uintptr_t nrvHakoniwaFall = 0x01d78910;
+const uintptr_t nrvHakoniwaHipDrop = 0x1D78978;
 
 bool isGalaxySpin = false;
 bool canGalaxySpin = true;
@@ -1025,6 +1031,30 @@ struct PadTriggerYHook : public mallow::hook::Trampoline<PadTriggerYHook>{
 struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook>{
     static void Callback(PlayerActorHakoniwa* thisPtr) {
         Orig(thisPtr);
+
+        // Check for Super suit costume and cap
+        const char* costume = GameDataFunction::getCurrentCostumeTypeName(thisPtr);
+        const char* cap     = GameDataFunction::getCurrentCapTypeName(thisPtr);
+        bool isSuper = (costume && al::isEqualString(costume, "MarioColorSuper"))
+                    && (cap     && al::isEqualString(cap,     "MarioColorSuper"));
+
+        // Apply or remove invincibility
+        PlayerDamageKeeper* damagekeep = thisPtr->mPlayerDamageKeeper;
+
+        if (isSuper) {
+            if (!damagekeep->mIsPreventDamage) {
+                damagekeep->activatePreventDamage();
+                damagekeep->mRemainingInvincibility = INT_MAX;
+            }
+            exl::patch::CodePatcher moonMovPatcher(0x41B700);
+            moonMovPatcher.WriteInst(0xAA0803E0);
+
+        } else {
+            damagekeep->mRemainingInvincibility = 0;
+            exl::patch::CodePatcher normalMovPatcher(0x41B700);
+            normalMovPatcher.WriteInst(0x9A961100);
+        }
+
         al::HitSensor* sensorSpin = al::getHitSensor(thisPtr, "GalaxySpin");
         al::HitSensor* sensorPunch = al::getHitSensor(thisPtr, "Punch");
         al::HitSensor* sensorHipDrop = al::getHitSensor(thisPtr, "HipDropKnockDown");        
@@ -1186,6 +1216,78 @@ struct InputIsTriggerActionCameraResetHook : public mallow::hook::Trampoline<Inp
     }
 };
 
+struct PlayerActorHakoniwaExeHeadSliding : public mallow::hook::Trampoline<PlayerActorHakoniwaExeHeadSliding> {
+  static void Callback(PlayerActorHakoniwa* thisPtr) {
+    Orig(thisPtr);
+
+        // Check for Super suit costume and cap
+        const char* costume = GameDataFunction::getCurrentCostumeTypeName(thisPtr);
+        const char* cap     = GameDataFunction::getCurrentCapTypeName(thisPtr);
+
+        bool isSuper = (costume && al::isEqualString(costume, "MarioColorSuper"))
+            && (cap && al::isEqualString(cap, "MarioColorSuper"));
+
+        bool isFeather = (costume && al::isEqualString(costume, "MarioFeather"));
+
+        if (!isSuper && !isFeather) {
+            return;
+        }
+        
+            float vy = al::getVelocity(thisPtr).y;
+            if (vy < -2.5f)
+            al::setVelocityY(thisPtr, -2.5f);
+
+            auto* anim  = thisPtr->mPlayerAnimator;
+            float speed = al::calcSpeed(thisPtr);
+
+            if (al::isFirstStep(thisPtr)) {
+            anim->endSubAnim();
+            anim->startAnim("JumpBroad8");
+            }
+            else if (anim->isAnim("JumpBroad8") && anim->isAnimEnd()) {
+            anim->endSubAnim();
+            anim->startAnim("CapeGlide");
+            }
+            else if (speed < 10.f && !anim->isAnim("CapeGlideStand")) {
+            anim->endSubAnim();
+            anim->startAnim("CapeGlideStand");
+            }
+
+        if (al::isGreaterStep(thisPtr, 25)) {
+        
+            if (al::isPadTriggerA(-1)
+            || al::isPadTriggerB(-1)) {
+                if (!al::isNerve(thisPtr, getNerveAt(nrvHakoniwaFall))) {
+                al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
+                }
+            }
+
+            if (al::isPadTriggerZL(-1)
+            || al::isPadTriggerZR(-1)) {
+                if (!al::isNerve(thisPtr, getNerveAt(nrvHakoniwaHipDrop))) {
+                al::setNerve(thisPtr, getNerveAt(nrvHakoniwaHipDrop));
+                }
+            }
+
+            if (isPadTriggerGalaxySpin(-1)
+            && canGalaxySpin) {
+                if (!al::isNerve(thisPtr, getNerveAt(spinCapNrvOffset))) {
+                triggerGalaxySpin = true;
+                al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
+                }
+            }
+
+            if (!isPadTriggerGalaxySpin(-1)
+            && (al::isPadTriggerX(-1)
+            || al::isPadTriggerY(-1))) {
+                if (!al::isNerve(thisPtr, getNerveAt(spinCapNrvOffset))) {
+                al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
+                }
+            }
+        }
+    }
+};
+
 extern "C" void userMain() {
     exl::hook::Initialize();
     PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
@@ -1251,4 +1353,12 @@ extern "C" void userMain() {
     
     DisallowCancelOnUnderwaterSpinPatch::InstallAtOffset(0x489F30);
     DisallowCancelOnWaterSurfaceSpinPatch::InstallAtOffset(0x48A3C8);
+
+    PlayerActorHakoniwaExeHeadSliding::InstallAtSymbol("_ZN19PlayerActorHakoniwa14exeHeadSlidingEv");
+
+    // Disable invincibility music patches
+    exl::patch::CodePatcher invincibleStartPatcher(0x4CC6FC);
+    invincibleStartPatcher.WriteInst(0x1F2003D5);  // NOP
+    exl::patch::CodePatcher invinciblePatcher(0x43F4A8);
+    invinciblePatcher.WriteInst(0x1F2003D5);       // NOP
 }
