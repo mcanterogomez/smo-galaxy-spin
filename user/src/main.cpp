@@ -202,8 +202,13 @@ struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryA
         if (isPadTriggerGalaxySpin(-1) && !rs::is2D(player) && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)) {
 
             if (player->mAnimator->isAnim("SpinSeparate") || 
+            player->mAnimator->isAnim("SpinAttackLeft") || 
+            player->mAnimator->isAnim("SpinAttackRight") || 
+            player->mAnimator->isAnim("SpinAttackAirLeft") || 
+            player->mAnimator->isAnim("SpinAttackAirRight") || 
+            player->mAnimator->isAnim("KoopaCapPunchL") ||
             player->mAnimator->isAnim("KoopaCapPunchR") || 
-            player->mAnimator->isAnim("KoopaCapPunchL"))
+            player->mAnimator->isAnim("RabbitGet"))
             return false;
     
             if (canGalaxySpin) {
@@ -241,8 +246,13 @@ struct PlayerTryActionCapSpinAttackBindEnd : public mallow::hook::Trampoline<Pla
         if (isPadTriggerGalaxySpin(-1) && !rs::is2D(player) && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)) {
 
             if (player->mAnimator->isAnim("SpinSeparate") || 
+            player->mAnimator->isAnim("SpinAttackLeft") || 
+            player->mAnimator->isAnim("SpinAttackRight") || 
+            player->mAnimator->isAnim("SpinAttackAirLeft") || 
+            player->mAnimator->isAnim("SpinAttackAirRight") || 
+            player->mAnimator->isAnim("KoopaCapPunchL") ||
             player->mAnimator->isAnim("KoopaCapPunchR") || 
-            player->mAnimator->isAnim("KoopaCapPunchL"))
+            player->mAnimator->isAnim("RabbitGet"))
             return false;
     
             if (canGalaxySpin) {
@@ -616,7 +626,13 @@ struct PlayerStateSwimExeSwimSpinCap : public mallow::hook::Trampoline<PlayerSta
             isGalaxySpin = true;
             triggerGalaxySpin = false;
             isSpinActive = true;
+
+            if (isNearCollectible) al::validateHitSensor(thisPtr->mActor, "Punch");
         }
+
+        if(isGalaxySpin && (al::isGreaterStep(thisPtr, 15) || al::isStep(thisPtr, -1)))
+            al::invalidateHitSensor(thisPtr->mActor, "Punch");
+
         if(isGalaxySpin && (al::isGreaterStep(thisPtr, 32) || al::isStep(thisPtr, -1))) {
             al::invalidateHitSensor(thisPtr->mActor, "GalaxySpin");
             isGalaxySpin = false;
@@ -634,7 +650,13 @@ struct PlayerStateSwimExeSwimSpinCapSurface : public mallow::hook::Trampoline<Pl
             isGalaxySpin = true;
             triggerGalaxySpin = false;
             isSpinActive = true;
+
+            if (isNearCollectible) al::validateHitSensor(thisPtr->mActor, "Punch");
         }
+
+        if(isGalaxySpin && (al::isGreaterStep(thisPtr, 15) || al::isStep(thisPtr, -1)))
+            al::invalidateHitSensor(thisPtr->mActor, "Punch");
+
         if(isGalaxySpin && (al::isGreaterStep(thisPtr, 32) || al::isStep(thisPtr, -1))) {
             al::invalidateHitSensor(thisPtr->mActor, "GalaxySpin");
             isGalaxySpin = false;
@@ -668,8 +690,20 @@ struct PlayerSpinCapAttackStartSpinSeparateSwimSurface : public mallow::hook::Tr
             return;
         }
 
-        //animator->startSubAnim("SpinSeparateSwim");
-        animator->startAnim("SpinSeparateSwim");
+        if (isNearCollectible) animator->startAnim("RabbitGet");
+        else animator->startAnim("SpinSeparateSwim");
+    }
+};
+
+struct PlayerSpinCapAttackStartSpinSeparateSwim : public mallow::hook::Trampoline<PlayerSpinCapAttackStartSpinSeparateSwim>{
+    static void Callback(PlayerSpinCapAttack* thisPtr, PlayerAnimator* animator) {
+        if(!isGalaxySpin && !triggerGalaxySpin) {
+            Orig(thisPtr, animator);
+            return;
+        }
+
+        if (isNearCollectible) animator->startAnim("RabbitGet");
+        else animator->startAnim("SpinSeparateSwim");
     }
 };
 
@@ -1695,6 +1729,7 @@ extern "C" void userMain() {
     PlayerStateSwimExeSwimSpinCapSurface::InstallAtSymbol("_ZN15PlayerStateSwim21exeSwimSpinCapSurfaceEv");
     PlayerStateSwimKill::InstallAtSymbol("_ZN15PlayerStateSwim4killEv");
     PlayerSpinCapAttackStartSpinSeparateSwimSurface::InstallAtSymbol("_ZN19PlayerSpinCapAttack28startSpinSeparateSwimSurfaceEP14PlayerAnimator");
+    PlayerSpinCapAttackStartSpinSeparateSwim::InstallAtSymbol("_ZN19PlayerSpinCapAttack21startSpinSeparateSwimEP14PlayerAnimator");
 
     // Allow carrying an object during a GalaxySpin
     PlayerCarryKeeperIsCarryDuringSpin::InstallAtOffset(0x423A24);
