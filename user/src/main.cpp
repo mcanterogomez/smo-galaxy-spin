@@ -53,6 +53,7 @@
 
 // mod‑specific
 #include "actors/custom/FireBall.h"
+#include "actors/custom/Hammer.h"
 #include "actors/custom/PlayerStateJump.h"
 #include "ModOptions.h"
 
@@ -129,12 +130,17 @@ al::LiveActorGroup* fireBalls = nullptr; // Global pointer for fireballs
 bool nextThrowLeft = true; // Global flag to track next throw direction
 bool canFireball = false; // Global flag to track fireball trigger
 
+static HammerBrosHammer* hammerAttack = nullptr; // Global pointer for hammer attack
+
 struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerActorHakoniwaInitPlayer> {
     static void Callback(PlayerActorHakoniwa* thisPtr, const al::ActorInitInfo* actorInfo, const PlayerInitInfo* playerInfo) {
         Orig(thisPtr, actorInfo, playerInfo);
 
         auto* model = thisPtr->mModelHolder->findModelActor("Mario");
 
+        hammerAttack = new HammerBrosHammer("HammerBrosHammer", model, "HammerBrosHammer", true);
+        hammerAttack->init(*actorInfo);
+        
         // Create and hide fireballs
         fireBalls = new al::LiveActorGroup("FireBrosFireBall", 2);
         while (!fireBalls->isFull()) {
@@ -164,6 +170,7 @@ struct PlayerActorHakoniwaInitAfterPlacement : public mallow::hook::Trampoline<P
         Orig(thisPtr);
 
         if (fireBalls) fireBalls->makeActorDeadAll();
+        if (hammerAttack) hammerAttack->makeActorDead();
     }
 };
 
@@ -446,6 +453,42 @@ public:
 
 PlayerStateSpinCapNrvGalaxySpinAir GalaxySpinAir;
 PlayerStateSpinCapNrvGalaxySpinGround GalaxySpinGround;
+
+static sead::Matrix34f hammerMtx;
+static const sead::Vector3f rotOffset(0.0f, sead::Mathf::deg2rad(-90.0f), 0.0f);
+
+class PlayerActorHakoniwaNrvHammer : public al::Nerve {
+public:
+    void execute(al::NerveKeeper* keeper) const override {
+        auto* player = keeper->getParent<PlayerActorHakoniwa>();
+        auto* model = player->mModelHolder->findModelActor("Mario");
+        auto* anim = player->mAnimator;
+
+
+        if (al::isFirstStep(player)) {
+            
+            anim->endSubAnim();
+            anim->startAnim("HammerAttack");
+
+            hammerAttack->makeActorAlive();
+
+            hammerAttack->attach(
+            al::getJointMtxPtr(model, "HandR"),
+            sead::Vector3f (0.0f, 50.0f, -37.5f),
+            rotOffset,
+            "Wait");
+
+            //al::startAction(hammerAttack, "Hammer");
+        }
+                
+        if (anim->isAnimEnd()) {
+            hammerAttack->makeActorDead();
+            al::setNerve(player, getNerveAt(nrvHakoniwaFall));
+        }
+    }
+};
+
+PlayerActorHakoniwaNrvHammer HammerNrv;
 
 struct PlayerSpinCapAttackAppear : public mallow::hook::Trampoline<PlayerSpinCapAttackAppear>{
     static void Callback(PlayerStateSpinCap* state) {
@@ -1206,22 +1249,44 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
 
 struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerActorHakoniwaExeRolling>{
     static void Callback(PlayerActorHakoniwa* thisPtr) {
-        if(isPadTriggerGalaxySpin(-1) && !thisPtr->mAnimator->isAnim("SpinSeparate") && canGalaxySpin) {
+        
+        if (isPadTriggerGalaxySpin(-1)
+        && !thisPtr->mAnimator->isAnim("SpinSeparate")
+        && canGalaxySpin
+        && hammerAttack
+        && al::isDead(hammerAttack)
+        ) {
+            al::setNerve(thisPtr, &HammerNrv);
+            return;
+        }
+
+        /*if(isPadTriggerGalaxySpin(-1) && !thisPtr->mAnimator->isAnim("SpinSeparate") && canGalaxySpin) {
             triggerGalaxySpin = true;
             al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
             return;
-        }
+        }*/
         Orig(thisPtr);
     }
 };
 
 struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActorHakoniwaExeSquat>{
     static void Callback(PlayerActorHakoniwa* thisPtr) {
-        if(isPadTriggerGalaxySpin(-1) && !thisPtr->mAnimator->isAnim("SpinSeparate") && canGalaxySpin) {
+
+        if (isPadTriggerGalaxySpin(-1)
+        && !thisPtr->mAnimator->isAnim("SpinSeparate")
+        && canGalaxySpin
+        && hammerAttack
+        && al::isDead(hammerAttack)
+        ) {
+            al::setNerve(thisPtr, &HammerNrv);
+            return;
+        }
+
+        /*if(isPadTriggerGalaxySpin(-1) && !thisPtr->mAnimator->isAnim("SpinSeparate") && canGalaxySpin) {
             triggerGalaxySpin = true;
             al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
             return;
-        }
+        }*/
         Orig(thisPtr);
     }
 };
@@ -1404,15 +1469,15 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook>{
                     fireBall->shoot(startPos, startQuat, offset, true, 0, false);
                 }
             }
-            if (onGround
-                && !isWater
-                && (anim->isAnimEnd()
-                || anim->isUpperBodyAnimEnd())) {
+            if (onGround && !isWater
+                && (anim->isAnimEnd() || anim->isUpperBodyAnimEnd())
+            ) {
                 al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
                 anim->clearUpperBodyAnim();
                 fireStep = -1;
             }
-            else if (anim->isUpperBodyAnimEnd()) {
+            else if (anim->isUpperBodyAnimEnd()
+            ) {
                 anim->clearUpperBodyAnim();
                 fireStep = -1;
 
