@@ -1,20 +1,25 @@
-// external libraries
+// C++ Standard Library
+#include <cstddef>
 #include <limits.h>
+
+// External hooking & config libraries
 #include <exl/hook/base.hpp>
 #include <mallow/config.hpp>
 #include <mallow/init/initLogging.hpp>
 #include <mallow/logging/logger.hpp>
 #include <mallow/mallow.hpp>
 
-// core system
-#include "Library/Nature/NatureUtil.h"
+// Core game system
 #include "System/GameDataFunction.h"
 
-// third‑party / project libs
+// Engine / “Library” headers
 #include "Library/Base/StringUtil.h"
 #include "Library/Controller/InputFunction.h"
+#include "Library/Controller/SpinInputAnalyzer.h"
 #include "Library/Effect/EffectSystemInfo.h"
 #include "Library/LiveActor/ActorActionFunction.h"
+#include "Library/LiveActor/ActorCollisionFunction.h"
+#include "Library/LiveActor/ActorClippingFunction.h"
 #include "Library/LiveActor/ActorFlagFunction.h"
 #include "Library/LiveActor/ActorModelFunction.h"
 #include "Library/LiveActor/ActorMovementFunction.h"
@@ -24,23 +29,27 @@
 #include "Library/LiveActor/LiveActorFunction.h"
 #include "Library/LiveActor/LiveActorGroup.h"
 #include "Library/Math/MathUtil.h"
+#include "Library/Nature/NatureUtil.h"
+#include "Library/Nature/WaterSurfaceFinder.h"
 #include "Library/Nerve/NerveSetupUtil.h"
 #include "Library/Nerve/NerveUtil.h"
 #include "Library/Placement/PlacementFunction.h"
+#include "Library/Player/PlayerUtil.h"
+#include "Library/Shadow/ActorShadowUtil.h"
 
-// game‑specific utilities
+// Game‑specific utilities
 #include "Project/HitSensor/HitSensor.h"
 #include "Util/PlayerCollisionUtil.h"
 #include "Util/PlayerUtil.h"
 #include "Util/SensorMsgFunction.h"
 
-// player actor & state headers
+// Player actor & state headers
 #include "Player/IUsePlayerCollision.h"
 #include "Player/PlayerActionGroundMoveControl.h"
-#include "Player/PlayerAnimator.h"
 #include "Player/PlayerActorHakoniwa.h"
 #include "Player/PlayerColliderHakoniwa.h"
-#include "Player/PlayerDamageKeeper.h"
+#include "Player/PlayerCounterForceRun.h"
+#include "Player/PlayerEquipmentUser.h"
 #include "Player/PlayerFunction.h"
 #include "Player/PlayerHackKeeper.h"
 #include "Player/PlayerInput.h"
@@ -48,21 +57,44 @@
 #include "Player/PlayerStateHeadSliding.h"
 #include "Player/PlayerStateSpinCap.h"
 #include "Player/PlayerStateSwim.h"
-#include "Player/PlayerStateWait.h"
 #include "Player/PlayerTrigger.h"
 
-// mod‑specific
+// Mod‑specific & custom actors
 #include "actors/custom/FireBall.h"
-#include "actors/custom/Hammer.h"
+#include "actors/custom/HammerBrosHammer.h"
+#include "actors/custom/PlayerAnimator.h"
+#include "actors/custom/PlayerDamageKeeper.h"
+#include "actors/custom/PlayerJudgeWallHitDown.h"
 #include "actors/custom/PlayerStateJump.h"
+#include "actors/custom/PlayerStateWait.h"
 #include "ModOptions.h"
 
 namespace rs {
     bool is2D(const IUseDimension*);
+    bool isActionCodeNoActionWall(IUsePlayerCollision const*);
+
+    bool sendMsgHackAttack(al::HitSensor* receiver, al::HitSensor* sender);
+    bool sendMsgCapAttack(al::HitSensor* receiver, al::HitSensor* sender);
+    bool sendMsgCapAttackCollide(al::HitSensor* receiver, al::HitSensor* sender);
+    bool sendMsgCapReflect(al::HitSensor* receiver, al::HitSensor* sender);
+    bool sendMsgCapReflectCollide(al::HitSensor* receiver, al::HitSensor* sender);
+    bool sendMsgBlowObjAttack(al::HitSensor* receiver, al::HitSensor* sender);
+    bool sendMsgCapItemGet(al::HitSensor* receiver, al::HitSensor* sender);
+    bool sendMsgEnemyAttackStrong(al::HitSensor* receiver, al::HitSensor* sender);
+    bool sendMsgBreedaPush(al::HitSensor* receiver, al::HitSensor* sender);
+    bool sendMsgWanwanEnemyAttack(al::HitSensor* receiver, al::HitSensor* sender);
+    bool sendMsgKillerMagnumAttack(al::HitSensor* receiver, al::HitSensor* sender);
+    bool sendMsgTsukkunThrust(al::HitSensor*, al::HitSensor*, sead::Vector3<float> const&, int, bool);
+    bool sendMsgCapTouchWall(al::HitSensor*, al::HitSensor*, sead::Vector3<float> const&, sead::Vector3<float> const&);
+    
+    al::HitSensor* tryGetCollidedWallSensor(IUsePlayerCollision const* collider);
+    al::HitSensor* tryGetCollidedGroundSensor(IUsePlayerCollision const* collider);
 }
+
 namespace PlayerEquipmentFunction {
     bool isEquipmentNoCapThrow(const PlayerEquipmentUser*);
 }
+
 class PlayerCarryKeeper {
 public:
     bool isCarry() const;
@@ -91,6 +123,53 @@ bool isPadTriggerGalaxySpin(int port) {
     }
 }
 
+struct PadTriggerYHook : public mallow::hook::Trampoline<PadTriggerYHook> {
+    static bool Callback(int port) {
+        
+        if(port == 100) return Orig(-1);
+
+        return false;
+    };
+};
+
+struct InputIsTriggerActionXexclusivelyHook : public mallow::hook::Trampoline<InputIsTriggerActionXexclusivelyHook> {
+    static bool Callback(const al::LiveActor* actor, int port) {
+        if(port == 100)
+            return Orig(actor, PlayerFunction::getPlayerInputPort(actor));
+        bool canCapThrow = true;
+        switch (mallow::config::getConfg<ModOptions>()->spinButton) {
+            case 'Y':
+                canCapThrow = al::isPadTriggerX(port);
+                break;
+            case 'X':
+                canCapThrow = al::isPadTriggerY(port);
+                break;
+        }
+        return Orig(actor, port) && canCapThrow;
+    }
+};
+
+struct InputIsTriggerActionCameraResetHook : public mallow::hook::Trampoline<InputIsTriggerActionCameraResetHook> {
+    static bool Callback(const al::LiveActor* actor, int port) {
+        switch (mallow::config::getConfg<ModOptions>()->spinButton) {
+            case 'L':
+                return al::isPadTriggerR(port);
+            case 'R':
+                return al::isPadTriggerL(port);
+        }
+        return Orig(actor, port);
+    }
+};
+
+struct TriggerCameraReset : public mallow::hook::Trampoline<TriggerCameraReset> {
+    static bool Callback(al::LiveActor* actor, int port) {
+        
+        if (al::isPadTriggerR(-1)) return false;
+
+        return Orig(actor, port);
+    }
+};
+
 al::LiveActor* hitBuffer[0x40];
 int hitBufferCount = 0;
 
@@ -99,6 +178,7 @@ const uintptr_t nrvSpinCapFall = 0x1d7ff70;
 const uintptr_t nrvHakoniwaFall = 0x01d78910;
 const uintptr_t nrvHakoniwaHipDrop = 0x1D78978;
 const uintptr_t nrvHakoniwaJump = 0x1D78948;
+const uintptr_t nrvHakoniwaDamage = 0x1D789B0;
 
 bool isGalaxySpin = false;
 bool canGalaxySpin = true;
@@ -131,6 +211,7 @@ bool nextThrowLeft = true; // Global flag to track next throw direction
 bool canFireball = false; // Global flag to track fireball trigger
 
 static HammerBrosHammer* hammerAttack = nullptr; // Global pointer for hammer attack
+static PlayerActorHakoniwa* hammerOwner = nullptr; // Global pointer for hammer owner
 
 struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerActorHakoniwaInitPlayer> {
     static void Callback(PlayerActorHakoniwa* thisPtr, const al::ActorInitInfo* actorInfo, const PlayerInitInfo* playerInfo) {
@@ -138,15 +219,19 @@ struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerAct
 
         auto* model = thisPtr->mModelHolder->findModelActor("Mario");
 
-        hammerAttack = new HammerBrosHammer("HammerBrosHammer", model, "HammerBrosHammer", true);
+        hammerAttack = new HammerBrosHammer("HammerBrosHammer", model, "PlayerHammer", true);
         hammerAttack->init(*actorInfo);
-        
+        //al::initCreateActorNoPlacementInfo(hammerAttack, *actorInfo);
+
+        // Set hammer attack owner
+        hammerOwner = thisPtr;
+
         // Create and hide fireballs
         fireBalls = new al::LiveActorGroup("FireBrosFireBall", 2);
         while (!fireBalls->isFull()) {
             auto* fb = new FireBrosFireBall("FireBall", model);
             fb->init(*actorInfo);
-            al::invalidateHitSensors(fb);
+            //al::initCreateActorNoPlacementInfo(fb, *actorInfo);
             fireBalls->registerActor(fb);
         }
         fireBalls->makeActorDeadAll();
@@ -174,7 +259,7 @@ struct PlayerActorHakoniwaInitAfterPlacement : public mallow::hook::Trampoline<P
     }
 };
 
-struct PlayerStateWaitExeWait : public mallow::hook::Trampoline<PlayerStateWaitExeWait>{
+struct PlayerStateWaitExeWait : public mallow::hook::Trampoline<PlayerStateWaitExeWait> {
     static void Callback(PlayerStateWait* state) {
         Orig(state);
 
@@ -197,7 +282,7 @@ struct PlayerStateWaitExeWait : public mallow::hook::Trampoline<PlayerStateWaitE
     }
 };
 
-struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttack>{
+struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttack> {
     static bool Callback(PlayerActorHakoniwa* player, bool a2) {
         // do not allow Y to trigger both pickup and spin on seeds (for picking up rocks, this function is not called)
         bool newIsCarry = player->mCarryKeeper->isCarry();
@@ -207,16 +292,18 @@ struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryA
         }
         prevIsCarry = newIsCarry;
 
-        if (isPadTriggerGalaxySpin(-1) && !rs::is2D(player) && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)) {
-
-            if (player->mAnimator->isAnim("SpinSeparate") || 
-            player->mAnimator->isAnim("SpinAttackLeft") || 
-            player->mAnimator->isAnim("SpinAttackRight") || 
-            player->mAnimator->isAnim("SpinAttackAirLeft") || 
-            player->mAnimator->isAnim("SpinAttackAirRight") || 
-            player->mAnimator->isAnim("KoopaCapPunchL") ||
-            player->mAnimator->isAnim("KoopaCapPunchR") || 
-            player->mAnimator->isAnim("RabbitGet"))
+        if (isPadTriggerGalaxySpin(-1)
+        && !rs::is2D(player)
+        && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)
+        ) {
+            if (player->mAnimator->isAnim("SpinSeparate")
+            || player->mAnimator->isAnim("SpinAttackLeft") 
+            || player->mAnimator->isAnim("SpinAttackRight") 
+            || player->mAnimator->isAnim("SpinAttackAirLeft")
+            || player->mAnimator->isAnim("SpinAttackAirRight")
+            || player->mAnimator->isAnim("KoopaCapPunchL")
+            || player->mAnimator->isAnim("KoopaCapPunchR")
+            || player->mAnimator->isAnim("RabbitGet"))
             return false;
     
             if (canGalaxySpin) {
@@ -229,9 +316,10 @@ struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryA
             return true;
         }
 
-        if (al::isPadTriggerR(-1) && !rs::is2D(player) && !player->mCarryKeeper->isCarry() && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)) {
-            canFireball = true;
-        }
+        if (al::isPadTriggerR(-1)
+        && !rs::is2D(player)
+        && !player->mCarryKeeper->isCarry()
+        && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)) canFireball = true;
 
         if(Orig(player, a2)) {
             triggerGalaxySpin = false;
@@ -241,7 +329,7 @@ struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryA
     }
 };
 
-struct PlayerTryActionCapSpinAttackBindEnd : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttackBindEnd>{
+struct PlayerTryActionCapSpinAttackBindEnd : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttackBindEnd> {
     static bool Callback(PlayerActorHakoniwa* player, bool a2) {
         // do not allow Y to trigger both pickup and spin on seeds (for picking up rocks, this function is not called)
         bool newIsCarry = player->mCarryKeeper->isCarry();
@@ -251,16 +339,18 @@ struct PlayerTryActionCapSpinAttackBindEnd : public mallow::hook::Trampoline<Pla
         }
         prevIsCarry = newIsCarry;
 
-        if (isPadTriggerGalaxySpin(-1) && !rs::is2D(player) && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)) {
-
-            if (player->mAnimator->isAnim("SpinSeparate") || 
-            player->mAnimator->isAnim("SpinAttackLeft") || 
-            player->mAnimator->isAnim("SpinAttackRight") || 
-            player->mAnimator->isAnim("SpinAttackAirLeft") || 
-            player->mAnimator->isAnim("SpinAttackAirRight") || 
-            player->mAnimator->isAnim("KoopaCapPunchL") ||
-            player->mAnimator->isAnim("KoopaCapPunchR") || 
-            player->mAnimator->isAnim("RabbitGet"))
+        if (isPadTriggerGalaxySpin(-1)
+        && !rs::is2D(player)
+        && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)
+        ) {
+            if (player->mAnimator->isAnim("SpinSeparate")
+            || player->mAnimator->isAnim("SpinAttackLeft") 
+            || player->mAnimator->isAnim("SpinAttackRight") 
+            || player->mAnimator->isAnim("SpinAttackAirLeft")
+            || player->mAnimator->isAnim("SpinAttackAirRight")
+            || player->mAnimator->isAnim("KoopaCapPunchL")
+            || player->mAnimator->isAnim("KoopaCapPunchR")
+            || player->mAnimator->isAnim("RabbitGet"))
             return false;
     
             if (canGalaxySpin) {
@@ -273,9 +363,10 @@ struct PlayerTryActionCapSpinAttackBindEnd : public mallow::hook::Trampoline<Pla
             return true;
         }
 
-        if (al::isPadTriggerR(-1) && !rs::is2D(player) && !player->mCarryKeeper->isCarry() && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)) {
-            canFireball = true;
-        }
+        if (al::isPadTriggerR(-1)
+        && !rs::is2D(player)
+        && !player->mCarryKeeper->isCarry()
+        && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)) canFireball = true;
 
         if(Orig(player, a2)) {
             triggerGalaxySpin = false;
@@ -292,10 +383,10 @@ class PlayerStateSpinCapNrvGalaxySpinGround : public al::Nerve {
             PlayerActorHakoniwa* player = static_cast<PlayerActorHakoniwa*>(state->mActor);
             
             bool isCarrying = player->mCarryKeeper->isCarry();
-            bool isRotatingL = state->mAnimator->isAnim("SpinGroundL")
-                || player->mInput->isSpinInput();
-            bool isRotatingR = state->mAnimator->isAnim("SpinGroundR")
-                || player->mInput->isSpinInput();
+            bool isRotatingL = state->mAnimator->isAnim("SpinGroundL");
+            bool isRotatingR = state->mAnimator->isAnim("SpinGroundR");
+            bool didSpin = player->mInput->isSpinInput();
+            int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
             bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
 
             isSpinActive = true;
@@ -306,7 +397,18 @@ class PlayerStateSpinCapNrvGalaxySpinGround : public al::Nerve {
 
                 if (!isSpinning) {
 
-                    if (isRotatingL) {
+                    if (didSpin) {
+                        if (spinDir > 0) {
+                            state->mAnimator->startSubAnim("SpinAttackLeft");
+                            state->mAnimator->startAnim ("SpinAttackLeft");
+                        }
+                        else {
+                            state->mAnimator->startSubAnim("SpinAttackRight");
+                            state->mAnimator->startAnim ("SpinAttackRight");
+                        }
+                        al::validateHitSensor(state->mActor, "DoubleSpin");
+
+                    } else if (isRotatingL) {
                         state->mAnimator->startSubAnim("SpinAttackLeft");
                         state->mAnimator->startAnim("SpinAttackLeft");
                         al::validateHitSensor(state->mActor, "DoubleSpin");
@@ -389,7 +491,7 @@ class PlayerStateSpinCapNrvGalaxySpinGround : public al::Nerve {
                 isSpinActive = false;
             }
         }
-    };
+};
             
 class PlayerStateSpinCapNrvGalaxySpinAir : public al::Nerve {
 public:
@@ -399,11 +501,11 @@ public:
 
         // true only while that exact anim is playing
         bool isRotatingAirL  = state->mAnimator->isAnim("StartSpinJumpL")
-                            || state->mAnimator->isAnim("RestartSpinJumpL")
-                            || player->mInput->isSpinInput();
+                            || state->mAnimator->isAnim("RestartSpinJumpL");
         bool isRotatingAirR  = state->mAnimator->isAnim("StartSpinJumpR")
-                            || state->mAnimator->isAnim("RestartSpinJumpR")
-                            || player->mInput->isSpinInput();
+                            || state->mAnimator->isAnim("RestartSpinJumpR");
+        bool didSpin = player->mInput->isSpinInput();
+        int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
         bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
 
         isSpinActive = true;
@@ -412,7 +514,16 @@ public:
 
             if (!isSpinning) {
 
-                if (isRotatingAirL) {
+                if (didSpin) {
+                    if (spinDir > 0) {
+                        state->mAnimator->startAnim("SpinAttackAirLeft");
+                    }
+                    else {
+                        state->mAnimator->startAnim("SpinAttackAirRight");
+                    }
+                    al::validateHitSensor(state->mActor, "DoubleSpin");
+
+                } else if (isRotatingAirL) {
                     //state->mAnimator->startSubAnim("SpinAttackRight");
                     state->mAnimator->startAnim("SpinAttackAirLeft");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
@@ -454,43 +565,130 @@ public:
 PlayerStateSpinCapNrvGalaxySpinAir GalaxySpinAir;
 PlayerStateSpinCapNrvGalaxySpinGround GalaxySpinGround;
 
-static sead::Matrix34f hammerMtx;
-static const sead::Vector3f rotOffset(0.0f, sead::Mathf::deg2rad(-90.0f), 0.0f);
-
 class PlayerActorHakoniwaNrvHammer : public al::Nerve {
 public:
     void execute(al::NerveKeeper* keeper) const override {
         auto* player = keeper->getParent<PlayerActorHakoniwa>();
         auto* model = player->mModelHolder->findModelActor("Mario");
-        auto* anim = player->mAnimator;
+        auto* judge = reinterpret_cast<PlayerJudgeWallHitDown*>(player->mJudgeWallHitDown);
 
+        bool isGround = rs::isOnGround(player, player->mCollider);
+        bool isWater = al::isInWater(player);
+        bool isSurface = player->mWaterSurfaceFinder->isFoundSurface();
 
-        if (al::isFirstStep(player)) {
-            
-            anim->endSubAnim();
-            anim->startAnim("HammerAttack");
+        auto* equip = player->mEquipmentUser;
+        auto* counter = player->mCounterForceRun;
+
+        const sead::Matrix34f* mL = al::getJointMtxPtr(model, "ArmL2");
+        const sead::Matrix34f* mR = al::getJointMtxPtr(model, "ArmR2");
+
+        sead::Vector3f posL = mL->getTranslation();
+        sead::Vector3f posR = mR->getTranslation();
+        sead::Vector3f mid  = (posL + posR) * 0.5f;
+
+        sead::Quatf qMid;
+        sead::Quatf qL; mL->toQuat(qL);
+        sead::Quatf qR; mR->toQuat(qR);
+        al::slerpQuat(&qMid, qL, qR, 0.5f);
+
+        static sead::Matrix34f hammerMtx;
+        hammerMtx.makeQT(qMid, mid);
+
+        if (al::isAlive(hammerAttack)
+        ) {
+            al::onCollide(hammerAttack);
+            al::invalidateClipping(hammerAttack);
+            al::showShadow(hammerAttack);
+        }
+        
+        if (al::isFirstStep(player)
+        ) {
+            hitBufferCount = 0;
+
+            player->mAnimator->endSubAnim();
+
+            if (!isGround) {
+                player->mAnimator->startAnim("RollingStart");
+                al::validateHitSensor(hammerAttack, "AttackHack");
+            } else {
+                player->mAnimator->startAnim("HammerAttack");
+            }
 
             hammerAttack->makeActorAlive();
-
+            
             hammerAttack->attach(
-            al::getJointMtxPtr(model, "HandR"),
-            sead::Vector3f (0.0f, 50.0f, -37.5f),
-            rotOffset,
-            "Wait");
-
-            //al::startAction(hammerAttack, "Hammer");
+            &hammerMtx,
+            //sead::Vector3f (0.0f, 50.0f, -40.0f), // original
+            //sead::Vector3f (0.0f, sead::Mathf::deg2rad(-90.0f), 0.0f),
+            sead::Vector3f (0.0f, -12.5f, -37.5f),
+            sead::Vector3f (0.0f, sead::Mathf::deg2rad(-90.0f), 0.0f),
+            "Hammer");
         }
-                
-        if (anim->isAnimEnd()) {
+
+        if (player->mAnimator->isAnim("RollingStart")
+            && player->mAnimator->isAnimEnd()
+        ) {
+            player->mAnimator->startAnim("Rolling");
+            al::startAction(hammerAttack, "Spin");
+        }
+
+        if ((player->mAnimator->isAnim("RollingStart")
+            || player->mAnimator->isAnim("Rolling"))
+            && isGround
+        ) {
+            player->mAnimator->endSubAnim();
+            al::startAction(hammerAttack, "Hammer");
+            player->mAnimator->startAnim("HammerAttack");
+        }
+
+        if (al::isStep(player, 3)
+        ) {
+            sead::Vector3f currentVelocity = al::getVelocity(player);
+            if (isGround) {
+                currentVelocity *= 0.5f;
+            } else {
+                if (currentVelocity.y > 0.0f) currentVelocity.y = 0.0f;
+                //currentVelocity += al::getGravity(player);
+            }
+            al::setVelocity(player, currentVelocity);
+        }
+
+        if (!isGround) al::addVelocity(player, (al::getGravity(player) * 0.5f));
+
+        if (al::isStep(player, 6)) al::validateHitSensor(hammerAttack, "AttackHack");
+        
+        if (player->mAnimator->isAnimEnd()
+        ) {
             hammerAttack->makeActorDead();
+            al::offCollide(hammerAttack);
+            al::invalidateHitSensor(hammerAttack, "AttackHack");
             al::setNerve(player, getNerveAt(nrvHakoniwaFall));
+            return;
+        }
+        else if (isWater && !isSurface
+        ) {
+            hammerAttack->makeActorDead();
+            al::offCollide(hammerAttack);
+            al::invalidateHitSensor(hammerAttack, "AttackHack");
+            al::setNerve(player, getNerveAt(nrvHakoniwaFall));
+            al::tryEmitEffect(hammerAttack, "Break", nullptr);
+            return;
+        }
+        else if (judge && judge->judge()
+        ) {
+            // trigger 10 = EActionTrigger::Bonk
+            player->mTrigger->set(PlayerTrigger::EActionTrigger_val10);            
+            if (equip && equip->mEquipmentSensor && counter && counter->mCounter >= 1) equip->cancelEquip();
+            al::setNerve(player, getNerveAt(nrvHakoniwaDamage));
+            al::tryEmitEffect(hammerAttack, "Break", nullptr);
+            return;
         }
     }
 };
 
 PlayerActorHakoniwaNrvHammer HammerNrv;
 
-struct PlayerSpinCapAttackAppear : public mallow::hook::Trampoline<PlayerSpinCapAttackAppear>{
+struct PlayerSpinCapAttackAppear : public mallow::hook::Trampoline<PlayerSpinCapAttackAppear> {
     static void Callback(PlayerStateSpinCap* state) {
 
         const bool isGrounded = rs::isOnGround(state->mActor, state->mCollider)
@@ -563,7 +761,7 @@ struct PlayerSpinCapAttackAppear : public mallow::hook::Trampoline<PlayerSpinCap
     }
 };
 
-struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinCapKill>{
+struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinCapKill> {
     static void Callback(PlayerStateSpinCap* state) {
         Orig(state);
         canStandardSpin = true;
@@ -575,7 +773,7 @@ struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinC
     }
 };
 
-struct PlayerStateSpinCapFall : public mallow::hook::Trampoline<PlayerStateSpinCapFall>{
+struct PlayerStateSpinCapFall : public mallow::hook::Trampoline<PlayerStateSpinCapFall> {
     static void Callback(PlayerStateSpinCap* state) {
         Orig(state);
 
@@ -607,25 +805,25 @@ struct PlayerStateSpinCapFall : public mallow::hook::Trampoline<PlayerStateSpinC
     }
 };
 
-struct PlayerStateSpinCapIsEnableCancelHipDrop : public mallow::hook::Trampoline<PlayerStateSpinCapIsEnableCancelHipDrop>{
+struct PlayerStateSpinCapIsEnableCancelHipDrop : public mallow::hook::Trampoline<PlayerStateSpinCapIsEnableCancelHipDrop> {
     static bool Callback(PlayerStateSpinCap* state) {
         return Orig(state) || (al::isNerve(state, &GalaxySpinAir) && al::isGreaterStep(state, 10));
     }
 };
 
-struct PlayerStateSpinCapIsEnableCancelAir : public mallow::hook::Trampoline<PlayerStateSpinCapIsEnableCancelAir>{
+struct PlayerStateSpinCapIsEnableCancelAir : public mallow::hook::Trampoline<PlayerStateSpinCapIsEnableCancelAir> {
     static bool Callback(PlayerStateSpinCap* state) {
         return Orig(state) && !(!state->mIsDead && al::isNerve(state, &GalaxySpinAir) && al::isLessEqualStep(state, 22));
     }
 };
 
-struct PlayerStateSpinCapIsSpinAttackAir : public mallow::hook::Trampoline<PlayerStateSpinCapIsSpinAttackAir>{
+struct PlayerStateSpinCapIsSpinAttackAir : public mallow::hook::Trampoline<PlayerStateSpinCapIsSpinAttackAir> {
     static bool Callback(PlayerStateSpinCap* state) {
         return Orig(state) || (!state->mIsDead && al::isNerve(state, &GalaxySpinAir) && al::isLessEqualStep(state, 22));
     }
 };
 
-struct PlayerStateSpinCapIsEnableCancelGround : public mallow::hook::Trampoline<PlayerStateSpinCapIsEnableCancelGround>{
+struct PlayerStateSpinCapIsEnableCancelGround : public mallow::hook::Trampoline<PlayerStateSpinCapIsEnableCancelGround> {
     static bool Callback(PlayerStateSpinCap* state) {
         // Check if Mario is in the GalaxySpinGround nerve and performing the SpinSeparate move
         bool isSpinSeparate = state->mAnimator->isAnim("SpinSeparate");
@@ -635,24 +833,8 @@ struct PlayerStateSpinCapIsEnableCancelGround : public mallow::hook::Trampoline<
     }
 };
 
-struct PlayerConstGetSpinAirSpeedMax : public mallow::hook::Trampoline<PlayerConstGetSpinAirSpeedMax>{
-    static float Callback(PlayerConst* playerConst) {
-        if(isGalaxySpin && !isPunching)
-            return playerConst->getNormalMaxSpeed();
-        return Orig(playerConst);
-    }
-};
-
-struct PlayerConstGetSpinBrakeFrame : public mallow::hook::Trampoline<PlayerConstGetSpinBrakeFrame>{
-    static s32 Callback(PlayerConst* playerConst) {
-        if(isGalaxySpin && !isPunching)
-            return 0;
-        return Orig(playerConst);
-    }
-};
-
 // used in swimming, which also calls tryActionCapSpinAttack before, so just assume isGalaxySpin is properly set up
-struct PlayerSpinCapAttackIsSeparateSingleSpin : public mallow::hook::Trampoline<PlayerSpinCapAttackIsSeparateSingleSpin>{
+struct PlayerSpinCapAttackIsSeparateSingleSpin : public mallow::hook::Trampoline<PlayerSpinCapAttackIsSeparateSingleSpin> {
     static bool Callback(PlayerStateSwim* thisPtr) {
         if(triggerGalaxySpin) {
             return true;
@@ -661,7 +843,7 @@ struct PlayerSpinCapAttackIsSeparateSingleSpin : public mallow::hook::Trampoline
     }
 };
 
-struct PlayerStateSwimExeSwimSpinCap : public mallow::hook::Trampoline<PlayerStateSwimExeSwimSpinCap>{
+struct PlayerStateSwimExeSwimSpinCap : public mallow::hook::Trampoline<PlayerStateSwimExeSwimSpinCap> {
     static void Callback(PlayerStateSwim* thisPtr) {
         Orig(thisPtr);
         if(triggerGalaxySpin && al::isFirstStep(thisPtr)) {
@@ -685,7 +867,7 @@ struct PlayerStateSwimExeSwimSpinCap : public mallow::hook::Trampoline<PlayerSta
     }
 };
 
-struct PlayerStateSwimExeSwimSpinCapSurface : public mallow::hook::Trampoline<PlayerStateSwimExeSwimSpinCapSurface>{
+struct PlayerStateSwimExeSwimSpinCapSurface : public mallow::hook::Trampoline<PlayerStateSwimExeSwimSpinCapSurface> {
     static void Callback(PlayerStateSwim* thisPtr) {
         Orig(thisPtr);
         if(triggerGalaxySpin && al::isFirstStep(thisPtr)) {
@@ -709,7 +891,7 @@ struct PlayerStateSwimExeSwimSpinCapSurface : public mallow::hook::Trampoline<Pl
     }
 };
 
-struct PlayerStateSwimExeSwimHipDropHeadSliding : public mallow::hook::Trampoline<PlayerStateSwimExeSwimHipDropHeadSliding>{
+struct PlayerStateSwimExeSwimHipDropHeadSliding : public mallow::hook::Trampoline<PlayerStateSwimExeSwimHipDropHeadSliding> {
     static void Callback(PlayerStateSwim* thisPtr) {
         Orig(thisPtr);
         if(isPadTriggerGalaxySpin(-1))
@@ -718,7 +900,7 @@ struct PlayerStateSwimExeSwimHipDropHeadSliding : public mallow::hook::Trampolin
     }
 };
 
-struct PlayerStateSwimKill : public mallow::hook::Trampoline<PlayerStateSwimKill>{
+struct PlayerStateSwimKill : public mallow::hook::Trampoline<PlayerStateSwimKill> {
     static void Callback(PlayerStateSwim* state) {
         Orig(state);
         isGalaxySpin = false;
@@ -727,7 +909,7 @@ struct PlayerStateSwimKill : public mallow::hook::Trampoline<PlayerStateSwimKill
     }
 };
 
-struct PlayerSpinCapAttackStartSpinSeparateSwimSurface : public mallow::hook::Trampoline<PlayerSpinCapAttackStartSpinSeparateSwimSurface>{
+struct PlayerSpinCapAttackStartSpinSeparateSwimSurface : public mallow::hook::Trampoline<PlayerSpinCapAttackStartSpinSeparateSwimSurface> {
     static void Callback(PlayerSpinCapAttack* thisPtr, PlayerAnimator* animator) {
         if(!isGalaxySpin && !triggerGalaxySpin) {
             Orig(thisPtr, animator);
@@ -739,7 +921,7 @@ struct PlayerSpinCapAttackStartSpinSeparateSwimSurface : public mallow::hook::Tr
     }
 };
 
-struct PlayerSpinCapAttackStartSpinSeparateSwim : public mallow::hook::Trampoline<PlayerSpinCapAttackStartSpinSeparateSwim>{
+struct PlayerSpinCapAttackStartSpinSeparateSwim : public mallow::hook::Trampoline<PlayerSpinCapAttackStartSpinSeparateSwim> {
     static void Callback(PlayerSpinCapAttack* thisPtr, PlayerAnimator* animator) {
         if(!isGalaxySpin && !triggerGalaxySpin) {
             Orig(thisPtr, animator);
@@ -751,60 +933,119 @@ struct PlayerSpinCapAttackStartSpinSeparateSwim : public mallow::hook::Trampolin
     }
 };
 
-struct DisallowCancelOnUnderwaterSpinPatch : public mallow::hook::Inline<DisallowCancelOnUnderwaterSpinPatch>{
+struct DisallowCancelOnUnderwaterSpinPatch : public mallow::hook::Inline<DisallowCancelOnUnderwaterSpinPatch> {
     static void Callback(exl::hook::InlineCtx* ctx) {
         if(isGalaxySpin)
             ctx->W[20] = true;
     }
 };
 
-struct DisallowCancelOnWaterSurfaceSpinPatch : public mallow::hook::Inline<DisallowCancelOnWaterSurfaceSpinPatch>{
+struct DisallowCancelOnWaterSurfaceSpinPatch : public mallow::hook::Inline<DisallowCancelOnWaterSurfaceSpinPatch> {
     static void Callback(exl::hook::InlineCtx* ctx) {
         if(isGalaxySpin)
             ctx->W[21] = true;
     }
 };
 
-namespace rs {
-    bool sendMsgHackAttack(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgCapAttack(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgCapAttackCollide(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgCapReflect(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgCapReflectCollide(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgBlowObjAttack(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgCapItemGet(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgEnemyAttackStrong(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgBreedaPush(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgWanwanEnemyAttack(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgKillerMagnumAttack(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgTsukkunThrust(al::HitSensor*, al::HitSensor*, sead::Vector3<float> const&, int, bool);
-    bool sendMsgCapTouchWall(al::HitSensor*, al::HitSensor*, sead::Vector3<float> const&, sead::Vector3<float> const&);
-    al::HitSensor* tryGetCollidedWallSensor(IUsePlayerCollision const* collider);
-    al::HitSensor* tryGetCollidedGroundSensor(IUsePlayerCollision const* collider);
+void tryCapSpinAndRethrow(PlayerActorHakoniwa* player, bool a2) {
+
+    if(isGalaxySpin) {  // currently in GalaxySpin
+        bool trySpin = player->tryActionCapSpinAttackImpl(a2);  // try to start another spin, can only succeed for standard throw
+        if(!trySpin)
+            return;
+
+        if(!isPadTriggerGalaxySpin(-1)) {  // standard throw or fakethrow
+            if(canStandardSpin) {
+                // tries a standard spin, is allowed to do so
+                al::setNerve(player, getNerveAt(spinCapNrvOffset));
+                isStandardAfterGalaxySpin = true;
+                return;
+            }
+            else {
+                // tries a standard spin, not allowed to do so
+                //player->mPlayerSpinCapAttack->tryStartCapSpinAirMiss(player->mPlayerAnimator);
+                // fakespins on standard spins should not happen in this mod
+                return;
+            }
+        } else {  // Y pressed => GalaxySpin or fake-GalaxySpin
+            if(galaxyFakethrowRemainder != -1 || player->mAnimator->isAnim("SpinSeparate"))
+                return;  // already in fakethrow or GalaxySpin
+
+            if(canGalaxySpin) {
+                // tries a GalaxySpin, is allowed to do so => should never happen, but better safe than sorry
+                al::setNerve(player, getNerveAt(spinCapNrvOffset));
+                return;
+            }
+            else {
+                // tries a GalaxySpin, not allowed to do so
+                galaxyFakethrowRemainder = -2;
+                return;
+            }
+        }
+
+        // not attempting or allowed to initiate a spin, so check if should be fakethrow
+        if(isPadTriggerGalaxySpin(-1) && galaxyFakethrowRemainder == -1 && !player->mAnimator->isAnim("SpinSeparate")) {
+            // Y button pressed, start a galaxy fakethrow
+            galaxyFakethrowRemainder = -2;
+            return;
+        }
+    }
+    else {  // currently in standard spin
+        bool trySpin = player->tryActionCapSpinAttackImpl(a2);  // try to start another spin, can succeed for GalaxySpin and fakethrow
+        if(!trySpin)
+            return;
+
+        if(!isPadTriggerGalaxySpin(-1)) {  // standard throw or fakethrow
+            if(canStandardSpin) {
+                // tries a standard spin, is allowed to do so => should never happen, but better safe than sorry
+                al::setNerve(player, getNerveAt(spinCapNrvOffset));
+                return;
+            }
+            else {
+                // tries a standard spin, not allowed to do so
+                //player->mPlayerSpinCapAttack->tryStartCapSpinAirMiss(player->mPlayerAnimator);
+                // fakespins on standard spins should not happen in this mod
+                return;
+            }
+        } else {  // Y pressed => GalaxySpin or fake-GalaxySpin
+            if(galaxyFakethrowRemainder != -1 || player->mAnimator->isAnim("SpinSeparate"))
+                return;  // already in fakethrow or GalaxySpin
+
+            if(canGalaxySpin) {
+                // tries a GalaxySpin, is allowed to do so
+                al::setNerve(player, getNerveAt(spinCapNrvOffset));
+                isGalaxyAfterStandardSpin = true;
+                return;
+            }
+            else {
+                // tries a GalaxySpin, not allowed to do so
+                galaxyFakethrowRemainder = -2;
+                return;
+            }
+        }
+    }
 }
 
-struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSensorHook>{
+struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSensorHook> {
     static void Callback(PlayerActorHakoniwa* thisPtr, al::HitSensor* target, al::HitSensor* source) {
         
         // Null check for thisPtr, target, and source
-        if (!thisPtr || !target || !source) {
-            return; // Exit early if any critical pointer is null
-        }
+        if (!thisPtr || !target || !source) return;
         
         al::LiveActor* sourceHost = al::getSensorHost(source);
         al::LiveActor* targetHost = al::getSensorHost(target);
         
         // Null check for targetHost and sourceHost
-        if (!targetHost || !sourceHost) {
-            return; // Exit early if either targetHost or sourceHost is null
-        }
+        if (!targetHost || !sourceHost) return;
 
-        if((al::isSensorName(target, "HipDropKnockDown")) &&
-            thisPtr->mAnimator && 
-            (al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDrop") ||
-            al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropReaction") ||
-            al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallL") ||
-            al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallR"))) {
+        if(
+            (al::isSensorName(target, "HipDropKnockDown"))
+            && thisPtr->mAnimator
+            && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDrop")
+            || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropReaction")
+            || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallL")
+            || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallR"))
+        ) {
             bool isInHitBuffer = false;
             for(int i = 0; i < hitBufferCount; i++) {
                 if(hitBuffer[i] == sourceHost) {
@@ -812,11 +1053,13 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     break;
                 }
             }
-            if (rs::tryGetCollidedGroundSensor(thisPtr->mCollider) &&
-            !al::isEqualSubString(typeid(*sourceHost).name(),"FixMapParts") &&
-            !al::isEqualSubString(typeid(*sourceHost).name(),"CitySignal")) {
-                if(!isInHitBuffer) {
-                    if (al::sendMsgExplosion(source, target, nullptr)) {
+            if(!isInHitBuffer) {
+                if (rs::tryGetCollidedGroundSensor(thisPtr->mCollider)
+                    && !al::isEqualSubString(typeid(*sourceHost).name(),"FixMapParts")
+                    && !al::isEqualSubString(typeid(*sourceHost).name(),"CitySignal")
+                ) {
+                    if (al::sendMsgExplosion(source, target, nullptr)
+                    ) {
                         hitBuffer[hitBufferCount++] = al::getSensorHost(source);
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
@@ -855,9 +1098,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
             }
 
             // Null check for sourceHost's NerveKeeper
-            if (!sourceHost->getNerveKeeper()) {
-                return; // Exit early if NerveKeeper is null
-            }
+            if (!sourceHost->getNerveKeeper()) return;
 
             if(sourceHost && sourceHost->getNerveKeeper()) {
                 const al::Nerve* sourceNrv = sourceHost->getNerveKeeper()->getCurrentNerve();
@@ -916,18 +1157,21 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
             }
             if(!isInHitBuffer) {
                 if (al::isEqualSubString(typeid(*sourceHost).name(),"CapSwitchTimer")
-                && rs::sendMsgCapStartLockOn(source, target)) {
+                    && rs::sendMsgCapStartLockOn(source, target)
+                ) {
                     //al::setNerve(sourceHost, getNerveAt(0x1CE4338));
                     hitBuffer[hitBufferCount++] = sourceHost;
                     sead::Vector3 effectPos = al::getTrans(targetHost);
                     effectPos.y += 50.0f;
-                    if (al::isSensorName(target, "Punch")) {
+                    if (al::isSensorName(target, "Punch")
+                    ) {
                         sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                         direction.normalize();
                         effectPos += direction * 100.0f;
                     }
                     if (al::isSensorName(target, "GalaxySpin")
-                    || al::isSensorName(target, "DoubleSpin")) {
+                        || al::isSensorName(target, "DoubleSpin")
+                    ) {
                         sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                         direction.normalize();
                         effectPos += direction * 75.0f;
@@ -936,18 +1180,21 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     return;
                 }
                 if (!al::isEqualSubString(typeid(*sourceHost).name(),"CapSwitchTimer")
-                && al::isEqualSubString(typeid(*sourceHost).name(),"CapSwitch")) {
+                    && al::isEqualSubString(typeid(*sourceHost).name(),"CapSwitch")
+                ) {
                     al::setNerve(sourceHost, getNerveAt(0x1CE3E18));
                     hitBuffer[hitBufferCount++] = sourceHost;
                     sead::Vector3 effectPos = al::getTrans(targetHost);
                     effectPos.y += 50.0f;
-                    if (al::isSensorName(target, "Punch")) {
+                    if (al::isSensorName(target, "Punch")
+                    ) {
                         sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                         direction.normalize();
                         effectPos += direction * 100.0f;
                     }
                     if (al::isSensorName(target, "GalaxySpin")
-                    || al::isSensorName(target, "DoubleSpin")) {
+                        || al::isSensorName(target, "DoubleSpin")
+                    ) {
                         sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                         direction.normalize();
                         effectPos += direction * 75.0f;
@@ -955,18 +1202,21 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     al::tryEmitEffect(targetHost, "Hit", &effectPos);
                     return;
                 }
-                if (al::isEqualSubString(typeid(*sourceHost).name(),"GolemClimbWeakPoint")) {
+                if (al::isEqualSubString(typeid(*sourceHost).name(),"GolemClimbWeakPoint")
+                ) {
                     al::setNerve(sourceHost, getNerveAt(0x1C69D08));
                     hitBuffer[hitBufferCount++] = sourceHost;
                     sead::Vector3 effectPos = al::getTrans(targetHost);
                     effectPos.y += 50.0f;
-                    if (al::isSensorName(target, "Punch")) {
+                    if (al::isSensorName(target, "Punch")
+                    ) {
                         sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                         direction.normalize();
                         effectPos += direction * 100.0f;
                     }
                     if (al::isSensorName(target, "GalaxySpin")
-                    || al::isSensorName(target, "DoubleSpin")) {
+                        || al::isSensorName(target, "DoubleSpin")
+                    ) {
                         sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                         direction.normalize();
                         effectPos += direction * 75.0f;
@@ -975,7 +1225,8 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     return;
                 }
                 if (al::isSensorNpc(source) &&
-                !al::isEqualSubString(typeid(*sourceHost).name(),"YoshiFruit")) {
+                    !al::isEqualSubString(typeid(*sourceHost).name(),"YoshiFruit")
+                ) {
                     if (
                         ((al::isEqualSubString(typeid(*sourceHost).name(),"RadiconCar") ||
                         al::isEqualSubString(typeid(*sourceHost).name(),"CollectAnimal")) &&
@@ -989,29 +1240,33 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        if (al::isSensorName(target, "Punch")) {
+                        if (al::isSensorName(target, "Punch")
+                        ) {
                             sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                             direction.normalize();
                             effectPos += direction * 100.0f;
                         }
                         if (al::isSensorName(target, "GalaxySpin")
-                        || al::isSensorName(target, "DoubleSpin")) {
+                            || al::isSensorName(target, "DoubleSpin")
+                        ) {
                             sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                             direction.normalize();
                             effectPos += direction * 75.0f;
                         }
-                        if (al::isEqualSubString(typeid(*sourceHost).name(),"Frog")) {
-                            al::tryDeleteEffect(targetHost, "HitSmall");}
-                        (!al::isEqualSubString(typeid(*sourceHost).name(),"CollectAnimal") &&
-                        al::tryEmitEffect(targetHost, "Hit", &effectPos));
+                        if (al::isEqualSubString(typeid(*sourceHost).name(),"Frog")) al::tryDeleteEffect(targetHost, "HitSmall");
+                        (!al::isEqualSubString(typeid(*sourceHost).name(),"CollectAnimal")
+                        && al::tryEmitEffect(targetHost, "Hit", &effectPos));
                         return;
                     }
                 }
                 if (al::isSensorEnemyBody(source) &&
-                    !al::isEqualSubString(typeid(*sourceHost).name(),"PartsModel")) {
+                    !al::isEqualSubString(typeid(*sourceHost).name(),"PartsModel")
+                ) {
                     sead::Vector3 fireDir = al::getTrans(sourceHost) - al::getTrans(targetHost);
                     fireDir.normalize();
                     if (
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"Popn") &&
+                        rs::sendMsgCapAttack(source, target)) ||
                         (al::isEqualSubString(typeid(*sourceHost).name(),"Breeda") &&
                         rs::sendMsgWanwanEnemyAttack(source, target)) ||
                         (al::isEqualSubString(typeid(*sourceHost).name(),"BreedaWanwan") &&
@@ -1025,6 +1280,11 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         rs::sendMsgCapReflect(source, target)) ||
                         (al::isEqualSubString(typeid(*sourceHost).name(),"Koopa") &&
                         al::sendMsgPlayerObjHipDropReflect(source, target, nullptr)) ||
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"TRex") &&
+                        (al::sendMsgPlayerHipDrop(source, target, nullptr)
+                        || al::sendMsgPlayerHipDropKnockDown(source, target)
+                        || al::sendMsgPlayerObjHipDrop(source, target, nullptr)
+                        || al::sendMsgPlayerObjHipDropReflect(source, target, nullptr))) ||
 
                         al::sendMsgKickStoneAttackReflect(source, target) ||
                         rs::sendMsgHackAttack(source, target) ||
@@ -1039,34 +1299,38 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        if (al::isSensorName(target, "Punch")) {
+                        if (al::isSensorName(target, "Punch")
+                        ) {
                             sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                             direction.normalize();
                             effectPos += direction * 100.0f;
                         }
                         if (al::isSensorName(target, "GalaxySpin")
-                        || al::isSensorName(target, "DoubleSpin")) {
+                            || al::isSensorName(target, "DoubleSpin")
+                        ) {
                             sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                             direction.normalize();
                             effectPos += direction * 75.0f;
                         }
-                        if (al::isEqualSubString(typeid(*sourceHost).name(),"BombTail")) {
-                            al::tryDeleteEffect(sourceHost, "CapReflect");}
-                        if (al::isEqualSubString(typeid(*sourceHost).name(),"FireBlower")) {
+                        if (al::isEqualSubString(typeid(*sourceHost).name(),"BombTail")) al::tryDeleteEffect(sourceHost, "CapReflect");
+                        if (al::isEqualSubString(typeid(*sourceHost).name(),"FireBlower")
+                        ) {
                             al::tryDeleteEffect(sourceHost, "HitSmall");
-                            al::tryDeleteEffect(sourceHost, "HitMark");}
+                            al::tryDeleteEffect(sourceHost, "HitMark");
+                        }
                         (!al::isEqualSubString(typeid(*sourceHost).name(),"Shibaken") &&
                         !al::isEqualSubString(typeid(*sourceHost).name(),"MofumofuScrap") &&
                         !al::isEqualSubString(typeid(*sourceHost).name(),"GrowerWorm") &&
                         !al::isEqualSubString(typeid(*sourceHost).name(),"FireBlowerCap") &&
                         !al::isEqualSubString(typeid(*sourceHost).name(),"CapThrowerCap") &&
                         !al::isEqualSubString(typeid(*sourceHost).name(),"Koopa") &&
-                        al::tryEmitEffect(targetHost, "PunchHit", &effectPos));
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos));
                         return;
                     }
                 }
                 if (al::isSensorMapObj(source) &&
-                    !al::isEqualSubString(typeid(*sourceHost).name(),"CitySignal")) {
+                    !al::isEqualSubString(typeid(*sourceHost).name(),"CitySignal")
+                ) {
                     if (
                         rs::sendMsgEnemyAttackStrong(source, target) ||
                         rs::sendMsgHackAttack(source, target) ||
@@ -1085,21 +1349,22 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        if (al::isSensorName(target, "Punch")) {
+                        if (al::isSensorName(target, "Punch")
+                        ) {
                             sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                             direction.normalize();
                             effectPos += direction * 100.0f;
                         }
                         if (al::isSensorName(target, "GalaxySpin")
-                        || al::isSensorName(target, "DoubleSpin")) {
+                            || al::isSensorName(target, "DoubleSpin")
+                        ) {
                             sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                             direction.normalize();
                             effectPos += direction * 75.0f;
                         }
-                        if (al::isEqualSubString(typeid(*sourceHost).name(),"VolleyballBall")) {
-                            if (!al::isEffectEmitting(sourceHost, "SmashHit")) {
-                                al::tryEmitEffect(targetHost, "Hit", &effectPos);
-                            }
+                        if (al::isEqualSubString(typeid(*sourceHost).name(),"VolleyballBall")
+                        ) {
+                            if (!al::isEffectEmitting(sourceHost, "SmashHit")) al::tryEmitEffect(targetHost, "Hit", &effectPos);
                             return;
                         }
                         (!al::isEqualSubString(typeid(*sourceHost).name(),"ReactionObject") &&
@@ -1108,28 +1373,29 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         al::tryEmitEffect(targetHost, "Hit", &effectPos));
                         return;
                     }
-                        if (
-                            (!al::isEqualSubString(typeid(*sourceHost).name(),"ShineTower") &&
-                            rs::sendMsgCapReflect(source, target))
+                    if (
+                        (!al::isEqualSubString(typeid(*sourceHost).name(),"ShineTower")
+                        && rs::sendMsgCapReflect(source, target))
+                    ) {
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        sead::Vector3 effectPos = al::getTrans(targetHost);
+                        effectPos.y += 50.0f;
+                        if (al::isSensorName(target, "Punch")
                         ) {
-                            hitBuffer[hitBufferCount++] = sourceHost;
-                            sead::Vector3 effectPos = al::getTrans(targetHost);
-                            effectPos.y += 50.0f;
-                            if (al::isSensorName(target, "Punch")) {
-                                sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                                direction.normalize();
-                                effectPos += direction * 100.0f;
-                            }
-                            if (al::isSensorName(target, "GalaxySpin")
-                            || al::isSensorName(target, "DoubleSpin")) {
-                                sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
-                                direction.normalize();
-                                effectPos += direction * 75.0f;
-                            }
-                            al::tryEmitEffect(targetHost, "Hit", &effectPos);
-                            return;                           
-                            
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 100.0f;
                         }
+                        if (al::isSensorName(target, "GalaxySpin")
+                            || al::isSensorName(target, "DoubleSpin")
+                        ) {
+                            sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
+                            direction.normalize();
+                            effectPos += direction * 75.0f;
+                        }
+                        al::tryEmitEffect(targetHost, "Hit", &effectPos);
+                        return;
+                    }
                     if (
                         (al::isEqualSubString(typeid(*sourceHost).name(),"ShineTower") &&
                         al::sendMsgPlayerObjHipDropReflect(source, target, nullptr)) ||
@@ -1143,39 +1409,42 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        if (al::isSensorName(target, "Punch")) {
+                        if (al::isSensorName(target, "Punch")
+                        ) {
                             sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                             direction.normalize();
                             effectPos += direction * 100.0f;
                         }
                         if (al::isSensorName(target, "GalaxySpin")
-                        || al::isSensorName(target, "DoubleSpin")) {
+                            || al::isSensorName(target, "DoubleSpin")
+                        ) {
                             sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                             direction.normalize();
                             effectPos += direction * 75.0f;
                         }
-                        if (al::isEqualSubString(typeid(*sourceHost).name(),"Souvenir")) {
-                            al::tryDeleteEffect(sourceHost, "HitSmall");
-                        }
-                        (al::isEqualSubString(typeid(*sourceHost).name(),"Souvenir") &&
-                        al::tryEmitEffect(targetHost, "Hit", &effectPos));
+                        if (al::isEqualSubString(typeid(*sourceHost).name(),"Souvenir")) al::tryDeleteEffect(sourceHost, "HitSmall");
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"Souvenir")
+                        && al::tryEmitEffect(targetHost, "Hit", &effectPos));
                         return;
                     }
                 }
-                if (al::isSensorRide(source)) {
+                if (al::isSensorRide(source)
+                ) {
                     if (
                         rs::sendMsgCapReflect(source, target)
                     ) {
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        if (al::isSensorName(target, "Punch")) {
+                        if (al::isSensorName(target, "Punch")
+                        ) {
                             sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                             direction.normalize();
                             effectPos += direction * 100.0f;
                         }
                         if (al::isSensorName(target, "GalaxySpin")
-                        || al::isSensorName(target, "DoubleSpin")) {
+                            || al::isSensorName(target, "DoubleSpin")
+                        ) {
                             sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                             direction.normalize();
                             effectPos += direction * 75.0f;
@@ -1204,13 +1473,15 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        if (al::isSensorName(target, "Punch")) {
+                        if (al::isSensorName(target, "Punch")
+                        ) {
                             sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                             direction.normalize();
                             effectPos += direction * 100.0f;
                         }
                         if (al::isSensorName(target, "GalaxySpin")
-                        || al::isSensorName(target, "DoubleSpin")) {
+                            || al::isSensorName(target, "DoubleSpin")
+                        ) {
                             sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                             direction.normalize();
                             effectPos += direction * 75.0f;
@@ -1225,13 +1496,15 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         hitBuffer[hitBufferCount++] = sourceHost;
                         sead::Vector3 effectPos = al::getTrans(targetHost);
                         effectPos.y += 50.0f;
-                        if (al::isSensorName(target, "Punch")) {
+                        if (al::isSensorName(target, "Punch")
+                        ) {
                             sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                             direction.normalize();
                             effectPos += direction * 100.0f;
                         }
                         if (al::isSensorName(target, "GalaxySpin")
-                        || al::isSensorName(target, "DoubleSpin")) {
+                            || al::isSensorName(target, "DoubleSpin")
+                        ) {
                             sead::Vector3 direction = (al::getTrans(sourceHost) - al::getTrans(targetHost));
                             direction.normalize();
                             effectPos += direction * 75.0f;
@@ -1247,118 +1520,26 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
     }
 };
 
-struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerActorHakoniwaExeRolling>{
-    static void Callback(PlayerActorHakoniwa* thisPtr) {
-        
-        if (isPadTriggerGalaxySpin(-1)
-        && !thisPtr->mAnimator->isAnim("SpinSeparate")
-        && canGalaxySpin
-        && hammerAttack
-        && al::isDead(hammerAttack)
-        ) {
-            al::setNerve(thisPtr, &HammerNrv);
-            return;
-        }
-
-        /*if(isPadTriggerGalaxySpin(-1) && !thisPtr->mAnimator->isAnim("SpinSeparate") && canGalaxySpin) {
-            triggerGalaxySpin = true;
-            al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
-            return;
-        }*/
-        Orig(thisPtr);
-    }
-};
-
-struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActorHakoniwaExeSquat>{
-    static void Callback(PlayerActorHakoniwa* thisPtr) {
-
-        if (isPadTriggerGalaxySpin(-1)
-        && !thisPtr->mAnimator->isAnim("SpinSeparate")
-        && canGalaxySpin
-        && hammerAttack
-        && al::isDead(hammerAttack)
-        ) {
-            al::setNerve(thisPtr, &HammerNrv);
-            return;
-        }
-
-        /*if(isPadTriggerGalaxySpin(-1) && !thisPtr->mAnimator->isAnim("SpinSeparate") && canGalaxySpin) {
-            triggerGalaxySpin = true;
-            al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
-            return;
-        }*/
-        Orig(thisPtr);
-    }
-};
-
-struct PlayerCarryKeeperIsCarryDuringSpin : public mallow::hook::Inline<PlayerCarryKeeperIsCarryDuringSpin>{
-    static void Callback(exl::hook::InlineCtx* ctx) {
-        // if either currently in galaxyspin or already finished galaxyspin while still in-air
-        if(ctx->X[0] && (isGalaxySpin || !canGalaxySpin))
-            ctx->X[0] = false;
-    }
-};
-
-struct PlayerCarryKeeperIsCarryDuringSwimSpin : public mallow::hook::Inline<PlayerCarryKeeperIsCarryDuringSwimSpin>{
-    static void Callback(exl::hook::InlineCtx* ctx) {
-        // if either currently in galaxyspin
-        if(ctx->X[0] && (isGalaxySpin || triggerGalaxySpin))
-            ctx->X[0] = false;
-    }
-};
-
-struct PlayerCarryKeeperStartThrowNoSpin : public mallow::hook::Trampoline<PlayerCarryKeeperStartThrowNoSpin>{
-    static bool Callback(PlayerCarryKeeper* state) {
-        if (isSpinActive || galaxySensorRemaining != -1 || galaxyFakethrowRemainder != -1) {
-        return false;
-        }
-        return Orig(state); 
-    }
-};
-
-struct PadTriggerYHook : public mallow::hook::Trampoline<PadTriggerYHook>{
-    static bool Callback(int port) {
-        if(port == 100)
-            return Orig(-1);
-        return false;
-    };
-};
-
-struct TriggerCameraReset : public mallow::hook::Trampoline<TriggerCameraReset>{
-    static bool Callback(al::LiveActor* actor, int port) {
-
-        if (al::isPadTriggerR(-1)) return false;
-
-        return Orig(actor, port);
-    }
-};
-
-struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook>{
+struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> {
     static void Callback(PlayerActorHakoniwa* thisPtr) {
         Orig(thisPtr);
 
         al::HitSensor* sensorSpin = al::getHitSensor(thisPtr, "GalaxySpin");
         al::HitSensor* sensorDoubleSpin = al::getHitSensor(thisPtr, "DoubleSpin");
         al::HitSensor* sensorPunch = al::getHitSensor(thisPtr, "Punch");
-        al::HitSensor* sensorHipDrop = al::getHitSensor(thisPtr, "HipDropKnockDown");        
+        al::HitSensor* sensorHipDrop = al::getHitSensor(thisPtr, "HipDropKnockDown");
 
-        if((sensorSpin && sensorSpin->mIsValid)
-        || (sensorDoubleSpin && sensorDoubleSpin->mIsValid)
-        || (sensorPunch && sensorPunch->mIsValid)
-        || (sensorHipDrop && sensorHipDrop->mIsValid)) {
-            if (sensorSpin && sensorSpin->mIsValid) {
-                thisPtr->attackSensor(sensorSpin, rs::tryGetCollidedWallSensor(thisPtr->mCollider));
-            }
-            if (sensorDoubleSpin && sensorDoubleSpin->mIsValid) {
-                thisPtr->attackSensor(sensorDoubleSpin, rs::tryGetCollidedWallSensor(thisPtr->mCollider));
-            }
-            if (sensorPunch && sensorPunch->mIsValid) {
-                thisPtr->attackSensor(sensorPunch, rs::tryGetCollidedWallSensor(thisPtr->mCollider));
-            }
-            if (sensorHipDrop && sensorHipDrop->mIsValid) {
-                thisPtr->attackSensor(sensorHipDrop, rs::tryGetCollidedGroundSensor(thisPtr->mCollider));
-            }
-        }
+        if (sensorSpin && sensorSpin->mIsValid)
+            thisPtr->attackSensor(sensorSpin, rs::tryGetCollidedWallSensor(thisPtr->mCollider));
+        
+        if (sensorDoubleSpin && sensorDoubleSpin->mIsValid)
+            thisPtr->attackSensor(sensorDoubleSpin, rs::tryGetCollidedWallSensor(thisPtr->mCollider));
+
+        if (sensorPunch && sensorPunch->mIsValid)
+            thisPtr->attackSensor(sensorPunch, rs::tryGetCollidedWallSensor(thisPtr->mCollider));
+
+        if (sensorHipDrop && sensorHipDrop->mIsValid)
+            thisPtr->attackSensor(sensorHipDrop, rs::tryGetCollidedGroundSensor(thisPtr->mCollider));        
         
         if(galaxySensorRemaining > 0) {
             galaxySensorRemaining--;
@@ -1488,6 +1669,15 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook>{
             }
         }
 
+        // Handle hammer attack
+        if (hammerAttack
+            && al::isAlive(hammerAttack)
+            && !al::isNerve(thisPtr, &HammerNrv)
+        ) {
+            hammerAttack->makeActorDead();
+            al::invalidateHitSensor(hammerAttack, "AttackHack");
+        }
+
         // Apply or remove invincibility
         PlayerDamageKeeper* damagekeep = thisPtr->mDamageKeeper;
 
@@ -1510,111 +1700,107 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook>{
     }
 };
 
-void tryCapSpinAndRethrow(PlayerActorHakoniwa* player, bool a2) {
+struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSensorHook> {
+    static void Callback(HammerBrosHammer* thisPtr, al::HitSensor* target, al::HitSensor* source) {
 
-    if(isGalaxySpin) {  // currently in GalaxySpin
-        bool trySpin = player->tryActionCapSpinAttackImpl(a2);  // try to start another spin, can only succeed for standard throw
-        if(!trySpin)
-            return;
+        if (!thisPtr || !target || !source) return;
 
-        if(!isPadTriggerGalaxySpin(-1)) {  // standard throw or fakethrow
-            if(canStandardSpin) {
-                // tries a standard spin, is allowed to do so
-                al::setNerve(player, getNerveAt(spinCapNrvOffset));
-                isStandardAfterGalaxySpin = true;
-                return;
-            }
-            else {
-                // tries a standard spin, not allowed to do so
-                //player->mPlayerSpinCapAttack->tryStartCapSpinAirMiss(player->mPlayerAnimator);
-                // fakespins on standard spins should not happen in this mod
-                return;
-            }
-        } else {  // Y pressed => GalaxySpin or fake-GalaxySpin
-            if(galaxyFakethrowRemainder != -1 || player->mAnimator->isAnim("SpinSeparate"))
-                return;  // already in fakethrow or GalaxySpin
-
-            if(canGalaxySpin) {
-                // tries a GalaxySpin, is allowed to do so => should never happen, but better safe than sorry
-                al::setNerve(player, getNerveAt(spinCapNrvOffset));
-                return;
-            }
-            else {
-                // tries a GalaxySpin, not allowed to do so
-                galaxyFakethrowRemainder = -2;
-                return;
-            }
-        }
-
-        // not attempting or allowed to initiate a spin, so check if should be fakethrow
-        if(isPadTriggerGalaxySpin(-1) && galaxyFakethrowRemainder == -1 && !player->mAnimator->isAnim("SpinSeparate")) {
-            // Y button pressed, start a galaxy fakethrow
-            galaxyFakethrowRemainder = -2;
+        if (!al::isNerve(hammerOwner, &HammerNrv)
+        ) {
+            Orig(thisPtr, target, source);
             return;
         }
-    }
-    else {  // currently in standard spin
-        bool trySpin = player->tryActionCapSpinAttackImpl(a2);  // try to start another spin, can succeed for GalaxySpin and fakethrow
-        if(!trySpin)
+        
+        al::LiveActor* sourceHost = al::getSensorHost(source);
+        al::LiveActor* targetHost = al::getSensorHost(target);
+        
+        if (!targetHost || !sourceHost) return;
+        if (sourceHost == hammerOwner) return;
+
+        if(al::isSensorName(target, "AttackHack")
+        ) {
+            bool isInHitBuffer = false;
+            for(int i = 0; i < hitBufferCount; i++) {
+                if(hitBuffer[i] == sourceHost) {
+                    isInHitBuffer = true;
+                    break;
+                }
+            }
+            if(!isInHitBuffer
+                && !al::isSensorName(source, "Brake")
+                && !al::isEqualSubString(typeid(*sourceHost).name(),"FixMapParts")
+                && !al::isEqualSubString(typeid(*sourceHost).name(),"ElectricWireTarget")
+                && !al::isEqualSubString(typeid(*sourceHost).name(),"CitySignal")
+            ) {
+                if (rs::sendMsgHammerBrosHammerHackAttack(source, target)
+                    || rs::sendMsgHackAttack(source, target)
+                    || al::sendMsgPlayerHipDrop(source, target, nullptr)
+                    || al::sendMsgPlayerHipDropKnockDown(source, target)
+                    || al::sendMsgPlayerObjHipDrop(source, target, nullptr)
+                    || al::sendMsgPlayerObjHipDropReflect(source, target, nullptr)
+                    || al::sendMsgExplosion(source, target, nullptr)
+                ) {
+                    hitBuffer[hitBufferCount++] = sourceHost;
+                    if (!al::isEffectEmitting(hammerAttack, "Hit")) al::emitEffectCurrentPos(hammerAttack, "Hit");
+                    (al::isEqualSubString(typeid(*sourceHost).name(),"ReactionObject")
+                    && al::tryDeleteEffect(hammerAttack, "Hit"));
+                    return;
+                }
+                if (al::tryGetCollidedWallSensor(hammerAttack)
+                    || al::tryGetCollidedCeilingSensor(hammerAttack)
+                    || al::tryGetCollidedGroundSensor(hammerAttack)
+                ) {
+                    if (rs::sendMsgHammerBrosHammerHackAttack(source, target)
+                        || rs::sendMsgHackAttack(source, target)
+                        || al::sendMsgPlayerHipDrop(source, target, nullptr)
+                        || al::sendMsgPlayerHipDropKnockDown(source, target)
+                        || al::sendMsgPlayerObjHipDrop(source, target, nullptr)
+                        || al::sendMsgPlayerObjHipDropReflect(source, target, nullptr)
+                        || al::sendMsgExplosion(source, target, nullptr)
+                    ) {
+                        hitBuffer[hitBufferCount++] = sourceHost;
+                        if (!al::isEffectEmitting(hammerAttack, "Hit")) al::emitEffectCurrentPos(hammerAttack, "Hit");
+                        (al::isEqualSubString(typeid(*sourceHost).name(),"ReactionObject")
+                        && al::tryDeleteEffect(hammerAttack, "Hit"));
+                        return;
+                    }
+                }
+            }
             return;
-
-        if(!isPadTriggerGalaxySpin(-1)) {  // standard throw or fakethrow
-            if(canStandardSpin) {
-                // tries a standard spin, is allowed to do so => should never happen, but better safe than sorry
-                al::setNerve(player, getNerveAt(spinCapNrvOffset));
-                return;
-            }
-            else {
-                // tries a standard spin, not allowed to do so
-                //player->mPlayerSpinCapAttack->tryStartCapSpinAirMiss(player->mPlayerAnimator);
-                // fakespins on standard spins should not happen in this mod
-                return;
-            }
-        } else {  // Y pressed => GalaxySpin or fake-GalaxySpin
-            if(galaxyFakethrowRemainder != -1 || player->mAnimator->isAnim("SpinSeparate"))
-                return;  // already in fakethrow or GalaxySpin
-
-            if(canGalaxySpin) {
-                // tries a GalaxySpin, is allowed to do so
-                al::setNerve(player, getNerveAt(spinCapNrvOffset));
-                isGalaxyAfterStandardSpin = true;
-                return;
-            }
-            else {
-                // tries a GalaxySpin, not allowed to do so
-                galaxyFakethrowRemainder = -2;
-                return;
-            }
         }
-    }
-}
-
-struct InputIsTriggerActionXexclusivelyHook : public mallow::hook::Trampoline<InputIsTriggerActionXexclusivelyHook>{
-    static bool Callback(const al::LiveActor* actor, int port) {
-        if(port == 100)
-            return Orig(actor, PlayerFunction::getPlayerInputPort(actor));
-        bool canCapThrow = true;
-        switch (mallow::config::getConfg<ModOptions>()->spinButton) {
-            case 'Y':
-                canCapThrow = al::isPadTriggerX(port);
-                break;
-            case 'X':
-                canCapThrow = al::isPadTriggerY(port);
-                break;
-        }
-        return Orig(actor, port) && canCapThrow;
+        Orig(thisPtr, target, source);
     }
 };
 
-struct InputIsTriggerActionCameraResetHook : public mallow::hook::Trampoline<InputIsTriggerActionCameraResetHook>{
-    static bool Callback(const al::LiveActor* actor, int port) {
-        switch (mallow::config::getConfg<ModOptions>()->spinButton) {
-            case 'L':
-                return al::isPadTriggerR(port);
-            case 'R':
-                return al::isPadTriggerL(port);
+struct LiveActorMovementHook : public mallow::hook::Trampoline<LiveActorMovementHook> {
+  static void Callback(al::LiveActor* actor) {
+    Orig(actor);
+
+        static bool hammerEffect = false;
+
+        if (actor != hammerAttack) return;
+        if (!al::isAlive(hammerAttack)
+        ) { 
+            hammerEffect = false;
+            return;
         }
-        return Orig(actor, port);
+
+        al::HitSensor* sensorHammer = al::getHitSensor(hammerAttack, "AttackHack");
+        if (!sensorHammer || !sensorHammer->mIsValid) return;
+
+        if (auto* sensorWall = al::tryGetCollidedWallSensor(hammerAttack)) hammerAttack->attackSensor(sensorHammer, sensorWall);
+        if (auto* sensorCeiling = al::tryGetCollidedCeilingSensor(hammerAttack)) hammerAttack->attackSensor(sensorHammer, sensorCeiling);
+        if (auto* sensorGround = al::tryGetCollidedGroundSensor(hammerAttack)) hammerAttack->attackSensor(sensorHammer, sensorGround);
+
+        if (!hammerEffect) {
+            if (al::isCollidedGround(hammerAttack)
+                && hammerOwner->mAnimator->isAnim("HammerAttack")
+                && !hammerOwner->mAnimator->isSubAnim("RollingStart")
+                && !hammerOwner->mAnimator->isAnim("Rolling")) {
+                al::tryEmitEffect(hammerOwner, "HammerLandHit", nullptr);
+                hammerEffect = true;
+            }
+        }
     }
 };
 
@@ -1654,12 +1840,56 @@ struct PlayerActorHakoniwaExeJump : public mallow::hook::Trampoline<PlayerActorH
     }
 };
 
-struct PlayerStateJumpTryCountUp : public mallow::hook::Trampoline<PlayerStateJumpTryCountUp>{
+struct PlayerStateJumpTryCountUp : public mallow::hook::Trampoline<PlayerStateJumpTryCountUp> {
     static void Callback(PlayerStateJump* state, PlayerContinuousJump* cont) {
 
         if (isBrawl) return;
 
         Orig(state, cont);
+    }
+};
+
+struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActorHakoniwaExeSquat> {
+    static void Callback(PlayerActorHakoniwa* thisPtr) {
+
+        if (isPadTriggerGalaxySpin(-1)
+        && !thisPtr->mAnimator->isAnim("SpinSeparate")
+        && canGalaxySpin
+        && hammerAttack
+        && al::isDead(hammerAttack)
+        ) {
+            al::setNerve(thisPtr, &HammerNrv);
+            return;
+        }
+
+        /*if(isPadTriggerGalaxySpin(-1) && !thisPtr->mAnimator->isAnim("SpinSeparate") && canGalaxySpin) {
+            triggerGalaxySpin = true;
+            al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
+            return;
+        }*/
+        Orig(thisPtr);
+    }
+};
+
+struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerActorHakoniwaExeRolling> {
+    static void Callback(PlayerActorHakoniwa* thisPtr) {
+
+        if (isPadTriggerGalaxySpin(-1)
+        && !thisPtr->mAnimator->isAnim("SpinSeparate")
+        && canGalaxySpin
+        && hammerAttack
+        && al::isDead(hammerAttack)
+        ) {
+            al::setNerve(thisPtr, &HammerNrv);
+            return;
+        }
+        
+        /*if(isPadTriggerGalaxySpin(-1) && !thisPtr->mAnimator->isAnim("SpinSeparate") && canGalaxySpin) {
+            triggerGalaxySpin = true;
+            al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
+            return;
+        }*/
+        Orig(thisPtr);
     }
 };
 
@@ -1739,12 +1969,63 @@ struct PlayerActorHakoniwaExeHeadSliding : public mallow::hook::Trampoline<Playe
     }
 };
 
-struct PlayerHeadSlidingKill : public mallow::hook::Trampoline<PlayerHeadSlidingKill>{
+struct PlayerHeadSlidingKill : public mallow::hook::Trampoline<PlayerHeadSlidingKill> {
     static void Callback(PlayerStateHeadSliding * state) {
 
         isCapeActive = 1200;
         if (state->mAnimator) state->mAnimator->clearUpperBodyAnim();
         Orig(state);
+    }
+};
+
+struct PlayerCarryKeeperStartCarry : public mallow::hook::Trampoline<PlayerCarryKeeperStartCarry> {
+    static void Callback(PlayerCarryKeeper* thisPtr, al::HitSensor* sensor) {
+        // if in hammer nerve block carry start
+        if (hammerOwner
+        && hammerOwner->getNerveKeeper()
+        && hammerOwner->getNerveKeeper()->getCurrentNerve() == &HammerNrv
+        ) return;
+        
+        Orig(thisPtr, sensor);
+    }
+};
+
+struct PlayerCarryKeeperStartThrowNoSpin : public mallow::hook::Trampoline<PlayerCarryKeeperStartThrowNoSpin> {
+    static bool Callback(PlayerCarryKeeper* state) {
+        
+        if (isSpinActive || galaxySensorRemaining != -1 || galaxyFakethrowRemainder != -1) return false;
+
+        return Orig(state); 
+    }
+};
+
+struct PlayerCarryKeeperIsCarryDuringSpin : public mallow::hook::Inline<PlayerCarryKeeperIsCarryDuringSpin> {
+    static void Callback(exl::hook::InlineCtx* ctx) {
+        // if either currently in galaxyspin or already finished galaxyspin while still in-air
+        if(ctx->X[0] && (isGalaxySpin || !canGalaxySpin)) ctx->X[0] = false;
+    }
+};
+
+struct PlayerCarryKeeperIsCarryDuringSwimSpin : public mallow::hook::Inline<PlayerCarryKeeperIsCarryDuringSwimSpin> {
+    static void Callback(exl::hook::InlineCtx* ctx) {
+        // if either currently in galaxyspin
+        if(ctx->X[0] && (isGalaxySpin || triggerGalaxySpin)) ctx->X[0] = false;
+    }
+};
+
+struct PlayerConstGetSpinAirSpeedMax : public mallow::hook::Trampoline<PlayerConstGetSpinAirSpeedMax> {
+    static float Callback(PlayerConst* playerConst) {
+        if(isGalaxySpin && !isPunching)
+            return playerConst->getNormalMaxSpeed();
+        return Orig(playerConst);
+    }
+};
+
+struct PlayerConstGetSpinBrakeFrame : public mallow::hook::Trampoline<PlayerConstGetSpinBrakeFrame> {
+    static s32 Callback(PlayerConst* playerConst) {
+        if(isGalaxySpin && !isPunching)
+            return 0;
+        return Orig(playerConst);
     }
 };
 
@@ -1798,6 +2079,11 @@ extern "C" void userMain() {
     PlayerStateSwimKill::InstallAtSymbol("_ZN15PlayerStateSwim4killEv");
     PlayerSpinCapAttackStartSpinSeparateSwimSurface::InstallAtSymbol("_ZN19PlayerSpinCapAttack28startSpinSeparateSwimSurfaceEP14PlayerAnimator");
     PlayerSpinCapAttackStartSpinSeparateSwim::InstallAtSymbol("_ZN19PlayerSpinCapAttack21startSpinSeparateSwimEP14PlayerAnimator");
+
+    // Handles Mario's hammer attack
+    HammerAttackSensorHook::InstallAtSymbol("_ZN16HammerBrosHammer12attackSensorEPN2al9HitSensorES2_");
+    LiveActorMovementHook::InstallAtSymbol("_ZN2al9LiveActor8movementEv");
+    PlayerCarryKeeperStartCarry::InstallAtSymbol("_ZN17PlayerCarryKeeper10startCarryEPN2al9HitSensorE");
 
     // Allow carrying an object during a GalaxySpin
     PlayerCarryKeeperIsCarryDuringSpin::InstallAtOffset(0x423A24);

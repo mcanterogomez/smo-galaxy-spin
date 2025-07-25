@@ -14,7 +14,7 @@ public:
                      const char*          archiveName,
                      bool                 flag);
 
-    virtual void init(const al::ActorInitInfo& info) override;
+    void init(const al::ActorInitInfo& info) override;
 
     void attach(const sead::Matrix34f* handMtx,
                 const sead::Vector3f&  unk1,
@@ -27,7 +27,7 @@ public:
                bool                  isHackAttack,
                int                   unused,
                bool                  unk);
-
+               
 private:
     char buffer[0x178 - sizeof(al::LiveActor)];
 };
