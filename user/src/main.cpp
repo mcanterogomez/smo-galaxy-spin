@@ -55,6 +55,8 @@
 #include "Player/PlayerFunction.h"
 #include "Player/PlayerHackKeeper.h"
 #include "Player/PlayerInput.h"
+#include "Player/PlayerJudgeStartWaterSurfaceRun.h"
+#include "Player/PlayerJudgeWaterSurfaceRun.h"
 #include "Player/PlayerModelHolder.h"
 #include "Player/PlayerStateHeadSliding.h"
 #include "Player/PlayerStateSpinCap.h"
@@ -71,9 +73,6 @@
 #include "actors/custom/PlayerStateWait.h"
 #include "ModOptions.h"
 #include "math/seadVectorFwd.h"
-
-#include "Player/PlayerJudgeStartWaterSurfaceRun.h"
-#include "Player/PlayerJudgeWaterSurfaceRun.h"
 
 namespace rs {
     bool is2D(const IUseDimension*);    
@@ -1769,21 +1768,56 @@ struct PlayerConstGetNormalMaxSpeed : public mallow::hook::Trampoline<PlayerCons
     }
 };
 
-struct PlayerConstDashGetFastBorder : public mallow::hook::Trampoline<PlayerConstDashGetFastBorder> {
-    static float Callback(const PlayerConst* thisPtr) {
+bool isSuperRunningOnSurface = false;
+const f32 MIN_SPEED_RUN_ON_WATER = 15.0f;
 
-        float dash = Orig(thisPtr);
-        if (isSuper) dash *= 0.0f;
-        return dash;
+struct StartWaterSurfaceRunJudge : public mallow::hook::Trampoline<StartWaterSurfaceRunJudge> {
+    static bool Callback(const PlayerJudgeStartWaterSurfaceRun* thisPtr) {
+
+        if (isSuper) {
+            return thisPtr->mWaterSurfaceFinder->isFoundSurface()
+                && al::isNearZeroOrGreater(thisPtr->mWaterSurfaceFinder->getDistance())
+                && al::getGravity(thisPtr->mPlayer).dot(al::getVelocity(thisPtr->mPlayer)) >= 0.0f
+                && al::calcSpeedH(thisPtr->mPlayer) >= MIN_SPEED_RUN_ON_WATER;
+        }
+        else {
+            return Orig(thisPtr);
+        }
     }
 };
 
-struct PlayerConstGetJumpPower : public mallow::hook::Trampoline<PlayerConstGetJumpPower> {
-    static float Callback(const PlayerConst* thisPtr) {
+struct WaterSurfaceRunJudge : public mallow::hook::Trampoline<WaterSurfaceRunJudge> {
+    static bool Callback(const PlayerJudgeWaterSurfaceRun* thisPtr) {
 
-        float jump = Orig(thisPtr);
-        if (isSuper) jump *= 1.5f;
-        return jump;
+        isSuperRunningOnSurface = false;
+
+        if (isSuper) {
+            bool result = thisPtr->mWaterSurfaceFinder->isFoundSurface()
+                && al::isNearZeroOrGreater(thisPtr->mWaterSurfaceFinder->getDistance())
+                && al::calcSpeedH(thisPtr->mPlayer) >= MIN_SPEED_RUN_ON_WATER;
+            isSuperRunningOnSurface = result;
+            return result;
+        }
+        else {
+            return Orig(thisPtr);
+        }
+    }
+};
+
+struct RunWaterSurfaceDisableSink : public mallow::hook::Inline<RunWaterSurfaceDisableSink> {
+    static void Callback(exl::hook::InlineCtx* ctx) {
+        // move value > 0 into W8 to cause skipping the "sink" part
+        if (isSuperRunningOnSurface) ctx->W[8] = 1;
+    }
+};
+
+// without this, entering deep water without shallow water first will cause slowing down the player
+// until complete stop without properly starting to run on water, no idea why this works, but it does
+struct WaterSurfaceRunDisableSlowdown : public mallow::hook::Inline<WaterSurfaceRunDisableSlowdown> {
+    static void Callback(exl::hook::InlineCtx* ctx) {
+        // used to redirect `turnVecToVecRate` into this location instead of the proper one, so the call is basically ignored
+        static sead::Vector3f garbageVec;
+        if (isSuperRunningOnSurface) ctx->X[0] = reinterpret_cast<u64>(&garbageVec);
     }
 };
 
@@ -1885,12 +1919,10 @@ extern "C" void userMain() {
     DisallowCancelOnWaterSurfaceSpinPatch::InstallAtOffset(0x48A3C8);
 
     PlayerConstMoon::InstallAtOffset(0x41B704);
-    //PlayerConstGetNormalMaxSpeed::InstallAtSymbol("_ZNK11PlayerConst17getNormalMaxSpeedEv");
-    //PlayerConstDashGetFastBorder::InstallAtSymbol("_ZNK11PlayerConst22getDashFastBorderSpeedEv");
-    //PlayerConstGetJumpPower::InstallAtSymbol("_ZNK11PlayerConst15getJumpPowerMaxEv");
-    //RunIsAnimDashFastHook::InstallAtSymbol("_ZNK20PlayerAnimControlRun14isAnimDashFastEv");
-    
-    //PlayerActorHakoniwaExeRun::InstallAtSymbol("_ZN19PlayerActorHakoniwa6exeRunEv");
-    //SuperSuitStartWaterSurfaceRunJudgeHook::InstallAtSymbol("_ZNK31PlayerJudgeStartWaterSurfaceRun5judgeEv");
-    //SuperSuitWaterSurfaceRunJudgeHook::InstallAtSymbol("_ZNK26PlayerJudgeWaterSurfaceRun5judgeEv");
+    PlayerConstGetNormalMaxSpeed::InstallAtSymbol("_ZNK11PlayerConst17getNormalMaxSpeedEv");
+
+    StartWaterSurfaceRunJudge::InstallAtSymbol("_ZNK31PlayerJudgeStartWaterSurfaceRun5judgeEv");
+    WaterSurfaceRunJudge::InstallAtSymbol("_ZNK26PlayerJudgeWaterSurfaceRun5judgeEv");
+    RunWaterSurfaceDisableSink::InstallAtOffset(0x48023C);
+    WaterSurfaceRunDisableSlowdown::InstallAtOffset(0x4184C0);
 }
