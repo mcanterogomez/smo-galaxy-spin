@@ -27,6 +27,7 @@
 #include "Library/LiveActor/ActorPoseUtil.h"
 #include "Library/LiveActor/ActorSensorFunction.h"
 #include "Library/LiveActor/ActorSensorUtil.h"
+#include "Library/LiveActor/LiveActorFlag.h"
 #include "Library/LiveActor/LiveActorFunction.h"
 #include "Library/LiveActor/LiveActorGroup.h"
 #include "Library/Math/MathUtil.h"
@@ -71,24 +72,11 @@
 #include "ModOptions.h"
 #include "math/seadVectorFwd.h"
 
-namespace rs {
-    bool is2D(const IUseDimension*);
-    bool isActionCodeNoActionWall(IUsePlayerCollision const*);
+#include "Player/PlayerJudgeStartWaterSurfaceRun.h"
+#include "Player/PlayerJudgeWaterSurfaceRun.h"
 
-    bool sendMsgHackAttack(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgCapAttack(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgCapAttackCollide(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgCapReflect(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgCapReflectCollide(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgBlowObjAttack(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgCapItemGet(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgEnemyAttackStrong(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgBreedaPush(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgWanwanEnemyAttack(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgKillerMagnumAttack(al::HitSensor* receiver, al::HitSensor* sender);
-    bool sendMsgTsukkunThrust(al::HitSensor*, al::HitSensor*, sead::Vector3<float> const&, int, bool);
-    bool sendMsgCapTouchWall(al::HitSensor*, al::HitSensor*, sead::Vector3<float> const&, sead::Vector3<float> const&);
-    
+namespace rs {
+    bool is2D(const IUseDimension*);    
     al::HitSensor* tryGetCollidedWallSensor(IUsePlayerCollision const* collider);
     al::HitSensor* tryGetCollidedGroundSensor(IUsePlayerCollision const* collider);
 }
@@ -229,7 +217,7 @@ struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerAct
         hammerOwner = thisPtr;
 
         // Create and hide fireballs
-        fireBalls = new al::LiveActorGroup("FireBrosFireBall", 2);
+        fireBalls = new al::LiveActorGroup("FireBrosFireBall", 4);
         while (!fireBalls->isFull()) {
             auto* fb = new FireBrosFireBall("FireBall", model);
             fb->init(*actorInfo);
@@ -572,6 +560,7 @@ public:
     void execute(al::NerveKeeper* keeper) const override {
         auto* player = keeper->getParent<PlayerActorHakoniwa>();
         auto* model = player->mModelHolder->findModelActor("Mario");
+        auto* hammer = al::tryGetSubActor(model, "Hammer");
 
         bool isGround = rs::isOnGround(player, player->mCollider);
         bool isWater = al::isInWater(player);
@@ -605,19 +594,13 @@ public:
             al::tryEmitEffect(hammerAttack, "Break", nullptr);
             return;
         }*/
-
-        if (al::isAlive(hammerAttack)
-        ) {
-            al::onCollide(hammerAttack);
-            al::invalidateClipping(hammerAttack);
-            al::showShadow(hammerAttack);
-        }
-        
+               
         if (al::isFirstStep(player)
         ) {
             hitBufferCount = 0;
-
             player->mAnimator->endSubAnim();
+
+            if (hammer) al::hideModelIfShow(hammer);
 
             if (!isGround) {
                 player->mAnimator->startAnim("RollingStart");
@@ -627,7 +610,6 @@ public:
             }
 
             hammerAttack->makeActorAlive();
-            
             hammerAttack->attach(
             &hammerMtx,
             //sead::Vector3(0.0f, 50.0f, -40.0f), // original
@@ -635,6 +617,10 @@ public:
             sead::Vector3(0.0f, -12.5f, -37.5f),
             sead::Vector3(0.0f, sead::Mathf::deg2rad(-90.0f), 0.0f),
             "Hammer");
+
+            al::onCollide(hammerAttack);
+            al::invalidateClipping(hammerAttack);
+            al::showShadow(hammerAttack);
         }
 
         if (player->mAnimator->isAnim("RollingStart")
@@ -672,6 +658,7 @@ public:
         if (player->mAnimator->isAnimEnd()
         ) {
             hammerAttack->makeActorDead();
+            if (hammer) al::showModelIfHide(hammer);
             al::offCollide(hammerAttack);
             al::invalidateHitSensor(hammerAttack, "AttackHack");
             al::setNerve(player, getNerveAt(nrvHakoniwaFall));
@@ -680,11 +667,27 @@ public:
         else if (isWater && !isSurface
         ) {
             hammerAttack->makeActorDead();
+            if (hammer) al::showModelIfHide(hammer);
             al::offCollide(hammerAttack);
             al::invalidateHitSensor(hammerAttack, "AttackHack");
             al::setNerve(player, getNerveAt(nrvHakoniwaFall));
             al::tryEmitEffect(hammerAttack, "Break", nullptr);
             return;
+        }
+        if (hammer && al::isDead(hammerAttack)) al::showModelIfHide(hammer);
+    }
+
+    void executeOnEnd(al::NerveKeeper* keeper) const override {
+        auto* player = keeper->getParent<PlayerActorHakoniwa>();
+        auto* model  = player->mModelHolder->findModelActor("Mario");
+        auto* hammer = al::tryGetSubActor(model, "Hammer");
+
+        if (hammer) al::showModelIfHide(hammer);
+
+        if (hammerAttack) {
+            al::offCollide(hammerAttack);
+            al::invalidateHitSensor(hammerAttack, "AttackHack");
+            hammerAttack->makeActorDead();
         }
     }
 };
@@ -1055,6 +1058,9 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
         sead::Vector3f targetPos = al::getSensorPos(target);
         sead::Vector3f spawnPos = (sourcePos + targetPos) * 0.5f;
         spawnPos.y += 20.0f;
+
+        sead::Vector3 fireDir = al::getTrans(targetHost) - al::getTrans(sourceHost);
+        fireDir.normalize();
    
         if(
             (al::isSensorName(source, "GalaxySpin")
@@ -1114,7 +1120,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         al::setNerve(targetHost, getNerveAt(0x1D22BD8));
                         al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
                         return;
-                    }    
+                    }
                     if (al::isEqualSubString(typeid(*targetHost).name(),"BossRaidRivet") &&
                         sourceNrv == getNerveAt(0x1C5F330)
                     ) {
@@ -1125,7 +1131,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     }
                 }
             }
-            if(!isInHitBuffer) {               
+            if(!isInHitBuffer) {
                 if (al::isEqualSubString(typeid(*targetHost).name(),"CapSwitchTimer")
                 ) {
                     al::setNerve(targetHost, getNerveAt(0x1CE4338));
@@ -1141,23 +1147,24 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
                     return;
                 }
-                if (al::isEqualSubString(typeid(*targetHost).name(), "GolemClimb")) {
-                    sead::Vector3 fireDir = al::getTrans(targetHost) - al::getTrans(sourceHost);
-                    fireDir.normalize();
-
-                    if (rs::sendMsgHammerBrosHammerHackAttack(target, source)
-                    ) {
-                        hitBuffer[hitBufferCount++] = targetHost;
-                        return;
-                    }
+                if (al::isEqualSubString(typeid(*targetHost).name(), "GolemClimb")
+                ) {
+                    if (rs::sendMsgHammerBrosHammerHackAttack(target, source)) hitBuffer[hitBufferCount++] = targetHost;
+                    return;
+                }
+                if (al::isEqualSubString(typeid(*targetHost).name(), "CollapseSandHill")
+                ) {
+                    if (rs::sendMsgCapAttack(target, source)) hitBuffer[hitBufferCount++] = targetHost;
+                    return;
                 }
                 if (al::isSensorNpc(target)
+                    || al::isSensorRide(target)
                 ) {
                     if (
-                        rs::sendMsgCapReflect(target, source)
-                        || al::sendMsgPlayerSpinAttack(target, source, nullptr)
-                        || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
+                        al::sendMsgPlayerSpinAttack(target, source, nullptr)
+                        || rs::sendMsgCapReflect(target, source)
                         || rs::sendMsgCapAttack(target, source)
+                        || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
                         return;
@@ -1165,8 +1172,6 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 }
                 if (al::isSensorEnemyBody(target)
                 ) {
-                    sead::Vector3 fireDir = al::getTrans(targetHost) - al::getTrans(sourceHost);
-                    fireDir.normalize();
                     if (
                         rs::sendMsgHackAttack(target, source)
                         || rs::sendMsgCapReflect(target, source)
@@ -1181,8 +1186,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 if (al::isSensorMapObj(target)
                 ) {
                     if (
-                        rs::sendMsgTRexAttack(target, source)
-                        || rs::sendMsgHackAttack(target, source)
+                        rs::sendMsgHackAttack(target, source)
                         || al::sendMsgPlayerSpinAttack(target, source, nullptr)
                         || rs::sendMsgCapReflect(target, source)
                         || al::sendMsgPlayerHipDrop(target, source, nullptr)
@@ -1194,20 +1198,11 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         return;
                     }
                 }
-                if (al::isSensorRide(target)
-                ) {
-                    if (
-                        rs::sendMsgCapReflect(target, source)
-                    ) {
-                        hitBuffer[hitBufferCount++] = targetHost;
-                        return;
-                    }
-                }
                 if (rs::tryGetCollidedWallSensor(thisPtr->mCollider)
                     && !al::isSensorName(target,"Brake")
                 ) {
                     if (
-                        (al::isEqualSubString(typeid(*targetHost).name(),"CageBreakable")
+                        (al::isEqualSubString(typeid(*targetHost).name(),"BreakMapParts")
                         && al::sendMsgExplosion(target, source, nullptr))
                         || ((al::isEqualSubString(typeid(*targetHost).name(),"BlockHard")
                             || al::isEqualSubString(typeid(*targetHost).name(),"MarchingCubeBlock")
@@ -1225,12 +1220,6 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                             && rs::sendMsgCapTouchWall(target, source, sead::Vector3f{0,0,0}, sead::Vector3f{0,0,0}))
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
-                        /*if (targetHost && al::isEffectEmitting(targetHost, "HitSmall")) al::tryDeleteEffect(targetHost, "HitSmall");
-                        if (targetHost && al::isEffectEmitting(targetHost, "CapReflect")) al::tryDeleteEffect(targetHost, "CapReflect");
-                        if ((targetHost && al::isEffectEmitting(targetHost, "Hit"))
-                            || (targetHost && al::isEffectEmitting(targetHost, "HitMark"))
-                            || (sourceHost && al::isEffectEmitting(sourceHost, "Hit"))) return;
-                        al::tryEmitEffect(sourceHost, "AttackHack", &spawnPos);*/
                         return;
                     }
                 }
@@ -1407,20 +1396,15 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         PlayerDamageKeeper* damagekeep = thisPtr->mDamageKeeper;
 
         if (isSuper) {
-            if (model) {
+            if (model && !model->mFlags->isModelVisible) {
                 if (!al::isEffectEmitting(keeper, "Bonfire")) al::tryEmitEffect(keeper, "Bonfire", nullptr);
+                if (!damagekeep->mIsPreventDamage) {
+                    damagekeep->activatePreventDamage();
+                    damagekeep->mRemainingInvincibility = INT_MAX;
+                }
             }
-            if (!damagekeep->mIsPreventDamage) {
-                damagekeep->activatePreventDamage();
-                damagekeep->mRemainingInvincibility = INT_MAX;
-            }
-            exl::patch::CodePatcher moonMovPatcher(0x41B700);
-            moonMovPatcher.WriteInst(0xAA0803E0);
-
         } else {
             damagekeep->mRemainingInvincibility = 0;
-            exl::patch::CodePatcher normalMovPatcher(0x41B700);
-            normalMovPatcher.WriteInst(0x9A961100);
         }
     }
 };
@@ -1441,6 +1425,9 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
         
         if (!sourceHost || !targetHost) return;
         if (targetHost == hammerOwner) return;
+        
+        sead::Vector3 fireDir = al::getTrans(targetHost) - al::getTrans(sourceHost);
+        fireDir.normalize();
 
         if(al::isSensorName(source, "AttackHack")
         ) {
@@ -1452,6 +1439,33 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
                 }
             }
             if(!isInHitBuffer) {
+                if (al::isEqualSubString(typeid(*targetHost).name(), "DamageBall")
+                ) {
+                    if (al::sendMsgExplosion(target, source, nullptr)) hitBuffer[hitBufferCount++] = targetHost;
+                    return;
+                }
+                if (al::isEqualSubString(typeid(*targetHost).name(), "CollapseSandHill")
+                ) {
+                    if (rs::sendMsgCapAttack(target, source)) hitBuffer[hitBufferCount++] = targetHost;
+                    return;
+                }
+                if (
+                    //rs::sendMsgTRexAttack(target, source)
+                    al::sendMsgPlayerHipDrop(target, source, nullptr)
+                    || al::sendMsgPlayerObjHipDrop(target, source, nullptr)
+                    || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
+                    || rs::sendMsgHackAttack(target, source)
+                    || rs::sendMsgSphinxRideAttackTouchThrough(target, source, fireDir, fireDir)
+                    || ((!al::isEqualSubString(typeid(*targetHost).name(),"Souvenir")
+                        || al::isEqualSubString(typeid(*targetHost).name(),"CactusMini"))
+                        && (rs::sendMsgCapReflect(target, source)
+                            || rs::sendMsgCapAttack(target, source)))
+                    || (!al::isEqualSubString(typeid(*targetHost).name(),"ReactionObject") 
+                        && rs::sendMsgTsukkunThrust(target, source, fireDir, 0, true))
+                ) {
+                    hitBuffer[hitBufferCount++] = targetHost;
+                    return;
+                }
                 if ((al::tryGetCollidedWallSensor(hammerAttack)
                     || al::tryGetCollidedCeilingSensor(hammerAttack)
                     || al::tryGetCollidedGroundSensor(hammerAttack))
@@ -1459,8 +1473,8 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
                 ) {
                     if (
                         ((al::isEqualSubString(typeid(*targetHost).name(),"ReactionObject")
-                        || al::isEqualSubString(typeid(*targetHost).name(),"CageBreakable"))
-                        && al::sendMsgExplosion(target, source, nullptr))
+                        || al::isEqualSubString(typeid(*targetHost).name(),"BreakMapParts"))
+                            && al::sendMsgExplosion(target, source, nullptr))
                         || ((al::isEqualSubString(typeid(*targetHost).name(),"BlockHard")
                             || al::isEqualSubString(typeid(*targetHost).name(),"MarchingCubeBlock")
                             || al::isEqualSubString(typeid(*targetHost).name(),"BossForestBlock"))
@@ -1477,23 +1491,6 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
                         return;
                     }
                 }
-                sead::Vector3 fireDir = al::getTrans(targetHost) - al::getTrans(sourceHost);
-                fireDir.normalize();
-                if (
-                    rs::sendMsgTRexAttack(target, source)
-                    || al::sendMsgPlayerHipDrop(target, source, nullptr)
-                    || al::sendMsgPlayerObjHipDrop(target, source, nullptr)
-                    || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
-                    || rs::sendMsgHackAttack(target, source)
-                    || rs::sendMsgTsukkunThrust(target, source, fireDir, 0, true)
-                    || al::sendMsgExplosion(target, source, nullptr)
-                    || ((al::isSensorNpc(target) || al::isSensorEnemyBody(target))
-                        && (rs::sendMsgCapReflect(target, source)
-                            || rs::sendMsgCapAttack(target, source)))
-                ) {
-                    hitBuffer[hitBufferCount++] = targetHost;
-                    return;
-                }
             }
         }
         Orig(thisPtr, source, target);
@@ -1507,6 +1504,7 @@ struct LiveActorMovementHook : public mallow::hook::Trampoline<LiveActorMovement
         static bool hammerEffect = false;
 
         if (actor != hammerAttack) return;
+
         if (!al::isAlive(hammerAttack)
         ) { 
             hammerEffect = false;
@@ -1755,6 +1753,40 @@ struct PlayerConstGetSpinBrakeFrame : public mallow::hook::Trampoline<PlayerCons
     }
 };
 
+struct PlayerConstMoon : public mallow::hook::Inline<PlayerConstMoon> {
+    static void Callback(exl::hook::InlineCtx* ctx) {
+
+        if(isSuper) ctx->X[0] = reinterpret_cast<u64>("Moon");
+    }
+};
+
+struct PlayerConstGetNormalMaxSpeed : public mallow::hook::Trampoline<PlayerConstGetNormalMaxSpeed> {
+    static float Callback(const PlayerConst* thisPtr) {
+
+        float speed = Orig(thisPtr);
+        if (isSuper) speed *= 2.0f;
+        return speed;
+    }
+};
+
+struct PlayerConstDashGetFastBorder : public mallow::hook::Trampoline<PlayerConstDashGetFastBorder> {
+    static float Callback(const PlayerConst* thisPtr) {
+
+        float dash = Orig(thisPtr);
+        if (isSuper) dash *= 0.0f;
+        return dash;
+    }
+};
+
+struct PlayerConstGetJumpPower : public mallow::hook::Trampoline<PlayerConstGetJumpPower> {
+    static float Callback(const PlayerConst* thisPtr) {
+
+        float jump = Orig(thisPtr);
+        if (isSuper) jump *= 1.5f;
+        return jump;
+    }
+};
+
 extern "C" void userMain() {
     exl::hook::Initialize();
     mallow::init::installHooks();
@@ -1851,4 +1883,14 @@ extern "C" void userMain() {
         
     DisallowCancelOnUnderwaterSpinPatch::InstallAtOffset(0x489F30);
     DisallowCancelOnWaterSurfaceSpinPatch::InstallAtOffset(0x48A3C8);
+
+    PlayerConstMoon::InstallAtOffset(0x41B704);
+    //PlayerConstGetNormalMaxSpeed::InstallAtSymbol("_ZNK11PlayerConst17getNormalMaxSpeedEv");
+    //PlayerConstDashGetFastBorder::InstallAtSymbol("_ZNK11PlayerConst22getDashFastBorderSpeedEv");
+    //PlayerConstGetJumpPower::InstallAtSymbol("_ZNK11PlayerConst15getJumpPowerMaxEv");
+    //RunIsAnimDashFastHook::InstallAtSymbol("_ZNK20PlayerAnimControlRun14isAnimDashFastEv");
+    
+    //PlayerActorHakoniwaExeRun::InstallAtSymbol("_ZN19PlayerActorHakoniwa6exeRunEv");
+    //SuperSuitStartWaterSurfaceRunJudgeHook::InstallAtSymbol("_ZNK31PlayerJudgeStartWaterSurfaceRun5judgeEv");
+    //SuperSuitWaterSurfaceRunJudgeHook::InstallAtSymbol("_ZNK26PlayerJudgeWaterSurfaceRun5judgeEv");
 }
