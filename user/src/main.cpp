@@ -259,13 +259,13 @@ struct PlayerStateWaitExeWait : public mallow::hook::Trampoline<PlayerStateWaitE
             const char* special = nullptr;
             if (state->tryGetSpecialStatusAnimName(&special)) {
                 if (al::isEqualString(special, "BattleWait"))
-                    state->requestAnimName("AngryWaitFight");
+                    state->requestAnimName("WaitSmashFight");
                 else
                     state->requestAnimName(special);
             }
             else {
-                if (isBrawl) state->requestAnimName("AngryWait");
-                else if (isSuper) state->requestAnimName("AngryWaitSuper");
+                if (isBrawl) state->requestAnimName("WaitSmash");
+                else if (isSuper) state->requestAnimName("WaitSuper");
             }
         }
     }
@@ -1276,8 +1276,8 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         || al::isActionPlaying(model, "CapeGlide")
         || al::isActionPlaying(model, "CapeGlideFloatStart")
         || al::isActionPlaying(model, "CapeGlideFloat"))*/) {
-            if (face && !al::isActionPlayingSubActor(model, "顔", "AngryWait"))
-                al::startActionSubActor(model, "顔", "AngryWait");
+            if (face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry"))
+                al::startActionSubActor(model, "顔", "WaitAngry");
         }
 
         // Reset proximity flag
@@ -1309,7 +1309,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             al::isActionPlaying(model, "CapeGlide")
             || al::isActionPlaying(model, "CapeGlideFloatStart")
             || al::isActionPlaying(model, "CapeGlideFloat")
-            || al::isActionPlaying(model, "AngryWaitFall")
+            || al::isActionPlaying(model, "WaitSuperFloat")
             || al::isActionPlaying(model, "JumpBroad8");
         
         if (isBrawl && cape) {
@@ -1375,7 +1375,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                 anim->clearUpperBodyAnim();
                 fireStep = -1;
 
-                if (isSuper && anim->isAnim("CapeGlideFloat")) anim->startUpperBodyAnim("AngryWaitFall");
+                if (isSuper && anim->isAnim("CapeGlideFloat")) anim->startUpperBodyAnim("WaitSuperFloat");
 
             } else {
                 fireStep++;
@@ -1395,7 +1395,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         PlayerDamageKeeper* damagekeep = thisPtr->mDamageKeeper;
 
         if (isSuper) {
-            if (model && !model->mFlags->isModelVisible) {
+            if (model && !model->mFlags->isModelHidden) {
                 if (!al::isEffectEmitting(keeper, "Bonfire")) al::tryEmitEffect(keeper, "Bonfire", nullptr);
                 if (!damagekeep->mIsPreventDamage) {
                     damagekeep->activatePreventDamage();
@@ -1449,8 +1449,8 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
                     return;
                 }
                 if (
-                    //rs::sendMsgTRexAttack(target, source)
-                    al::sendMsgPlayerHipDrop(target, source, nullptr)
+                    rs::sendMsgTRexAttack(target, source)
+                    || al::sendMsgPlayerHipDrop(target, source, nullptr)
                     || al::sendMsgPlayerObjHipDrop(target, source, nullptr)
                     || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
                     || rs::sendMsgHackAttack(target, source)
@@ -1653,7 +1653,7 @@ struct PlayerActorHakoniwaExeHeadSliding : public mallow::hook::Trampoline<Playe
             
             if (anim->isAnim("CapeGlideFloatStart") && anim->isAnimEnd()) {
                 anim->startAnim("CapeGlideFloat");
-                if (isSuper) anim->startUpperBodyAnim("AngryWaitFall");
+                if (isSuper) anim->startUpperBodyAnim("WaitSuperFloat");
             }
         }
 
@@ -1752,10 +1752,24 @@ struct PlayerConstGetSpinBrakeFrame : public mallow::hook::Trampoline<PlayerCons
     }
 };
 
+struct PlayerAnimControlRun : public mallow::hook::Inline<PlayerAnimControlRun> {
+    static void Callback(exl::hook::InlineCtx* ctx) {
+
+        if (isSuper) ctx->X[8] = reinterpret_cast<u64>("MoveSuper");
+    }
+};
+
+struct PlayerAnimControlRunUpdate : public mallow::hook::Inline<PlayerAnimControlRunUpdate> {
+    static void Callback(exl::hook::InlineCtx* ctx) {
+
+        if (isSuper) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveSuper"); //mMoveAnimName in PlayerAnimControlRun
+    }
+};
+
 struct PlayerConstMoon : public mallow::hook::Inline<PlayerConstMoon> {
     static void Callback(exl::hook::InlineCtx* ctx) {
 
-        if(isSuper) ctx->X[0] = reinterpret_cast<u64>("Moon");
+        if (isSuper) ctx->X[0] = reinterpret_cast<u64>("Moon");
     }
 };
 
@@ -1768,6 +1782,16 @@ struct PlayerConstGetNormalMaxSpeed : public mallow::hook::Trampoline<PlayerCons
     }
 };
 
+struct PlayerConstGetHeadSlidingSpeed : public mallow::hook::Trampoline<PlayerConstGetHeadSlidingSpeed> {
+    static float Callback(const PlayerConst* thisPtr) {
+
+        float speed = Orig(thisPtr);
+        if (isSuper) speed *= 2.0f;
+        return speed;
+    }
+};
+
+// Handling running on water while Super
 bool isSuperRunningOnSurface = false;
 const f32 MIN_SPEED_RUN_ON_WATER = 15.0f;
 
@@ -1811,8 +1835,8 @@ struct RunWaterSurfaceDisableSink : public mallow::hook::Inline<RunWaterSurfaceD
     }
 };
 
-// without this, entering deep water without shallow water first will cause slowing down the player
-// until complete stop without properly starting to run on water, no idea why this works, but it does
+// Without this, entering deep water without shallow water first will cause slowing down the player
+// Until complete stop without properly starting to run on water, no idea why this works, but it does
 struct WaterSurfaceRunDisableSlowdown : public mallow::hook::Inline<WaterSurfaceRunDisableSlowdown> {
     static void Callback(exl::hook::InlineCtx* ctx) {
         // used to redirect `turnVecToVecRate` into this location instead of the proper one, so the call is basically ignored
@@ -1824,13 +1848,14 @@ struct WaterSurfaceRunDisableSlowdown : public mallow::hook::Inline<WaterSurface
 extern "C" void userMain() {
     exl::hook::Initialize();
     mallow::init::installHooks();
-    // Mario's movement that checks ever frame
-    PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
+    // Disable Y button for everything else
+    // PadTriggerYHook::InstallAtSymbol("_ZN2al13isPadTriggerYEi");
 
-    // Remove Cappy eyes while ide
-    exl::patch::CodePatcher eyePatcher(0x41F7E4);
-    eyePatcher.WriteInst(exl::armv8::inst::Movk(exl::armv8::reg::W0, 0));
-    
+    // Disable R Reset Camera
+    InputIsTriggerActionXexclusivelyHook::InstallAtSymbol("_ZN19PlayerInputFunction15isTriggerActionEPKN2al9LiveActorEi");
+    // InputIsTriggerActionCameraResetHook::InstallAtSymbol("_ZN19PlayerInputFunction20isTriggerCameraResetEPKN2al9LiveActorEi");
+    TriggerCameraReset::InstallAtSymbol("_ZN19PlayerInputFunction20isTriggerCameraResetEPKN2al9LiveActorEi");
+
     // Initialize player actor
     PlayerActorHakoniwaInitPlayer::InstallAtSymbol("_ZN19PlayerActorHakoniwa10initPlayerERKN2al13ActorInitInfoERK14PlayerInitInfo");
     PlayerActorHakoniwaInitAfterPlacement::InstallAtSymbol("_ZN19PlayerActorHakoniwa18initAfterPlacementEv");
@@ -1838,23 +1863,6 @@ extern "C" void userMain() {
     // Change Mario's idle
     PlayerStateWaitExeWait::InstallAtSymbol("_ZN15PlayerStateWait7exeWaitEv");
     
-    // Handles Mario's double jump
-    PlayerActorHakoniwaExeJump::InstallAtSymbol("_ZN19PlayerActorHakoniwa7exeJumpEv");
-    PlayerStateJumpTryCountUp::InstallAtSymbol("_ZN15PlayerStateJump24tryCountUpContinuousJumpEP20PlayerContinuousJump");
-    
-    // Handles Mario's glide
-    PlayerActorHakoniwaExeHeadSliding::InstallAtSymbol("_ZN19PlayerActorHakoniwa14exeHeadSlidingEv");
-    PlayerHeadSlidingKill::InstallAtSymbol("_ZN22PlayerStateHeadSliding4killEv");
-
-    // Disable invincibility music patches
-    exl::patch::CodePatcher invincibleStartPatcher(0x4CC6FC);
-    invincibleStartPatcher.WriteInst(0x1F2003D5);  // NOP
-    exl::patch::CodePatcher invinciblePatcher(0x43F4A8);
-    invinciblePatcher.WriteInst(0x1F2003D5);       // NOP
-
-    // Disable R Reset Camera
-    TriggerCameraReset::InstallAtSymbol("_ZN19PlayerInputFunction20isTriggerCameraResetEPKN2al9LiveActorEi");
-
     // Trigger spin instead of cap throw
     PlayerTryActionCapSpinAttack::InstallAtSymbol("_ZN19PlayerActorHakoniwa26tryActionCapSpinAttackImplEb");
     PlayerTryActionCapSpinAttackBindEnd::InstallAtSymbol("_ZN19PlayerActorHakoniwa29tryActionCapSpinAttackBindEndEv");
@@ -1872,6 +1880,15 @@ extern "C" void userMain() {
     PlayerSpinCapAttackStartSpinSeparateSwimSurface::InstallAtSymbol("_ZN19PlayerSpinCapAttack28startSpinSeparateSwimSurfaceEP14PlayerAnimator");
     PlayerSpinCapAttackStartSpinSeparateSwim::InstallAtSymbol("_ZN19PlayerSpinCapAttack21startSpinSeparateSwimEP14PlayerAnimator");
 
+    DisallowCancelOnUnderwaterSpinPatch::InstallAtOffset(0x489F30);
+    DisallowCancelOnWaterSurfaceSpinPatch::InstallAtOffset(0x48A3C8);
+
+    // Send out attack messages during spins
+    PlayerAttackSensorHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa12attackSensorEPN2al9HitSensorES2_");
+
+    // Mario's movement that checks ever frame
+    PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
+
     // Handles Mario's hammer attack
     HammerAttackSensorHook::InstallAtSymbol("_ZN16HammerBrosHammer12attackSensorEPN2al9HitSensorES2_");
     LiveActorMovementHook::InstallAtSymbol("_ZN2al9LiveActor8movementEv");
@@ -1886,6 +1903,14 @@ extern "C" void userMain() {
     PlayerActorHakoniwaExeRolling::InstallAtSymbol("_ZN19PlayerActorHakoniwa10exeRollingEv");
     PlayerActorHakoniwaExeSquat::InstallAtSymbol("_ZN19PlayerActorHakoniwa8exeSquatEv");
 
+    // Handles Mario's double jump
+    PlayerActorHakoniwaExeJump::InstallAtSymbol("_ZN19PlayerActorHakoniwa7exeJumpEv");
+    PlayerStateJumpTryCountUp::InstallAtSymbol("_ZN15PlayerStateJump24tryCountUpContinuousJumpEP20PlayerContinuousJump");
+    
+    // Handles Mario's glide
+    PlayerActorHakoniwaExeHeadSliding::InstallAtSymbol("_ZN19PlayerActorHakoniwa14exeHeadSlidingEv");
+    PlayerHeadSlidingKill::InstallAtSymbol("_ZN22PlayerStateHeadSliding4killEv");
+
     // Allow triggering another spin while falling from a spin
     exl::patch::CodePatcher fakethrowPatcher(0x423B80);
     fakethrowPatcher.WriteInst(0x1F2003D5);  // NOP
@@ -1894,18 +1919,7 @@ extern "C" void userMain() {
     fakethrowPatcher.WriteInst(0x1F2003D5);  // NOP
     fakethrowPatcher.Seek(0x423B9C);
     fakethrowPatcher.BranchInst(reinterpret_cast<void*>(&tryCapSpinAndRethrow));
-
-    // Do not cancel momentum on spin
-    //PlayerConstGetSpinAirSpeedMax::InstallAtSymbol("_ZNK11PlayerConst18getSpinAirSpeedMaxEv");
-    //PlayerConstGetSpinBrakeFrame::InstallAtSymbol("_ZNK11PlayerConst17getSpinBrakeFrameEv");
-
-    // Send out attack messages during spins
-    PlayerAttackSensorHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa12attackSensorEPN2al9HitSensorES2_");
-
-    // Disable Y button for everything else
-    // PadTriggerYHook::InstallAtSymbol("_ZN2al13isPadTriggerYEi");
-    InputIsTriggerActionXexclusivelyHook::InstallAtSymbol("_ZN19PlayerInputFunction15isTriggerActionEPKN2al9LiveActorEi");
-    // InputIsTriggerActionCameraResetHook::InstallAtSymbol("_ZN19PlayerInputFunction20isTriggerCameraResetEPKN2al9LiveActorEi");
+    
     
     // Manually allow hacks and "special things" to use Y button
     exl::patch::CodePatcher yButtonPatcher(0x44C9FC);
@@ -1914,15 +1928,31 @@ extern "C" void userMain() {
     yButtonPatcher.WriteInst(exl::armv8::inst::Movk(exl::armv8::reg::W1, 100));  // isTriggerAction
     yButtonPatcher.Seek(0x44C5F0);
     yButtonPatcher.WriteInst(exl::armv8::inst::Movk(exl::armv8::reg::W1, 100));  // isTriggerCarryStart
-        
-    DisallowCancelOnUnderwaterSpinPatch::InstallAtOffset(0x489F30);
-    DisallowCancelOnWaterSurfaceSpinPatch::InstallAtOffset(0x48A3C8);
 
+    // Disable invincibility music patches
+    exl::patch::CodePatcher invincibleStartPatcher(0x4CC6FC);
+    invincibleStartPatcher.WriteInst(0x1F2003D5); // NOP
+    exl::patch::CodePatcher invinciblePatcher(0x43F4A8);
+    invinciblePatcher.WriteInst(0x1F2003D5); // NOP
+
+    // Do not cancel momentum on spin
+    //PlayerConstGetSpinAirSpeedMax::InstallAtSymbol("_ZNK11PlayerConst18getSpinAirSpeedMaxEv");
+    //PlayerConstGetSpinBrakeFrame::InstallAtSymbol("_ZNK11PlayerConst17getSpinBrakeFrameEv");
+
+    // Modify Mario's speed
+    PlayerAnimControlRun::InstallAtOffset(0x42C5E0);
+    PlayerAnimControlRunUpdate::InstallAtOffset(0x42C6BC);
     PlayerConstMoon::InstallAtOffset(0x41B704);
     PlayerConstGetNormalMaxSpeed::InstallAtSymbol("_ZNK11PlayerConst17getNormalMaxSpeedEv");
+    PlayerConstGetHeadSlidingSpeed::InstallAtSymbol("_ZNK11PlayerConst19getHeadSlidingSpeedEv");
 
+    // Running on water
     StartWaterSurfaceRunJudge::InstallAtSymbol("_ZNK31PlayerJudgeStartWaterSurfaceRun5judgeEv");
     WaterSurfaceRunJudge::InstallAtSymbol("_ZNK26PlayerJudgeWaterSurfaceRun5judgeEv");
     RunWaterSurfaceDisableSink::InstallAtOffset(0x48023C);
     WaterSurfaceRunDisableSlowdown::InstallAtOffset(0x4184C0);
+
+    // Remove Cappy eyes while ide
+    exl::patch::CodePatcher eyePatcher(0x41F7E4);
+    eyePatcher.WriteInst(exl::armv8::inst::Movk(exl::armv8::reg::W0, 0));
 }
