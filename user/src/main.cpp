@@ -192,7 +192,6 @@ bool isSuper = false;
 bool isFeather = false;
 
 bool isDoubleJump = false; // Global flag to track double jump state
-
 int isCapeActive = -1; // Global flag to track cape state
 
 al::LiveActorGroup* fireBalls = nullptr; // Global pointer for fireballs
@@ -1270,14 +1269,13 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
         // Change face
         if ((isBrawl || isSuper)
-        /*&& (al::isActionPlaying(model, "Move")
-        || al::isActionPlaying(model, "MoveMoon")
-        || al::isActionPlaying(model, "JumpBroad8")
-        || al::isActionPlaying(model, "CapeGlide")
-        || al::isActionPlaying(model, "CapeGlideFloatStart")
-        || al::isActionPlaying(model, "CapeGlideFloat"))*/) {
+        ) {
             if (face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry"))
                 al::startActionSubActor(model, "顔", "WaitAngry");
+
+            if (anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSmash")) {
+                anim->startAnim("WearEndSmash");
+            }
         }
 
         // Reset proximity flag
@@ -1307,9 +1305,9 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         // Handle cape logic for Brawl Suit
         bool isGliding =
             al::isActionPlaying(model, "CapeGlide")
-            || al::isActionPlaying(model, "CapeGlideFloatStart")
             || al::isActionPlaying(model, "CapeGlideFloat")
-            || al::isActionPlaying(model, "WaitSuperFloat")
+            || al::isActionPlaying(model, "CapeGlideFloatStart")
+            || al::isActionPlaying(model, "CapeGlideFloatSuper")
             || al::isActionPlaying(model, "JumpBroad8");
         
         if (isBrawl && cape) {
@@ -1333,7 +1331,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
         static int fireStep = -1;
 
-        if ((canFireball || anim->isAnim("CapeGlideFloat")) && al::isPadTriggerR(-1)) {
+        if ((canFireball || anim->isAnim("CapeGlideFloat") || anim->isAnim("CapeGlideFloatSuper")) && al::isPadTriggerR(-1)) {
             if (fireStep < 0 && fireBall && al::isDead(fireBall)) {
 
                 fireStep = 0;
@@ -1374,9 +1372,6 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             ) {
                 anim->clearUpperBodyAnim();
                 fireStep = -1;
-
-                if (isSuper && anim->isAnim("CapeGlideFloat")) anim->startUpperBodyAnim("WaitSuperFloat");
-
             } else {
                 fireStep++;
             }
@@ -1461,6 +1456,7 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
                             || rs::sendMsgCapAttack(target, source)))
                     || (!al::isEqualSubString(typeid(*targetHost).name(),"ReactionObject") 
                         && rs::sendMsgTsukkunThrust(target, source, fireDir, 0, true))
+                    || al::sendMsgExplosion(target, source, nullptr)
                 ) {
                     hitBuffer[hitBufferCount++] = targetHost;
                     return;
@@ -1534,7 +1530,7 @@ struct PlayerActorHakoniwaExeJump : public mallow::hook::Trampoline<PlayerActorH
         auto* model = thisPtr->mModelHolder->findModelActor("Mario");
         auto* keeper = static_cast<al::IUseEffectKeeper*>(model);
 
-        if (!isBrawl) {
+        if (!isBrawl && !isFeather) {
             Orig(thisPtr);
             return;
         }
@@ -1546,20 +1542,20 @@ struct PlayerActorHakoniwaExeJump : public mallow::hook::Trampoline<PlayerActorH
 
         bool isGround =  rs::isOnGround(thisPtr, thisPtr->mCollider);
         bool isWater  =  al::isInWater(thisPtr);
-        bool isAir     = !isGround || !isWater;
+        bool isAir     = !isGround && !isWater;
 
         if (wasWater || (wasGround && isAir)) isDoubleJump = false;
 
-        if (isAir && !isDoubleJump && (al::isPadTriggerA(-1) || al::isPadTriggerB(-1))) {
-
+        if (isAir && !isDoubleJump && (al::isPadTriggerA(-1) || al::isPadTriggerB(-1))
+        ) {
             isDoubleJump = true;
-
-            if (!al::isEffectEmitting(keeper, "DoubleJump")) al::tryEmitEffect(keeper, "DoubleJump", nullptr);
-            
+            if (isBrawl) al::tryEmitEffect(keeper, "DoubleJump", nullptr);
+            if (isFeather) al::tryEmitEffect(keeper, "AppearBloom", nullptr);
             al::setNerve(thisPtr, getNerveAt(nrvHakoniwaJump));
         }
 
-        if (al::isFirstStep(thisPtr) && isDoubleJump) anim->startAnim("PoleHandStandJump");
+        if (isBrawl && al::isFirstStep(thisPtr) && isDoubleJump) anim->startAnim("PoleHandStandJump");
+        if (isFeather && al::isFirstStep(thisPtr) && isDoubleJump) anim->startAnim("JumpDashFast");
     }
 };
 
@@ -1653,7 +1649,7 @@ struct PlayerActorHakoniwaExeHeadSliding : public mallow::hook::Trampoline<Playe
             
             if (anim->isAnim("CapeGlideFloatStart") && anim->isAnimEnd()) {
                 anim->startAnim("CapeGlideFloat");
-                if (isSuper) anim->startUpperBodyAnim("WaitSuperFloat");
+                if (isSuper) anim->startAnim("CapeGlideFloatSuper");
             }
         }
 
@@ -1738,6 +1734,7 @@ struct PlayerCarryKeeperIsCarryDuringSwimSpin : public mallow::hook::Inline<Play
 
 struct PlayerConstGetSpinAirSpeedMax : public mallow::hook::Trampoline<PlayerConstGetSpinAirSpeedMax> {
     static float Callback(PlayerConst* playerConst) {
+
         if(isGalaxySpin && !isPunching)
             return playerConst->getNormalMaxSpeed();
         return Orig(playerConst);
@@ -1746,6 +1743,7 @@ struct PlayerConstGetSpinAirSpeedMax : public mallow::hook::Trampoline<PlayerCon
 
 struct PlayerConstGetSpinBrakeFrame : public mallow::hook::Trampoline<PlayerConstGetSpinBrakeFrame> {
     static s32 Callback(PlayerConst* playerConst) {
+
         if(isGalaxySpin && !isPunching)
             return 0;
         return Orig(playerConst);
@@ -1763,6 +1761,20 @@ struct PlayerAnimControlRunUpdate : public mallow::hook::Inline<PlayerAnimContro
     static void Callback(exl::hook::InlineCtx* ctx) {
 
         if (isSuper) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveSuper"); //mMoveAnimName in PlayerAnimControlRun
+    }
+};
+
+struct PlayerSeCtrlUpdateMove : public mallow::hook::Inline<PlayerSeCtrlUpdateMove> {
+    static void Callback(exl::hook::InlineCtx* ctx) {
+
+        if (isSuper) ctx->X[8] = reinterpret_cast<u64>("MoveSuper");
+    }
+};
+
+struct PlayerSeCtrlUpdateWearEnd : public mallow::hook::Inline<PlayerSeCtrlUpdateWearEnd> {
+    static void Callback(exl::hook::InlineCtx* ctx) {
+
+        if (isSuper || isBrawl) ctx->X[20] = reinterpret_cast<u64>("WearEndSmash");
     }
 };
 
@@ -1842,6 +1854,22 @@ struct WaterSurfaceRunDisableSlowdown : public mallow::hook::Inline<WaterSurface
         // used to redirect `turnVecToVecRate` into this location instead of the proper one, so the call is basically ignored
         static sead::Vector3f garbageVec;
         if (isSuperRunningOnSurface) ctx->X[0] = reinterpret_cast<u64>(&garbageVec);
+    }
+};
+
+struct RsIsTouchDeadCode : public mallow::hook::Trampoline<RsIsTouchDeadCode> {
+    static bool Callback(const al::LiveActor* actor, const IUsePlayerCollision* coll, const IPlayerModelChanger* changer, const IUseDimension* dim, float f) {
+
+        if (isSuper) return false;
+        return Orig(actor, coll, changer, dim, f);
+    }
+};
+
+struct RsIsTouchDamageFireCode : public mallow::hook::Trampoline<RsIsTouchDamageFireCode> {
+    static bool Callback(const al::LiveActor* actor, const IUsePlayerCollision* coll, const IPlayerModelChanger* changer) {
+
+        if (isSuper) return false;
+        return Orig(actor, coll, changer);
     }
 };
 
@@ -1942,6 +1970,8 @@ extern "C" void userMain() {
     // Modify Mario's speed
     PlayerAnimControlRun::InstallAtOffset(0x42C5E0);
     PlayerAnimControlRunUpdate::InstallAtOffset(0x42C6BC);
+    PlayerSeCtrlUpdateMove::InstallAtOffset(0x463038);
+    PlayerSeCtrlUpdateWearEnd::InstallAtOffset(0x463DE0);  
     PlayerConstMoon::InstallAtOffset(0x41B704);
     PlayerConstGetNormalMaxSpeed::InstallAtSymbol("_ZNK11PlayerConst17getNormalMaxSpeedEv");
     PlayerConstGetHeadSlidingSpeed::InstallAtSymbol("_ZNK11PlayerConst19getHeadSlidingSpeedEv");
@@ -1951,6 +1981,8 @@ extern "C" void userMain() {
     WaterSurfaceRunJudge::InstallAtSymbol("_ZNK26PlayerJudgeWaterSurfaceRun5judgeEv");
     RunWaterSurfaceDisableSink::InstallAtOffset(0x48023C);
     WaterSurfaceRunDisableSlowdown::InstallAtOffset(0x4184C0);
+    RsIsTouchDeadCode::InstallAtSymbol("_ZN2rs15isTouchDeadCodeEPKN2al9LiveActorEPK19IUsePlayerCollisionPK19IPlayerModelChangerPK13IUseDimensionf");
+    RsIsTouchDamageFireCode::InstallAtSymbol("_ZN2rs21isTouchDamageFireCodeEPKN2al9LiveActorEPK19IUsePlayerCollisionPK19IPlayerModelChanger");
 
     // Remove Cappy eyes while ide
     exl::patch::CodePatcher eyePatcher(0x41F7E4);
