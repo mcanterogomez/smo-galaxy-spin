@@ -164,6 +164,7 @@ int hitBufferCount = 0;
 
 const uintptr_t spinCapNrvOffset = 0x1d78940;
 const uintptr_t nrvSpinCapFall = 0x1d7ff70;
+const uintptr_t nrvHakoniwaWait = 0x01D78918;
 const uintptr_t nrvHakoniwaFall = 0x01d78910;
 const uintptr_t nrvHakoniwaHipDrop = 0x1D78978;
 const uintptr_t nrvHakoniwaJump = 0x1D78948;
@@ -198,8 +199,13 @@ al::LiveActorGroup* fireBalls = nullptr; // Global pointer for fireballs
 bool nextThrowLeft = true; // Global flag to track next throw direction
 bool canFireball = false; // Global flag to track fireball trigger
 
+int fireStep = -1;
+static inline bool isFireThrowing() { return fireStep >= 0; }
+
 static HammerBrosHammer* hammerAttack = nullptr; // Global pointer for hammer attack
 static PlayerActorHakoniwa* hammerOwner = nullptr; // Global pointer for hammer owner
+
+bool canTaunt = false;  // Global flag to enable/disable taunts
 
 struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerActorHakoniwaInitPlayer> {
     static void Callback(PlayerActorHakoniwa* thisPtr, const al::ActorInitInfo* actorInfo, const PlayerInitInfo* playerInfo) {
@@ -208,8 +214,7 @@ struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerAct
         auto* model = thisPtr->mModelHolder->findModelActor("Mario");
 
         hammerAttack = new HammerBrosHammer("HammerBrosHammer", model, "PlayerHammer", true);
-        hammerAttack->init(*actorInfo);
-        //al::initCreateActorNoPlacementInfo(hammerAttack, *actorInfo);
+        al::initCreateActorNoPlacementInfo(hammerAttack, *actorInfo);
 
         // Set hammer attack owner
         hammerOwner = thisPtr;
@@ -218,8 +223,7 @@ struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerAct
         fireBalls = new al::LiveActorGroup("FireBrosFireBall", 4);
         while (!fireBalls->isFull()) {
             auto* fb = new FireBrosFireBall("FireBall", model);
-            fb->init(*actorInfo);
-            //al::initCreateActorNoPlacementInfo(fb, *actorInfo);
+            al::initCreateActorNoPlacementInfo(fb, *actorInfo);
             fireBalls->registerActor(fb);
         }
         fireBalls->makeActorDeadAll();
@@ -258,12 +262,12 @@ struct PlayerStateWaitExeWait : public mallow::hook::Trampoline<PlayerStateWaitE
             const char* special = nullptr;
             if (state->tryGetSpecialStatusAnimName(&special)) {
                 if (al::isEqualString(special, "BattleWait"))
-                    state->requestAnimName("WaitSmashFight");
+                    state->requestAnimName("WaitBrawlFight");
                 else
                     state->requestAnimName(special);
             }
             else {
-                if (isBrawl) state->requestAnimName("WaitSmash");
+                if (isBrawl) state->requestAnimName("WaitBrawl");
                 else if (isSuper) state->requestAnimName("WaitSuper");
             }
         }
@@ -272,6 +276,9 @@ struct PlayerStateWaitExeWait : public mallow::hook::Trampoline<PlayerStateWaitE
 
 struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttack> {
     static bool Callback(PlayerActorHakoniwa* player, bool a2) {
+        // Block while Fire throwing
+        if (isFireThrowing()) return false;
+
         // do not allow Y to trigger both pickup and spin on seeds (for picking up rocks, this function is not called)
         bool newIsCarry = player->mCarryKeeper->isCarry();
         if (newIsCarry && !prevIsCarry) {
@@ -309,7 +316,8 @@ struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryA
         && !player->mCarryKeeper->isCarry()
         && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)) canFireball = true;
 
-        if(Orig(player, a2)) {
+        if(Orig(player, a2)
+        ) {
             triggerGalaxySpin = false;
             return true;
         }
@@ -319,6 +327,9 @@ struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryA
 
 struct PlayerTryActionCapSpinAttackBindEnd : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttackBindEnd> {
     static bool Callback(PlayerActorHakoniwa* player, bool a2) {
+        // Block while Fire throwing
+        if (isFireThrowing()) return false;
+
         // do not allow Y to trigger both pickup and spin on seeds (for picking up rocks, this function is not called)
         bool newIsCarry = player->mCarryKeeper->isCarry();
         if (newIsCarry && !prevIsCarry) {
@@ -356,7 +367,8 @@ struct PlayerTryActionCapSpinAttackBindEnd : public mallow::hook::Trampoline<Pla
         && !player->mCarryKeeper->isCarry()
         && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)) canFireball = true;
 
-        if(Orig(player, a2)) {
+        if(Orig(player, a2)
+        ) {
             triggerGalaxySpin = false;
             return true;
         }
@@ -477,7 +489,7 @@ public:
         }
     }
 };
-            
+
 class PlayerStateSpinCapNrvGalaxySpinAir : public al::Nerve {
 public:
     void execute(al::NerveKeeper* keeper) const override {
@@ -550,8 +562,8 @@ public:
     }
 };
 
-PlayerStateSpinCapNrvGalaxySpinAir GalaxySpinAir;
 PlayerStateSpinCapNrvGalaxySpinGround GalaxySpinGround;
+PlayerStateSpinCapNrvGalaxySpinAir GalaxySpinAir;
 
 class PlayerActorHakoniwaNrvHammer : public al::Nerve {
 public:
@@ -582,16 +594,6 @@ public:
 
         static sead::Matrix34f hammerMtx;
         hammerMtx.makeQT(qMid, mid);
-
-        /*if (judge && judge->judge()
-        ) {
-            player->mTrigger->set(PlayerTrigger::EActionTrigger_val10);
-            if (equip && equip->mEquipmentSensor
-                && counter && counter->mCounter >= 1) equip->cancelEquip();
-            al::setNerve(player, getNerveAt(nrvHakoniwaDamage));
-            al::tryEmitEffect(hammerAttack, "Break", nullptr);
-            return;
-        }*/
                
         if (al::isFirstStep(player)
         ) {
@@ -691,6 +693,57 @@ public:
 };
 
 PlayerActorHakoniwaNrvHammer HammerNrv;
+
+class PlayerActorHakoniwaNrvTauntLeft : public al::Nerve {
+public:
+    void execute(al::NerveKeeper* keeper) const override {
+        auto* player = keeper->getParent<PlayerActorHakoniwa>();
+        auto* anim = player->mAnimator;
+
+        if (al::isFirstStep(player)
+        ) {
+            anim->endSubAnim();
+            anim->startAnim("AreaWait64");
+            if (isBrawl) anim->startAnim("WearEndBrawl");
+            if (isSuper) anim->startAnim("WearEndSuper");
+        }
+        if (anim->isAnimEnd()
+        ) {
+            al::setNerve(player, getNerveAt(nrvHakoniwaWait));
+            return;
+        }
+    }
+};
+
+class PlayerActorHakoniwaNrvTauntRight : public al::Nerve {
+public:
+    void execute(al::NerveKeeper* keeper) const override {
+        auto* player = keeper->getParent<PlayerActorHakoniwa>();
+        auto* anim = player->mAnimator;
+
+        if (al::isFirstStep(player)
+        ) {
+            anim->endSubAnim();
+            anim->startAnim("RaceResultWin");
+            if (isBrawl) anim->startAnim("WearEndBrawl");
+            if (isSuper) anim->startAnim("AreaWaitSuper");
+        }
+        if (isSuper && anim->isAnim("AreaWaitSuper") && al::isStep(player, 14)
+        ) {
+            al::tryEmitEffect(player, "InvincibleStart", nullptr);
+        }
+        if (anim->isAnimEnd()
+            || (anim->isAnim("RaceResultWin")
+            && al::isStep(player, 80))
+        ) {
+            al::setNerve(player, getNerveAt(nrvHakoniwaWait));
+            return;
+        }
+    }
+};
+
+PlayerActorHakoniwaNrvTauntLeft TauntLeftNrv;
+PlayerActorHakoniwaNrvTauntRight TauntRightNrv;
 
 struct PlayerSpinCapAttackAppear : public mallow::hook::Trampoline<PlayerSpinCapAttackAppear> {
     static void Callback(PlayerStateSpinCap* state) {
@@ -1273,9 +1326,8 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             if (face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry"))
                 al::startActionSubActor(model, "顔", "WaitAngry");
 
-            if (anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSmash")) {
-                anim->startAnim("WearEndSmash");
-            }
+            if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
+            if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
         }
 
         // Reset proximity flag
@@ -1329,9 +1381,9 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         bool onGround = rs::isOnGround(thisPtr, thisPtr->mCollider);
         bool isWater = al::isInWater(thisPtr);
 
-        static int fireStep = -1;
-
-        if ((canFireball || anim->isAnim("CapeGlideFloat") || anim->isAnim("CapeGlideFloatSuper")) && al::isPadTriggerR(-1)) {
+        if ((canFireball || anim->isAnim("CapeGlideFloat") || anim->isAnim("CapeGlideFloatSuper"))
+            && al::isPadTriggerR(-1)
+        ) {
             if (fireStep < 0 && fireBall && al::isDead(fireBall)) {
 
                 fireStep = 0;
@@ -1399,6 +1451,23 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             }
         } else {
             damagekeep->mRemainingInvincibility = 0;
+        }
+
+        // Handle Taunt triggers
+        if (al::isNerve(thisPtr, getNerveAt(nrvHakoniwaWait))
+            && !al::isNerve(thisPtr, &TauntLeftNrv)
+            && !al::isNerve(thisPtr, &TauntRightNrv)
+        ) {
+            if (al::isPadTriggerLeft(-1)
+            ) {
+                al::setNerve(thisPtr, &TauntLeftNrv);
+                return;
+            }
+            if (al::isPadTriggerRight(-1)
+            ) {
+                al::setNerve(thisPtr, &TauntRightNrv);
+                return;
+            }
         }
     }
 };
@@ -1570,6 +1639,8 @@ struct PlayerStateJumpTryCountUp : public mallow::hook::Trampoline<PlayerStateJu
 
 struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActorHakoniwaExeSquat> {
     static void Callback(PlayerActorHakoniwa* thisPtr) {
+        // Block while Fire throwing
+        if (isFireThrowing()) return;
 
         if (isPadTriggerGalaxySpin(-1)
         && !thisPtr->mAnimator->isAnim("SpinSeparate")
@@ -1580,18 +1651,14 @@ struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActor
             al::setNerve(thisPtr, &HammerNrv);
             return;
         }
-
-        /*if(isPadTriggerGalaxySpin(-1) && !thisPtr->mAnimator->isAnim("SpinSeparate") && canGalaxySpin) {
-            triggerGalaxySpin = true;
-            al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
-            return;
-        }*/
         Orig(thisPtr);
     }
 };
 
 struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerActorHakoniwaExeRolling> {
     static void Callback(PlayerActorHakoniwa* thisPtr) {
+        // Block while Fire throwing
+        if (isFireThrowing()) return;
 
         if (isPadTriggerGalaxySpin(-1)
         && !thisPtr->mAnimator->isAnim("SpinSeparate")
@@ -1602,12 +1669,6 @@ struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerAct
             al::setNerve(thisPtr, &HammerNrv);
             return;
         }
-        
-        /*if(isPadTriggerGalaxySpin(-1) && !thisPtr->mAnimator->isAnim("SpinSeparate") && canGalaxySpin) {
-            triggerGalaxySpin = true;
-            al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
-            return;
-        }*/
         Orig(thisPtr);
     }
 };
@@ -1750,6 +1811,31 @@ struct PlayerConstGetSpinBrakeFrame : public mallow::hook::Trampoline<PlayerCons
     }
 };
 
+struct PlayerConstMoon : public mallow::hook::Inline<PlayerConstMoon> {
+    static void Callback(exl::hook::InlineCtx* ctx) {
+
+        if (isSuper) ctx->X[0] = reinterpret_cast<u64>("Moon");
+    }
+};
+
+struct PlayerConstGetNormalMaxSpeed : public mallow::hook::Trampoline<PlayerConstGetNormalMaxSpeed> {
+    static float Callback(const PlayerConst* thisPtr) {
+
+        float speed = Orig(thisPtr);
+        if (isSuper) speed *= 2.0f;
+        return speed;
+    }
+};
+
+struct PlayerConstGetHeadSlidingSpeed : public mallow::hook::Trampoline<PlayerConstGetHeadSlidingSpeed> {
+    static float Callback(const PlayerConst* thisPtr) {
+
+        float speed = Orig(thisPtr);
+        if (isSuper) speed *= 2.0f;
+        return speed;
+    }
+};
+
 struct PlayerAnimControlRun : public mallow::hook::Inline<PlayerAnimControlRun> {
     static void Callback(exl::hook::InlineCtx* ctx) {
 
@@ -1774,32 +1860,8 @@ struct PlayerSeCtrlUpdateMove : public mallow::hook::Inline<PlayerSeCtrlUpdateMo
 struct PlayerSeCtrlUpdateWearEnd : public mallow::hook::Inline<PlayerSeCtrlUpdateWearEnd> {
     static void Callback(exl::hook::InlineCtx* ctx) {
 
-        if (isSuper || isBrawl) ctx->X[20] = reinterpret_cast<u64>("WearEndSmash");
-    }
-};
-
-struct PlayerConstMoon : public mallow::hook::Inline<PlayerConstMoon> {
-    static void Callback(exl::hook::InlineCtx* ctx) {
-
-        if (isSuper) ctx->X[0] = reinterpret_cast<u64>("Moon");
-    }
-};
-
-struct PlayerConstGetNormalMaxSpeed : public mallow::hook::Trampoline<PlayerConstGetNormalMaxSpeed> {
-    static float Callback(const PlayerConst* thisPtr) {
-
-        float speed = Orig(thisPtr);
-        if (isSuper) speed *= 2.0f;
-        return speed;
-    }
-};
-
-struct PlayerConstGetHeadSlidingSpeed : public mallow::hook::Trampoline<PlayerConstGetHeadSlidingSpeed> {
-    static float Callback(const PlayerConst* thisPtr) {
-
-        float speed = Orig(thisPtr);
-        if (isSuper) speed *= 2.0f;
-        return speed;
+        if (isBrawl) ctx->X[20] = reinterpret_cast<u64>("WearEndBrawl");
+        if (isSuper) ctx->X[20] = reinterpret_cast<u64>("WearEndSuper");
     }
 };
 
