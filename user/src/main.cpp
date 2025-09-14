@@ -1234,14 +1234,14 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     if (rs::sendMsgCapAttack(target, source)) hitBuffer[hitBufferCount++] = targetHost;
                     return;
                 }
-                if (al::isEqualSubString(typeid(*targetHost).name(), "DamageBall")
+                if (//al::isEqualSubString(typeid(*targetHost).name(), "DamageBall")
+                    al::isEqualSubString(typeid(*targetHost).name(), "KickStone")
                     || al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "KickStone")
                 ) {
                     if (al::sendMsgExplosion(target, source, nullptr)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
-                        if (!al::isEffectEmitting(sourceHost, "Hit")) al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
+                        al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
                     }
                     return;
                 }
@@ -1295,13 +1295,13 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     && !al::isSensorName(target,"Brake")
                 ) {
                     if (
-                        (al::isEqualSubString(typeid(*targetHost).name(),"BreakMapParts")
+                        /*(al::isEqualSubString(typeid(*targetHost).name(),"BreakMapParts")
                         && al::sendMsgExplosion(target, source, nullptr))
                         || ((al::isEqualSubString(typeid(*targetHost).name(),"BlockHard")
                             || al::isEqualSubString(typeid(*targetHost).name(),"MarchingCubeBlock")
                             || al::isEqualSubString(typeid(*targetHost).name(),"BossForestBlock"))
-                            && rs::sendMsgHammerBrosHammerHackAttack(target, source))
-                        || (al::isEqualSubString(typeid(*targetHost).name(),"ReactionObject")
+                            && rs::sendMsgHammerBrosHammerHackAttack(target, source))*/
+                        (al::isEqualSubString(typeid(*targetHost).name(),"ReactionObject")
                             && rs::sendMsgCapReflect(target, source))
                         || (al::isEqualSubString(typeid(*targetHost).name(),"TRex")
                             && al::sendMsgPlayerHipDrop(target, source, nullptr))
@@ -1312,7 +1312,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         || (al::isEqualSubString(typeid(*targetHost).name(),"ChurchDoor")
                             && rs::sendMsgCapTouchWall(target, source, sead::Vector3f{0,0,0}, sead::Vector3f{0,0,0}))
                     ) {
-                        if (al::isEqualSubString(typeid(*targetHost).name(),"BreakMapParts")) al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
+                        //if (al::isEqualSubString(typeid(*targetHost).name(),"BreakMapParts")) al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
                         hitBuffer[hitBufferCount++] = targetHost;
                         return;
                     }
@@ -1566,12 +1566,22 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
                     return;
                 }
                 if (al::isEqualSubString(typeid(*targetHost).name(), "DamageBall")
+                    || al::isEqualSubString(typeid(*targetHost).name(), "FrailBox")
                     || al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
                 ) {
                     if (al::sendMsgExplosion(target, source, nullptr)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
-                        if (!al::isEffectEmitting(sourceHost, "HammerHit")) al::tryEmitEffect(sourceHost, "HammerHit", &spawnPos);
+                        al::tryEmitEffect(sourceHost, "HammerHit", &spawnPos);
+                    }
+                    return;
+                }
+                if (al::isEqualSubString(typeid(*targetHost).name(), "TRex")
+                ) {
+                    if (rs::sendMsgSeedAttackBig(target, source)
+                    ) {
+                        hitBuffer[hitBufferCount++] = targetHost;
+                        al::tryEmitEffect(sourceHost, "HammerHit", &spawnPos);
                     }
                     return;
                 }
@@ -1588,6 +1598,7 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
                             || rs::sendMsgCapAttack(target, source)))
                     || (!al::isEqualSubString(typeid(*targetHost).name(),"ReactionObject") 
                         && rs::sendMsgTsukkunThrust(target, source, fireDir, 0, true))
+                    || al::sendMsgExplosion(target, source, nullptr)
                 ) {
                     hitBuffer[hitBufferCount++] = targetHost;
                     return;
@@ -1765,7 +1776,7 @@ struct PlayerActorHakoniwaExeHeadSliding : public mallow::hook::Trampoline<Playe
             if (isBrawl && cape && al::isDead(cape)
             ) {
                 cape->appear();
-                if (!al::isEffectEmitting(keeper, "AppearBloom")) al::tryEmitEffect(keeper, "AppearBloom", nullptr);
+                al::tryEmitEffect(keeper, "AppearBloom", nullptr);
                 al::tryStartSe(thisPtr, "Bloom");
             }
             anim->startAnim("JumpBroad8");
