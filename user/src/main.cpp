@@ -188,6 +188,7 @@ bool isPunchRight = false;
 
 bool isSpinActive = false; // Global flag to track spin state
 bool isNearCollectible = false; // Global flag to track if near a collectible
+bool isNearTreasure = false; // Global flag to track if near a collectible
 
 // Global flags to track suits
 bool isBrawl = false;
@@ -429,9 +430,11 @@ public:
                 } else if (isNearCollectible) {
                         state->mAnimator->startAnim("RabbitGet");
                         al::validateHitSensor(state->mActor, "Punch");
-                        //galaxySensorRemaining = 15;
-                        //isPunching = false;  
-                        //return;                                     
+
+                } else if (isNearTreasure) {
+                        state->mAnimator->startAnim("Kick");
+                        al::validateHitSensor(state->mActor, "Punch");
+                        
                 } else {
                     if (isPunchRight) {
                         state->mAnimator->startSubAnim("KoopaCapPunchRStart");
@@ -450,7 +453,8 @@ public:
             }
         }
         
-        if (!isSpinning && !isCarrying && !isNearCollectible
+        if (!isSpinning && !isCarrying
+            && !isNearCollectible && !isNearTreasure
             && !isRotatingL && !isRotatingR
         ) {
             if (al::isStep(state, 3)) {
@@ -721,7 +725,7 @@ public:
         auto* player = keeper->getParent<PlayerActorHakoniwa>();
         auto* anim = player->mAnimator;
         auto* model = player->mModelHolder->findModelActor("Mario");
-        auto* cape = al::getSubActor(model, "ケープ");
+        auto* cape = al::tryGetSubActor(model, "ケープ");
         auto* effect = static_cast<al::IUseEffectKeeper*>(model);
 
         if (al::isFirstStep(player)
@@ -856,6 +860,7 @@ struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinC
         isPunching = false;
         isSpinActive = false;
         isNearCollectible = false;
+        isNearTreasure = false;
 
         al::invalidateHitSensor(state->mActor, "DoubleSpin");
         al::invalidateHitSensor(state->mActor, "GalaxySpin");
@@ -1176,29 +1181,39 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 if (al::isSensorName(source, "Punch")
                     && !isPunching
                 ) {
-                    if (al::isEqualSubString(typeid(*targetHost).name(),"Stake") &&
-                        sourceNrv == getNerveAt(0x1D36D20)
+                    if (al::isEqualSubString(typeid(*targetHost).name(),"Stake")
+                        && sourceNrv == getNerveAt(0x1D36D20)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
                         al::setNerve(targetHost, getNerveAt(0x1D36D30));
                         al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
                         return;
                     }
-                    if (al::isEqualSubString(typeid(*targetHost).name(),"Radish") &&
-                        sourceNrv == getNerveAt(0x1D22B70)
+                    if (al::isEqualSubString(typeid(*targetHost).name(),"Radish")
+                        && sourceNrv == getNerveAt(0x1D22B70)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
                         al::setNerve(targetHost, getNerveAt(0x1D22BD8));
                         al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
                         return;
                     }
-                    if (al::isEqualSubString(typeid(*targetHost).name(),"BossRaidRivet") &&
-                        sourceNrv == getNerveAt(0x1C5F330)
+                    if (al::isEqualSubString(typeid(*targetHost).name(),"BossRaidRivet")
+                        && sourceNrv == getNerveAt(0x1C5F330)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
                         al::setNerve(targetHost, getNerveAt(0x1C5F338));
                         al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
                         return;
+                    }
+                    if (al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
+                        && !al::isModelName(targetHost, "TreasureBoxWood")
+                    ) {
+                        if (al::sendMsgExplosion(target, source, nullptr)
+                        ) {
+                            hitBuffer[hitBufferCount++] = targetHost;
+                            al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
+                            return;
+                        }
                     }
                 }
             }
@@ -1236,7 +1251,8 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 }
                 if (//al::isEqualSubString(typeid(*targetHost).name(), "DamageBall")
                     al::isEqualSubString(typeid(*targetHost).name(), "KickStone")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
+                    || (al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
+                        && al::isModelName(targetHost, "TreasureBoxWood"))
                 ) {
                     if (al::sendMsgExplosion(target, source, nullptr)
                     ) {
@@ -1277,6 +1293,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     }
                 }
                 if (al::isSensorMapObj(target)
+                    && !al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
                 ) {
                     if (
                         rs::sendMsgHackAttack(target, source)
@@ -1298,10 +1315,10 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         /*(al::isEqualSubString(typeid(*targetHost).name(),"BreakMapParts")
                         && al::sendMsgExplosion(target, source, nullptr))
                         || ((al::isEqualSubString(typeid(*targetHost).name(),"BlockHard")
-                            || al::isEqualSubString(typeid(*targetHost).name(),"MarchingCubeBlock")
-                            || al::isEqualSubString(typeid(*targetHost).name(),"BossForestBlock"))
-                            && rs::sendMsgHammerBrosHammerHackAttack(target, source))*/
-                        (al::isEqualSubString(typeid(*targetHost).name(),"ReactionObject")
+                            || al::isEqualSubString(typeid(*targetHost).name(),"MarchingCubeBlock")*/
+                        (al::isEqualSubString(typeid(*targetHost).name(),"BossForestBlock")
+                        && rs::sendMsgHammerBrosHammerHackAttack(target, source))
+                        || (al::isEqualSubString(typeid(*targetHost).name(),"ReactionObject")
                             && rs::sendMsgCapReflect(target, source))
                         || (al::isEqualSubString(typeid(*targetHost).name(),"TRex")
                             && al::sendMsgPlayerHipDrop(target, source, nullptr))
@@ -1355,7 +1372,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         auto* anim   = thisPtr->mAnimator;
         auto* holder = thisPtr->mModelHolder;
         auto* model  = holder->findModelActor("Mario");
-        auto* cape = al::getSubActor(model, "ケープ");
+        auto* cape = al::tryGetSubActor(model, "ケープ");
         al::LiveActor* face = al::tryGetSubActor(model, "顔");
         al::IUseEffectKeeper* keeper = static_cast<al::IUseEffectKeeper*>(model);
 
@@ -1402,6 +1419,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
         // Reset proximity flag
         isNearCollectible = false;
+        isNearTreasure = false;
 
         // Get Mario's Carry sensor
         al::HitSensor* carrySensor = al::getHitSensor(thisPtr, "Carry");
@@ -1416,13 +1434,20 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                     const char* typeName = typeid(*actor).name();
                     if (al::isEqualSubString(typeName, "Radish") ||
                         al::isEqualSubString(typeName, "Stake") ||
-                        al::isEqualSubString(typeName, "BossRaidRivet")) {
+                        al::isEqualSubString(typeName, "BossRaidRivet")
+                    ) {
                         isNearCollectible = true;
                         break; // Exit early if found
+                    } else if (al::isEqualSubString(typeName, "TreasureBox")
+                        && !al::isModelName(actor, "TreasureBoxWood")
+                    ) {
+                        isNearTreasure = true;
+                        break;
                     }
                 }
             }
         }
+        
         // Handle cape logic for Brawl Suit
         bool isGliding =
             al::isActionPlaying(model, "CapeGlide")
@@ -1759,7 +1784,7 @@ struct PlayerActorHakoniwaExeHeadSliding : public mallow::hook::Trampoline<Playe
                 
         auto* anim   = thisPtr->mAnimator;
         auto* model = thisPtr->mModelHolder->findModelActor("Mario");
-        auto* cape = al::getSubActor(model, "ケープ");
+        auto* cape = al::tryGetSubActor(model, "ケープ");
         auto* keeper = static_cast<al::IUseEffectKeeper*>(model);
 
         if (!isBrawl && !isSuper && !isFeather) return;
