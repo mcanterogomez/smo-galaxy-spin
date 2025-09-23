@@ -213,8 +213,11 @@ struct PlayerStateWaitExeWait : public mallow::hook::Trampoline<PlayerStateWaitE
         if (al::isFirstStep(state)) {
             const char* special = nullptr;
             if (state->tryGetSpecialStatusAnimName(&special)) {
-                if (al::isEqualString(special, "BattleWait"))
-                    state->requestAnimName("WaitBrawlFight");
+                if (al::isEqualString(special, "BattleWait")
+                ) {
+                    if (isBrawl) state->requestAnimName("WaitBrawlFight");
+                    else if (isSuper) state->requestAnimName("WaitSuperFight");
+                }
                 else
                     state->requestAnimName(special);
             }
