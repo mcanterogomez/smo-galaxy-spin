@@ -176,6 +176,7 @@ bool isPunchRight = false;
 bool isSpinActive = false; // Global flag to track spin state
 bool isNearCollectible = false; // Global flag to track if near a collectible
 bool isNearTreasure = false; // Global flag to track if near a collectible
+bool isNearSwoonedEnemy = false;  // Global flag to track if near a swooned enemy
 
 // Global flags to track suits
 bool isBrawl = false;
@@ -192,7 +193,7 @@ struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerAct
         Orig(thisPtr, actorInfo, playerInfo);
         // Check for Super suit costume and cap
         const char* costume = GameDataFunction::getCurrentCostumeTypeName(thisPtr);
-        const char* cap     = GameDataFunction::getCurrentCapTypeName(thisPtr);
+        const char* cap = GameDataFunction::getCurrentCapTypeName(thisPtr);
 
         isBrawl = (costume && al::isEqualString(costume, "MarioColorBrawl"))
                 && (cap && al::isEqualString(cap, "MarioColorBrawl"));
@@ -363,7 +364,7 @@ public:
                         state->mAnimator->startAnim("RabbitGet");
                         al::validateHitSensor(state->mActor, "Punch");
 
-                } else if (isNearTreasure) {
+                } else if (isNearTreasure || isNearSwoonedEnemy) {
                         state->mAnimator->startAnim("Kick");
                         al::validateHitSensor(state->mActor, "Punch");
                         
@@ -393,7 +394,7 @@ public:
         }
         
         if (!isSpinning && !isCarrying
-            && !isNearCollectible && !isNearTreasure
+            && !isNearCollectible && !isNearTreasure && !isNearSwoonedEnemy
             && !isRotatingL && !isRotatingR
         ) {
             if (al::isStep(state, 3)) {
@@ -671,6 +672,7 @@ struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinC
         isSpinActive = false;
         isNearCollectible = false;
         isNearTreasure = false;
+        isNearSwoonedEnemy = false;
 
         al::invalidateHitSensor(state->mActor, "DoubleSpin");
         al::invalidateHitSensor(state->mActor, "GalaxySpin");
@@ -758,7 +760,7 @@ struct PlayerStateSwimExeSwimSpinCap : public mallow::hook::Trampoline<PlayerSta
             triggerGalaxySpin = false;
             isSpinActive = true;
 
-            if (isNearCollectible) al::validateHitSensor(thisPtr->mActor, "Punch");
+            if (isNearCollectible || isNearTreasure || isNearSwoonedEnemy) al::validateHitSensor(thisPtr->mActor, "Punch");
         }
 
         if(isGalaxySpin && (al::isGreaterStep(thisPtr, 15) || al::isStep(thisPtr, -1)))
@@ -782,7 +784,7 @@ struct PlayerStateSwimExeSwimSpinCapSurface : public mallow::hook::Trampoline<Pl
             triggerGalaxySpin = false;
             isSpinActive = true;
 
-            if (isNearCollectible) al::validateHitSensor(thisPtr->mActor, "Punch");
+            if (isNearCollectible || isNearTreasure || isNearSwoonedEnemy) al::validateHitSensor(thisPtr->mActor, "Punch");
         }
 
         if(isGalaxySpin && (al::isGreaterStep(thisPtr, 15) || al::isStep(thisPtr, -1)))
@@ -822,6 +824,7 @@ struct PlayerSpinCapAttackStartSpinSeparateSwimSurface : public mallow::hook::Tr
         }
 
         if (isNearCollectible) animator->startAnim("RabbitGet");
+        else if (isNearTreasure || isNearSwoonedEnemy) animator->startAnim("Kick");
         else animator->startAnim("SpinSeparateSwim");
     }
 };
@@ -834,6 +837,7 @@ struct PlayerSpinCapAttackStartSpinSeparateSwim : public mallow::hook::Trampolin
         }
 
         if (isNearCollectible) animator->startAnim("RabbitGet");
+        else if (isNearTreasure || isNearSwoonedEnemy) animator->startAnim("Kick");
         else animator->startAnim("SpinSeparateSwim");
     }
 };
@@ -1061,6 +1065,8 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 }
                 if (al::isEqualSubString(typeid(*targetHost).name(), "DamageBall")
                     || al::isEqualSubString(typeid(*targetHost).name(), "KickStone")
+                    || (al::isEqualSubString(typeid(*targetHost).name(), "SignBoard")
+                        && !al::isModelName(targetHost, "SignBoardNormal"))
                     || (al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
                         && al::isModelName(targetHost, "TreasureBoxWood"))
                 ) {
@@ -1131,22 +1137,24 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     && !al::isSensorName(target,"Brake")
                 ) {
                     if (
-                        (al::isEqualSubString(typeid(*targetHost).name(),"BreakMapParts")
-                        && al::sendMsgExplosion(target, source, nullptr))
-                        || ((al::isEqualSubString(typeid(*targetHost).name(),"BlockHard")
-                            || al::isEqualSubString(typeid(*targetHost).name(),"MarchingCubeBlock")
-                            || al::isEqualSubString(typeid(*targetHost).name(),"BossForestBlock"))
+                        ((al::isEqualSubString(typeid(*targetHost).name(),"BlockHard")
+                        || al::isEqualSubString(typeid(*targetHost).name(),"MarchingCubeBlock")
+                        || al::isEqualSubString(typeid(*targetHost).name(),"BossForestBlock"))
                             && rs::sendMsgHammerBrosHammerHackAttack(target, source))
+                        || (al::isEqualSubString(typeid(*targetHost).name(),"BreakMapParts")
+                            && al::sendMsgExplosion(target, source, nullptr))
+                        || ((al::isEqualSubString(typeid(*targetHost).name(),"Car")
+                            || (al::isEqualSubString(typeid(*targetHost).name(),"SignBoard")
+                                && al::isModelName(targetHost, "SignBoardNormal")))
+                                    && rs::sendMsgCapReflectCollide(target, source))
+                        || (al::isEqualSubString(typeid(*targetHost).name(),"ChurchDoor")
+                            && rs::sendMsgCapTouchWall(target, source, sead::Vector3f{0,0,0}, sead::Vector3f{0,0,0}))
+                        || (al::isEqualSubString(typeid(*targetHost).name(),"Doshi")
+                            && rs::sendMsgCapAttackCollide(target, source))
                         || (al::isEqualSubString(typeid(*targetHost).name(),"ReactionObject")
                             && rs::sendMsgCapReflect(target, source))
                         || (al::isEqualSubString(typeid(*targetHost).name(),"TRex")
                             && al::sendMsgPlayerHipDrop(target, source, nullptr))
-                        || (al::isEqualSubString(typeid(*targetHost).name(),"Doshi")
-                            && rs::sendMsgCapAttackCollide(target, source))
-                        || (al::isEqualSubString(typeid(*targetHost).name(),"Car")
-                            && rs::sendMsgCapReflectCollide(target, source))
-                        || (al::isEqualSubString(typeid(*targetHost).name(),"ChurchDoor")
-                            && rs::sendMsgCapTouchWall(target, source, sead::Vector3f{0,0,0}, sead::Vector3f{0,0,0}))
                     ) {
                         if (al::isEqualSubString(typeid(*targetHost).name(),"BreakMapParts")) al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
                         hitBuffer[hitBufferCount++] = targetHost;
@@ -1238,6 +1246,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         // Reset proximity flag
         isNearCollectible = false;
         isNearTreasure = false;
+        isNearSwoonedEnemy = false;
 
         // Get Mario's Carry sensor
         al::HitSensor* carrySensor = al::getHitSensor(thisPtr, "Carry");
@@ -1250,16 +1259,24 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                 if (actor) {
                     // Check if sensor belongs to target object type
                     const char* typeName = typeid(*actor).name();
-                    if (al::isEqualSubString(typeName, "Radish") ||
-                        al::isEqualSubString(typeName, "Stake") ||
-                        al::isEqualSubString(typeName, "BossRaidRivet")
+                    if (al::isEqualSubString(typeName, "Radish")
+                    || al::isEqualSubString(typeName, "Stake")
+                    || al::isEqualSubString(typeName, "BossRaidRivet")
                     ) {
                         isNearCollectible = true;
-                        break; // Exit early if found
+                        break;
                     } else if (al::isEqualSubString(typeName, "TreasureBox")
                         && !al::isModelName(actor, "TreasureBoxWood")
                     ) {
                         isNearTreasure = true;
+                        break;  
+                    } else if (al::isSensorEnemyBody(other)
+                        && (al::isActionPlaying(actor, "SwoonStart")
+                            || al::isActionPlaying(actor, "SwoonStartLand")
+                            || al::isActionPlaying(actor, "SwoonLoop")
+                            || al::isActionPlaying(actor, "Swoon"))
+                    ) {
+                        isNearSwoonedEnemy = true;
                         break;
                     }
                 }
