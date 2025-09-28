@@ -977,6 +977,11 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackAirLeft")
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackAirRight")
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "RabbitGet")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "Rolling")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "RollingStart")
+                || al::isActionPlaying(thisPtr->mModelHolder->findModelActor("Mario"), "MoveSuper")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "JumpBroad8")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "CapeGlide")
                 || isGalaxySpin)
         ) {
             bool isInHitBuffer = false;
@@ -1046,6 +1051,11 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 }
             }
             if(!isInHitBuffer) {
+                if (al::isEqualSubString(typeid(*targetHost).name(), "BreedaWanwan")
+                ) {
+                    if (al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)) hitBuffer[hitBufferCount++] = targetHost;
+                    return;
+                }
                 if (al::isEqualSubString(typeid(*targetHost).name(),"CapSwitch")
                 ) {
                     al::setNerve(targetHost, getNerveAt(0x1CE3E18));
@@ -1068,6 +1078,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 }
                 if (al::isEqualSubString(typeid(*targetHost).name(), "DamageBall")
                     || al::isEqualSubString(typeid(*targetHost).name(), "KickStone")
+                    || al::isEqualSubString(typeid(*targetHost).name(), "PlayGuideBoard")                    
                     || (al::isEqualSubString(typeid(*targetHost).name(), "SignBoard")
                         && !al::isModelName(targetHost, "SignBoardNormal"))
                     || (al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
@@ -1206,12 +1217,38 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         al::LiveActor* face = al::tryGetSubActor(model, "顔");
         al::IUseEffectKeeper* keeper = static_cast<al::IUseEffectKeeper*>(model);
 
+        // Add attack to moves
+        if (model) {
+            static bool wasMoveRoll = false;
+            const bool isMoveRoll = (al::isActionPlaying(model, "RollingStart") || anim->isAnim("Rolling"));
+
+            if (isMoveRoll && !wasMoveRoll) { al::validateHitSensor(thisPtr, "GalaxySpin"); hitBufferCount = 0;}
+            else if (!isMoveRoll && wasMoveRoll) al::invalidateHitSensor(thisPtr, "GalaxySpin");
+
+            wasMoveRoll = isMoveRoll;
+        }
+
         // Change face
         if ((isBrawl || isSuper)
         ) {
             if (face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry"))
                 al::startActionSubActor(model, "顔", "WaitAngry");
 
+            // Activate damage when running and Super
+            if (isSuper) {
+                static bool wasMoveSuper = false;
+                const bool isMoveSuper =
+                    model
+                    && ((al::isActionPlaying(model, "MoveSuper")
+                    && al::calcSpeedH(thisPtr) >= thisPtr->mConst->getDashFastBorderSpeed())
+                    || anim->isAnim("JumpBroad8") || anim->isAnim("CapeGlide"));
+
+                if (isMoveSuper && !wasMoveSuper) { al::validateHitSensor(thisPtr, "GalaxySpin"); hitBufferCount = 0; }
+                else if (!isMoveSuper && wasMoveSuper) al::invalidateHitSensor(thisPtr, "GalaxySpin");
+
+                wasMoveSuper = isMoveSuper;
+            }
+                
             if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
             if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
         }
@@ -1263,8 +1300,8 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                     // Check if sensor belongs to target object type
                     const char* typeName = typeid(*actor).name();
                     if (al::isEqualSubString(typeName, "Radish")
-                    || al::isEqualSubString(typeName, "Stake")
-                    || al::isEqualSubString(typeName, "BossRaidRivet")
+                        || al::isEqualSubString(typeName, "Stake")
+                        || al::isEqualSubString(typeName, "BossRaidRivet")
                     ) {
                         isNearCollectible = true;
                         break;
@@ -1272,7 +1309,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                         && !al::isModelName(actor, "TreasureBoxWood")
                     ) {
                         isNearTreasure = true;
-                        break;  
+                        break;
                     } else if (al::isSensorEnemyBody(other)
                         && (al::isActionPlaying(actor, "SwoonStart")
                             || al::isActionPlaying(actor, "SwoonStartLand")
@@ -1482,7 +1519,7 @@ struct PlayerHeadSlidingKill : public mallow::hook::Trampoline<PlayerHeadSliding
 
 struct PlayerCarryKeeperStartThrowNoSpin : public mallow::hook::Trampoline<PlayerCarryKeeperStartThrowNoSpin> {
     static bool Callback(PlayerCarryKeeper* state) {
-
+        
         if (isSpinActive || galaxySensorRemaining != -1 || galaxyFakethrowRemainder != -1) return false;
         return Orig(state); 
     }
