@@ -191,23 +191,22 @@ bool isNearCollectible = false; // Global flag to track if near a collectible
 bool isNearTreasure = false; // Global flag to track if near a collectible
 bool isNearSwoonedEnemy = false;  // Global flag to track if near a swooned enemy
 
-// Global flags to track suits
+// Global flags to track states
+bool isMario = false;
 bool isBrawl = false;
-bool isSuper = false;
 bool isFeather = false;
+bool isSuper = false;
 
-bool tauntRightAlt = false; // Global flag to alternate taunt direction
-
-static HammerBrosHammer* hammerAttack = nullptr; // Global pointer for hammer attack
-static PlayerActorHakoniwa* hammerOwner = nullptr; // Global pointer for hammer owner
+static PlayerActorHakoniwa* isHakoniwa = nullptr; // Global pointer for Hakoniwa
+static HammerBrosHammer* isHammer = nullptr; // Global pointer for hammer attack
 
 al::LiveActorGroup* fireBalls = nullptr; // Global pointer for fireballs
 bool nextThrowLeft = true; // Global flag to track next throw direction
 bool canFireball = false; // Global flag to track fireball trigger
-
 int fireStep = -1;
 static inline bool isFireThrowing() { return fireStep >= 0; }
 
+bool tauntRightAlt = false; // Global flag to alternate taunt direction
 bool isDoubleJump = false; // Global flag to track double jump state
 int isCapeActive = -1; // Global flag to track cape state
 
@@ -215,13 +214,12 @@ struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerAct
     static void Callback(PlayerActorHakoniwa* thisPtr, const al::ActorInitInfo* actorInfo, const PlayerInitInfo* playerInfo) {
         Orig(thisPtr, actorInfo, playerInfo);
 
+        // Set Hakoniwa pointer
+        isHakoniwa = thisPtr;
         auto* model = thisPtr->mModelHolder->findModelActor("Mario");
 
-        hammerAttack = new HammerBrosHammer("HammerBrosHammer", model, "PlayerHammer", true);
-        al::initCreateActorNoPlacementInfo(hammerAttack, *actorInfo);
-
-        // Set hammer attack owner
-        hammerOwner = thisPtr;
+        isHammer = new HammerBrosHammer("HammerBrosHammer", model, "PlayerHammer", true);
+        al::initCreateActorNoPlacementInfo(isHammer, *actorInfo);
 
         // Create and hide fireballs
         fireBalls = new al::LiveActorGroup("FireBrosFireBall", 4);
@@ -236,11 +234,13 @@ struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerAct
         const char* costume = GameDataFunction::getCurrentCostumeTypeName(thisPtr);
         const char* cap = GameDataFunction::getCurrentCapTypeName(thisPtr);
 
+        isMario = (costume && al::isEqualString(costume, "Mario"))
+                && (cap && al::isEqualString(cap, "Mario"));
         isBrawl = (costume && al::isEqualString(costume, "MarioColorBrawl"))
                 && (cap && al::isEqualString(cap, "MarioColorBrawl"));
+        isFeather = (costume && al::isEqualString(costume, "MarioFeather"));
         isSuper = (costume && al::isEqualString(costume, "MarioColorSuper"))
                 && (cap && al::isEqualString(cap, "MarioColorSuper"));
-        isFeather = (costume && al::isEqualString(costume, "MarioFeather"));
     }
 };
 
@@ -249,7 +249,7 @@ struct PlayerActorHakoniwaInitAfterPlacement : public mallow::hook::Trampoline<P
         Orig(thisPtr);
 
         if (fireBalls) fireBalls->makeActorDeadAll();
-        if (hammerAttack) hammerAttack->makeActorDead();
+        if (isHammer) isHammer->makeActorDead();
     }
 };
 
@@ -257,7 +257,7 @@ struct PlayerStateWaitExeWait : public mallow::hook::Trampoline<PlayerStateWaitE
     static void Callback(PlayerStateWait* state) {
         Orig(state);
 
-        if (!isSuper && !isBrawl)
+        if (!isBrawl && !isSuper)
         return;
 
         if (al::isFirstStep(state)) {
@@ -559,36 +559,35 @@ public:
         if (al::isFirstStep(player)
         ) {
             hitBufferCount = 0;
-            player->mAnimator->endSubAnim();
 
-            if (hammer) al::hideModelIfShow(hammer);
+            if (hammer)
+                al::hideModelIfShow(hammer);
+            isHammer->makeActorAlive();
+            isHammer->attach(
+            &hammerMtx,
+            sead::Vector3(0.0f, -12.5f, -37.5f),
+            sead::Vector3(0.0f, sead::Mathf::deg2rad(-90.0f), 0.0f),
+            nullptr);
+
+            al::onCollide(isHammer);
+            al::invalidateClipping(isHammer);
+            al::showShadow(isHammer);
+
+            player->mAnimator->endSubAnim();
 
             if (!isGround) {
                 player->mAnimator->startAnim("RollingStart");
-                al::validateHitSensor(hammerAttack, "AttackHack");
+                al::validateHitSensor(isHammer, "AttackHack");
             } else {
                 player->mAnimator->startAnim("HammerAttack");
             }
-
-            hammerAttack->makeActorAlive();
-            hammerAttack->attach(
-            &hammerMtx,
-            //sead::Vector3(0.0f, 50.0f, -40.0f), // original
-            //sead::Vector3(0.0f, sead::Mathf::deg2rad(-90.0f), 0.0f),
-            sead::Vector3(0.0f, -12.5f, -37.5f),
-            sead::Vector3(0.0f, sead::Mathf::deg2rad(-90.0f), 0.0f),
-            "Hammer");
-
-            al::onCollide(hammerAttack);
-            al::invalidateClipping(hammerAttack);
-            al::showShadow(hammerAttack);
         }
 
         if (player->mAnimator->isAnim("RollingStart")
             && player->mAnimator->isAnimEnd()
         ) {
             player->mAnimator->startAnim("Rolling");
-            al::startAction(hammerAttack, "Spin");
+            al::startAction(isHammer, "Spin");
         }
 
         if ((player->mAnimator->isAnim("RollingStart")
@@ -596,7 +595,7 @@ public:
             && isGround
         ) {
             player->mAnimator->endSubAnim();
-            al::startAction(hammerAttack, "Hammer");
+            al::startAction(isHammer, "Hammer");
             player->mAnimator->startAnim("HammerAttack");
         }
 
@@ -614,28 +613,28 @@ public:
 
         if (!isGround) al::addVelocity(player, (al::getGravity(player) * 0.5f));
 
-        if (al::isStep(player, 6)) al::validateHitSensor(hammerAttack, "AttackHack");
+        if (al::isStep(player, 6)) al::validateHitSensor(isHammer, "AttackHack");
         
         if (player->mAnimator->isAnimEnd()
         ) {
-            hammerAttack->makeActorDead();
+            isHammer->makeActorDead();
             if (hammer) al::showModelIfHide(hammer);
-            al::offCollide(hammerAttack);
-            al::invalidateHitSensor(hammerAttack, "AttackHack");
+            al::offCollide(isHammer);
+            al::invalidateHitSensor(isHammer, "AttackHack");
             al::setNerve(player, getNerveAt(nrvHakoniwaFall));
             return;
         }
         else if (isWater && !isSurface
         ) {
-            hammerAttack->makeActorDead();
+            isHammer->makeActorDead();
             if (hammer) al::showModelIfHide(hammer);
-            al::offCollide(hammerAttack);
-            al::invalidateHitSensor(hammerAttack, "AttackHack");
+            al::offCollide(isHammer);
+            al::invalidateHitSensor(isHammer, "AttackHack");
             al::setNerve(player, getNerveAt(nrvHakoniwaFall));
-            al::tryEmitEffect(hammerAttack, "Break", nullptr);
+            al::tryEmitEffect(isHammer, "Break", nullptr);
             return;
         }
-        if (hammer && al::isDead(hammerAttack)) al::showModelIfHide(hammer);
+        if (hammer && al::isDead(isHammer)) al::showModelIfHide(hammer);
     }
 
     void executeOnEnd(al::NerveKeeper* keeper) const override {
@@ -645,10 +644,10 @@ public:
 
         if (hammer) al::showModelIfHide(hammer);
 
-        if (hammerAttack) {
-            al::offCollide(hammerAttack);
-            al::invalidateHitSensor(hammerAttack, "AttackHack");
-            hammerAttack->makeActorDead();
+        if (isHammer) {
+            al::offCollide(isHammer);
+            al::invalidateHitSensor(isHammer, "AttackHack");
+            isHammer->makeActorDead();
         }
     }
 };
@@ -690,10 +689,10 @@ public:
             anim->endSubAnim();
             anim->startAnim("TauntMario");
             if (tauntRightAlt) anim->startAnim("AreaWait64");
-            if (isFeather) anim->startAnim("TauntFeather");
-            if (isFeather && tauntRightAlt) anim->startAnim("AreaWaitSayCheese");
             if (isBrawl) anim->startAnim("TauntBrawl");
             if (isBrawl && tauntRightAlt) anim->startAnim("LandJump3");
+            if (isFeather) anim->startAnim("TauntFeather");
+            if (isFeather && tauntRightAlt) anim->startAnim("AreaWaitSayCheese");
             if (isSuper) anim->startAnim("TauntSuper");
         }
         if (isSuper && anim->isAnim("TauntSuper") && al::isStep(player, 14)
@@ -1456,7 +1455,9 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             || al::isActionPlaying(model, "CapeGlideFloatSuper")
             || al::isActionPlaying(model, "JumpBroad8");
         
-        if (isBrawl && cape) {
+        if ((isMario || isBrawl)
+            && cape
+        ) {
             if (al::isDead(cape)) isCapeActive = -1;
             else if (!isGliding && isCapeActive > 0) {
                 if (--isCapeActive == 0) {
@@ -1525,27 +1526,32 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         }
 
         // Handle hammer attack
-        if (hammerAttack
-            && al::isAlive(hammerAttack)
+        if (isHammer
+            && al::isAlive(isHammer)
             && !al::isNerve(thisPtr, &HammerNrv)
         ) {
-            hammerAttack->makeActorDead();
-            al::invalidateHitSensor(hammerAttack, "AttackHack");
+            isHammer->makeActorDead();
+            al::invalidateHitSensor(isHammer, "AttackHack");
         }
 
         // Apply or remove invincibility
         PlayerDamageKeeper* damagekeep = thisPtr->mDamageKeeper;
+        bool damageBlink = damagekeep && damagekeep->mIsPreventDamage && (damagekeep->mRemainingInvincibility > 0);
+        bool hacked = thisPtr->mHackKeeper && thisPtr->mHackKeeper->mCurrentHackActor;
 
-        if (isSuper) {
-            if (model && !model->mFlags->isModelHidden) {
-                if (!al::isEffectEmitting(keeper, "Bonfire")) al::tryEmitEffect(keeper, "Bonfire", nullptr);
-                if (!damagekeep->mIsPreventDamage) {
-                    damagekeep->activatePreventDamage();
-                    damagekeep->mRemainingInvincibility = INT_MAX;
-                }
+        if (isSuper && !hacked
+            && (!al::isHideModel(model) || damageBlink)
+        ) {
+            if (!al::isEffectEmitting(keeper, "Bonfire")) al::tryEmitEffect(keeper, "Bonfire", nullptr);
+            if (!damagekeep->mIsPreventDamage) {
+                damagekeep->activatePreventDamage();
+                damagekeep->mRemainingInvincibility = INT_MAX;
             }
         } else {
-            damagekeep->mRemainingInvincibility = 0;
+            if (hacked || !damageBlink) {
+                if (al::isEffectEmitting(keeper, "Bonfire")) al::tryDeleteEffect(keeper, "Bonfire");
+                damagekeep->mRemainingInvincibility = 0;
+            }
         }
     }
 };
@@ -1555,7 +1561,7 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
 
         if (!thisPtr || !source || !target) return;
 
-        if (!al::isNerve(hammerOwner, &HammerNrv)
+        if (!al::isNerve(isHakoniwa, &HammerNrv)
         ) {
             Orig(thisPtr, source, target);
             return;
@@ -1565,7 +1571,7 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
         al::LiveActor* targetHost = al::getSensorHost(target);
         
         if (!sourceHost || !targetHost) return;
-        if (targetHost == hammerOwner) return;
+        if (targetHost == isHakoniwa) return;
 
         sead::Vector3f sourcePos = al::getSensorPos(source);
         sead::Vector3f targetPos = al::getSensorPos(target);
@@ -1667,26 +1673,26 @@ struct LiveActorMovementHook : public mallow::hook::Trampoline<LiveActorMovement
 
         static bool hammerEffect = false;
 
-        if (actor != hammerAttack) return;
+        if (actor != isHammer) return;
 
-        if (!al::isAlive(hammerAttack)
+        if (!al::isAlive(isHammer)
         ) { 
             hammerEffect = false;
             return;
         }
 
-        al::HitSensor* sensorHammer = al::getHitSensor(hammerAttack, "AttackHack");
+        al::HitSensor* sensorHammer = al::getHitSensor(isHammer, "AttackHack");
         if (!sensorHammer || !sensorHammer->mIsValid) return;
 
-        if (auto* sensorWall = al::tryGetCollidedWallSensor(hammerAttack)) hammerAttack->attackSensor(sensorHammer, sensorWall);
-        if (auto* sensorCeiling = al::tryGetCollidedCeilingSensor(hammerAttack)) hammerAttack->attackSensor(sensorHammer, sensorCeiling);
-        if (auto* sensorGround = al::tryGetCollidedGroundSensor(hammerAttack)) hammerAttack->attackSensor(sensorHammer, sensorGround);
+        if (auto* sensorWall = al::tryGetCollidedWallSensor(isHammer)) isHammer->attackSensor(sensorHammer, sensorWall);
+        if (auto* sensorCeiling = al::tryGetCollidedCeilingSensor(isHammer)) isHammer->attackSensor(sensorHammer, sensorCeiling);
+        if (auto* sensorGround = al::tryGetCollidedGroundSensor(isHammer)) isHammer->attackSensor(sensorHammer, sensorGround);
 
         if (!hammerEffect
-            && hammerOwner->mAnimator->isAnim("HammerAttack")
-            && al::isCollidedGround(hammerAttack)
+            && isHakoniwa->mAnimator->isAnim("HammerAttack")
+            && al::isCollidedGround(isHammer)
         ) {
-            al::tryEmitEffect(hammerOwner, "HammerLandHit", nullptr);
+            al::tryEmitEffect(isHakoniwa, "HammerLandHit", nullptr);
             hammerEffect = true;
         }
     }
@@ -1746,8 +1752,8 @@ struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActor
         && !thisPtr->mAnimator->isAnim("SpinSeparate")
         && canGalaxySpin
 
-        && hammerAttack
-        && al::isDead(hammerAttack)
+        && isHammer
+        && al::isDead(isHammer)
         ) {
             //triggerGalaxySpin = true;
             //al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
@@ -1767,8 +1773,8 @@ struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerAct
         && !thisPtr->mAnimator->isAnim("SpinSeparate")
         && canGalaxySpin
 
-        && hammerAttack
-        && al::isDead(hammerAttack)
+        && isHammer
+        && al::isDead(isHammer)
         ) {
             //triggerGalaxySpin = true;
             //al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
@@ -1788,7 +1794,7 @@ struct PlayerActorHakoniwaExeHeadSliding : public mallow::hook::Trampoline<Playe
         auto* cape = al::tryGetSubActor(model, "ケープ");
         auto* keeper = static_cast<al::IUseEffectKeeper*>(model);
 
-        if (!isBrawl && !isSuper && !isFeather) return;
+        if (!isMario && !isBrawl && !isFeather && !isSuper) return;
 
         float vy = al::getVelocity(thisPtr).y;
         if (vy < -2.5f)
@@ -1799,7 +1805,8 @@ struct PlayerActorHakoniwaExeHeadSliding : public mallow::hook::Trampoline<Playe
         if (al::isFirstStep(thisPtr)
         ) {
             anim->endSubAnim();
-            if (isBrawl && cape && al::isDead(cape)
+            if ((isMario || isBrawl) 
+                && cape && al::isDead(cape)
             ) {
                 cape->appear();
                 al::tryEmitEffect(keeper, "AppearBloom", nullptr);
@@ -1865,9 +1872,9 @@ struct PlayerHeadSlidingKill : public mallow::hook::Trampoline<PlayerHeadSliding
 struct PlayerCarryKeeperStartCarry : public mallow::hook::Trampoline<PlayerCarryKeeperStartCarry> {
     static void Callback(PlayerCarryKeeper* thisPtr, al::HitSensor* sensor) {
         // if in hammer nerve block carry start
-        if (hammerOwner
-        && hammerOwner->getNerveKeeper()
-        && hammerOwner->getNerveKeeper()->getCurrentNerve() == &HammerNrv
+        if (isHakoniwa
+            && isHakoniwa->getNerveKeeper()
+            && isHakoniwa->getNerveKeeper()->getCurrentNerve() == &HammerNrv
         ) return;
         
         Orig(thisPtr, sensor);
@@ -1925,7 +1932,8 @@ struct PlayerConstGetNormalMaxSpeed : public mallow::hook::Trampoline<PlayerCons
     static float Callback(const PlayerConst* thisPtr) {
 
         float speed = Orig(thisPtr);
-        if (isSuper) speed *= 2.0f;
+        if (isSuper
+            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor)) speed *= 2.0f;
         return speed;
     }
 };
@@ -1934,29 +1942,34 @@ struct PlayerConstGetHeadSlidingSpeed : public mallow::hook::Trampoline<PlayerCo
     static float Callback(const PlayerConst* thisPtr) {
 
         float speed = Orig(thisPtr);
-        if (isSuper) speed *= 1.5f;
+        if (isSuper
+            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor)) speed *= 1.5f;
         return speed;
     }
 };
 
-struct PlayerAnimControlRun : public mallow::hook::Inline<PlayerAnimControlRun> {
+/*struct PlayerAnimControlRun : public mallow::hook::Inline<PlayerAnimControlRun> {
     static void Callback(exl::hook::InlineCtx* ctx) {
 
         if (isSuper) ctx->X[8] = reinterpret_cast<u64>("MoveSuper");
     }
-};
+};*/
 
 struct PlayerAnimControlRunUpdate : public mallow::hook::Inline<PlayerAnimControlRunUpdate> {
     static void Callback(exl::hook::InlineCtx* ctx) {
 
-        if (isSuper) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveSuper"); //mMoveAnimName in PlayerAnimControlRun
+        if (isSuper
+            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor))
+                *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveSuper"); //mMoveAnimName in PlayerAnimControlRun
     }
 };
 
 struct PlayerSeCtrlUpdateMove : public mallow::hook::Inline<PlayerSeCtrlUpdateMove> {
     static void Callback(exl::hook::InlineCtx* ctx) {
 
-        if (isSuper) ctx->X[8] = reinterpret_cast<u64>("MoveSuper");
+        if (isSuper
+            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor))
+                ctx->X[8] = reinterpret_cast<u64>("MoveSuper");
     }
 };
 
@@ -2132,7 +2145,7 @@ extern "C" void userMain() {
     //PlayerConstGetSpinBrakeFrame::InstallAtSymbol("_ZNK11PlayerConst17getSpinBrakeFrameEv");
 
     // Modify Mario's Player settings
-    PlayerAnimControlRun::InstallAtOffset(0x42C5E0);
+    //PlayerAnimControlRun::InstallAtOffset(0x42C5E0);
     PlayerAnimControlRunUpdate::InstallAtOffset(0x42C6BC);
     PlayerSeCtrlUpdateMove::InstallAtOffset(0x463038);
     PlayerSeCtrlUpdateWearEnd::InstallAtOffset(0x463DE0);  
