@@ -1114,6 +1114,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     }
                 }
                 if (al::isSensorMapObj(target)
+                    && !al::isEqualSubString(typeid(*targetHost).name(), "HipDrop")
                     && !al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
                 ) {
                     if (rs::sendMsgHackAttack(target, source)
