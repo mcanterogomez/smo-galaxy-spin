@@ -64,6 +64,7 @@
 #include "Player/PlayerTrigger.h"
 
 // Mod‑specific & custom actors
+#include "actors/custom/CustomPlayerConst.h"
 #include "actors/custom/PlayerAnimator.h"
 #include "actors/custom/PlayerDamageKeeper.h"
 #include "actors/custom/PlayerJudgeWallHitDown.h"
@@ -1135,6 +1136,19 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
     }
 };
 
+// Used exclusively to force Moon on Mario
+struct PlayerControlHook : public mallow::hook::Trampoline<PlayerControlHook> {
+    static void Callback(PlayerActorHakoniwa* thisPtr) {
+        Orig(thisPtr);
+
+        PlayerConst* pc = thisPtr->mConst;
+        if (!pc) return;
+
+        if (isSuper) applyMoonMarioConst(pc); // force Moon every tick
+        else applyNormalMarioConst(pc); // force Normal every tick
+    }
+};
+
 struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> {
     static void Callback(PlayerActorHakoniwa* thisPtr) {
         Orig(thisPtr);
@@ -1519,13 +1533,6 @@ struct PlayerConstGetSpinBrakeFrame : public mallow::hook::Trampoline<PlayerCons
     }
 };
 
-struct PlayerConstMoon : public mallow::hook::Inline<PlayerConstMoon> {
-    static void Callback(exl::hook::InlineCtx* ctx) {
-
-        if (isSuper) ctx->X[0] = reinterpret_cast<u64>("Moon");
-    }
-};
-
 struct PlayerConstGetNormalMaxSpeed : public mallow::hook::Trampoline<PlayerConstGetNormalMaxSpeed> {
     static float Callback(const PlayerConst* thisPtr) {
 
@@ -1545,13 +1552,6 @@ struct PlayerConstGetHeadSlidingSpeed : public mallow::hook::Trampoline<PlayerCo
         return speed;
     }
 };
-
-/*struct PlayerAnimControlRun : public mallow::hook::Inline<PlayerAnimControlRun> {
-    static void Callback(exl::hook::InlineCtx* ctx) {
-
-        if (isMarioVisible && isSuper) ctx->X[8] = reinterpret_cast<u64>("MoveSuper");
-    }
-};*/
 
 struct PlayerAnimControlRunUpdate : public mallow::hook::Inline<PlayerAnimControlRunUpdate> {
     static void Callback(exl::hook::InlineCtx* ctx) {
@@ -1688,6 +1688,8 @@ extern "C" void userMain() {
     // Send out attack messages during spins
     PlayerAttackSensorHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa12attackSensorEPN2al9HitSensorES2_");
 
+    // Mario's control that checks every frame
+    PlayerControlHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa7controlEv");
     // Mario's movement that checks ever frame
     PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
 
@@ -1739,8 +1741,7 @@ extern "C" void userMain() {
     //PlayerAnimControlRun::InstallAtOffset(0x42C5E0);
     PlayerAnimControlRunUpdate::InstallAtOffset(0x42C6BC);
     PlayerSeCtrlUpdateMove::InstallAtOffset(0x463038);
-    PlayerSeCtrlUpdateWearEnd::InstallAtOffset(0x463DE0);  
-    PlayerConstMoon::InstallAtOffset(0x41B704);
+    PlayerSeCtrlUpdateWearEnd::InstallAtOffset(0x463DE0);
     PlayerConstGetNormalMaxSpeed::InstallAtSymbol("_ZNK11PlayerConst17getNormalMaxSpeedEv");
     PlayerConstGetHeadSlidingSpeed::InstallAtSymbol("_ZNK11PlayerConst19getHeadSlidingSpeedEv");
 
