@@ -1038,6 +1038,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     || al::isEqualSubString(typeid(*targetHost).name(), "CatchBomb")
                     || al::isEqualSubString(typeid(*targetHost).name(), "DamageBall")
                     || al::isEqualSubString(typeid(*targetHost).name(), "KickStone")
+                    || al::isEqualSubString(typeid(*targetHost).name(), "MoonBasement")
                     || al::isEqualSubString(typeid(*targetHost).name(), "PlayGuideBoard")
                     || (al::isEqualSubString(typeid(*targetHost).name(), "SignBoard")
                         && !al::isModelName(targetHost, "SignBoardNormal"))
@@ -1045,6 +1046,8 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         && al::isModelName(targetHost, "TreasureBoxWood"))
                 ) {
                     if (al::sendMsgExplosion(target, source, nullptr)
+                        || rs::sendMsgKoopaHackPunch(target, source)
+                        || rs::sendMsgKoopaHackPunchCollide(target, source)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
                         al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
@@ -1136,19 +1139,6 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
     }
 };
 
-// Used exclusively to force Moon on Mario
-struct PlayerControlHook : public mallow::hook::Trampoline<PlayerControlHook> {
-    static void Callback(PlayerActorHakoniwa* thisPtr) {
-        Orig(thisPtr);
-
-        PlayerConst* pc = thisPtr->mConst;
-        if (!pc) return;
-
-        if (isSuper) applyMoonMarioConst(pc); // force Moon every tick
-        else applyNormalMarioConst(pc); // force Normal every tick
-    }
-};
-
 struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> {
     static void Callback(PlayerActorHakoniwa* thisPtr) {
         Orig(thisPtr);
@@ -1202,19 +1192,21 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             if (face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry"))
                 al::startActionSubActor(model, "顔", "WaitAngry");
 
-            // Activate damage when running and Super
+            // Activate properties for when Super
             if (isSuper) {
                 static bool wasMoveSuper = false;
                 const bool isMoveSuper =
                     model
                     && ((al::isActionPlaying(model, "MoveSuper")
-                    && al::calcSpeedH(thisPtr) >= thisPtr->mConst->getDashFastBorderSpeed())
-                    || anim->isAnim("JumpBroad8") || anim->isAnim("CapeGlide"));
+                        && al::calcSpeedH(thisPtr) >= thisPtr->mConst->getDashFastBorderSpeed())
+                        || anim->isAnim("JumpBroad8") || anim->isAnim("CapeGlide"));
 
                 if (isMoveSuper && !wasMoveSuper) { al::validateHitSensor(thisPtr, "GalaxySpin"); hitBufferCount = 0; }
                 else if (!isMoveSuper && wasMoveSuper) al::invalidateHitSensor(thisPtr, "GalaxySpin");
 
                 wasMoveSuper = isMoveSuper;
+
+                applyMoonMarioConst(thisPtr->mConst); // force Moon every tick
             }
                 
             if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
@@ -1689,8 +1681,7 @@ extern "C" void userMain() {
     PlayerAttackSensorHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa12attackSensorEPN2al9HitSensorES2_");
 
     // Mario's control that checks every frame
-    PlayerControlHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa7controlEv");
-    // Mario's movement that checks ever frame
+    //PlayerControlHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa7controlEv");
     PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
 
     // Allow carrying an object during a GalaxySpin
