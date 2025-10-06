@@ -1379,7 +1379,9 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
                 applyMoonMarioConst(thisPtr->mConst); // force Moon every tick
             }
-                
+            if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
+            if (anim && anim->isAnim("MofumofuDemoOpening2") && !anim->isAnim("MofumofuDemoOpening2Super")) anim->startAnim("MofumofuDemoOpening2Super");
+            
             if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
             if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
         }
