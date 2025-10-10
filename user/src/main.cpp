@@ -217,7 +217,7 @@ struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerAct
 
         // Set Hakoniwa pointer
         isHakoniwa = thisPtr;
-        auto* model = thisPtr->mModelHolder->findModelActor("Mario");
+        auto* model = thisPtr->mModelHolder->findModelActor("Normal");
 
         isHammer = new HammerBrosHammer("HammerBrosHammer", model, "PlayerHammer", true);
         al::initCreateActorNoPlacementInfo(isHammer, *actorInfo);
@@ -531,7 +531,7 @@ class PlayerActorHakoniwaNrvHammer : public al::Nerve {
 public:
     void execute(al::NerveKeeper* keeper) const override {
         auto* player = keeper->getParent<PlayerActorHakoniwa>();
-        auto* model = player->mModelHolder->findModelActor("Mario");
+        auto* model = player->mModelHolder->findModelActor("Normal");
         auto* hammer = al::tryGetSubActor(model, "Hammer");
 
         bool isGround = rs::isOnGround(player, player->mCollider);
@@ -640,7 +640,7 @@ public:
 
     void executeOnEnd(al::NerveKeeper* keeper) const override {
         auto* player = keeper->getParent<PlayerActorHakoniwa>();
-        auto* model  = player->mModelHolder->findModelActor("Mario");
+        auto* model  = player->mModelHolder->findModelActor("Normal");
         auto* hammer = al::tryGetSubActor(model, "Hammer");
 
         if (hammer) al::showModelIfHide(hammer);
@@ -681,7 +681,7 @@ public:
     void execute(al::NerveKeeper* keeper) const override {
         auto* player = keeper->getParent<PlayerActorHakoniwa>();
         auto* anim = player->mAnimator;
-        auto* model = player->mModelHolder->findModelActor("Mario");
+        auto* model = player->mModelHolder->findModelActor("Normal");
         auto* cape = al::tryGetSubActor(model, "ケープ");
         auto* effect = static_cast<al::IUseEffectKeeper*>(model);
 
@@ -1107,7 +1107,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
         sead::Vector3 fireDir = al::getTrans(targetHost) - al::getTrans(sourceHost);
         fireDir.normalize();
    
-        if (al::isActionPlaying(thisPtr->mModelHolder->findModelActor("Mario"), "MoveSuper")
+        if (al::isActionPlaying(thisPtr->mModelHolder->findModelActor("Normal"), "MoveSuper")
             && al::isEqualSubString(typeid(*targetHost).name(), "FireBall")) return;
             
         if((al::isSensorName(source, "GalaxySpin")
@@ -1124,7 +1124,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "RabbitGet")
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "Rolling")
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "RollingStart")
-                || al::isActionPlaying(thisPtr->mModelHolder->findModelActor("Mario"), "MoveSuper")
+                || al::isActionPlaying(thisPtr->mModelHolder->findModelActor("Normal"), "MoveSuper")
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "JumpBroad8")
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "CapeGlide")
                 || isGalaxySpin)
@@ -1341,7 +1341,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         // Grab model for effects
         auto* anim   = thisPtr->mAnimator;
         auto* holder = thisPtr->mModelHolder;
-        auto* model  = holder->findModelActor("Mario");
+        auto* model  = holder->findModelActor("Normal");
         auto* cape = al::tryGetSubActor(model, "ケープ");
         al::LiveActor* face = al::tryGetSubActor(model, "顔");
         al::IUseEffectKeeper* keeper = static_cast<al::IUseEffectKeeper*>(model);
@@ -1375,6 +1375,17 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
                 wasMoveSuper = isMoveSuper;
                 applyMoonMarioConst(thisPtr->mConst); // force Moon every tick
+
+                // Apply sfx for DashFastSuper
+                if (al::isPadHoldR(-1) && al::isActionPlaying(model, "MoveSuper")
+                    && al::calcSpeedH(thisPtr) >= 14.0f)
+                    al::tryEmitEffect(model, "DashSuper", nullptr);
+                else if (al::isActionPlaying(model, "CapeGlide"))
+                    al::tryEmitEffect(model, "DashSuperGlide", nullptr);
+                else {
+                    al::tryDeleteEffect(model, "DashSuper");
+                    al::tryDeleteEffect(model, "DashSuperGlide");
+                }
             }
             if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
             if (anim && anim->isAnim("MofumofuDemoOpening2") && !anim->isAnim("MofumofuDemoOpening2Super")) anim->startAnim("MofumofuDemoOpening2Super");
@@ -1712,7 +1723,7 @@ struct PlayerActorHakoniwaExeJump : public mallow::hook::Trampoline<PlayerActorH
     static void Callback(PlayerActorHakoniwa* thisPtr) {
 
         auto* anim   = thisPtr->mAnimator;
-        auto* model = thisPtr->mModelHolder->findModelActor("Mario");
+        auto* model = thisPtr->mModelHolder->findModelActor("Normal");
         auto* keeper = static_cast<al::IUseEffectKeeper*>(model);
 
         if (!isBrawl && !isFeather) {
@@ -1800,7 +1811,7 @@ struct PlayerActorHakoniwaExeHeadSliding : public mallow::hook::Trampoline<Playe
         Orig(thisPtr);
                 
         auto* anim   = thisPtr->mAnimator;
-        auto* model = thisPtr->mModelHolder->findModelActor("Mario");
+        auto* model = thisPtr->mModelHolder->findModelActor("Normal");
         auto* cape = al::tryGetSubActor(model, "ケープ");
         auto* keeper = static_cast<al::IUseEffectKeeper*>(model);
 
