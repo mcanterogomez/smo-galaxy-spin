@@ -1192,20 +1192,17 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             if (face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry"))
                 al::startActionSubActor(model, "顔", "WaitAngry");
 
-            // Activate properties for when Super
+            // Activate setup for Super
             if (isSuper) {
                 static bool wasMoveSuper = false;
                 const bool isMoveSuper =
-                    model
-                    && ((al::isActionPlaying(model, "MoveSuper")
-                        && al::calcSpeedH(thisPtr) >= thisPtr->mConst->getDashFastBorderSpeed())
-                        || anim->isAnim("JumpBroad8") || anim->isAnim("CapeGlide"));
+                    al::calcSpeedH(thisPtr) >= thisPtr->mConst->getDashFastBorderSpeed()
+                    || anim->isAnim("JumpBroad8") || anim->isAnim("CapeGlide");
 
                 if (isMoveSuper && !wasMoveSuper) { al::validateHitSensor(thisPtr, "GalaxySpin"); hitBufferCount = 0; }
                 else if (!isMoveSuper && wasMoveSuper) al::invalidateHitSensor(thisPtr, "GalaxySpin");
 
                 wasMoveSuper = isMoveSuper;
-
                 applyMoonMarioConst(thisPtr->mConst); // force Moon every tick
             }
             if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
@@ -1509,6 +1506,38 @@ struct PlayerCarryKeeperIsCarryDuringSwimSpin : public mallow::hook::Inline<Play
     }
 };
 
+struct PlayerActionGroundMoveControlUpdate : public mallow::hook::Trampoline<PlayerActionGroundMoveControlUpdate> {
+    static float Callback(PlayerActionGroundMoveControl* thisPtr) {
+        float update = Orig(thisPtr);
+
+        PlayerConst* playerConst = const_cast<PlayerConst*>(thisPtr->mConst);
+
+        if (isSuper && al::isPadHoldR(-1)) {
+            playerConst->mNormalMaxSpeed = 28.0f;
+            thisPtr->mMaxSpeed = 28.0f;
+        }
+        else if ((isMario || isBrawl || isFeather) && al::isPadHoldR(-1)) {
+            playerConst->mNormalMaxSpeed = 21.0f;
+            thisPtr->mMaxSpeed = 21.0f;
+        }
+        else {
+            playerConst->mNormalMaxSpeed = 14.0f;
+            thisPtr->mMaxSpeed = 14.0f;
+        }
+        return update;
+    }
+};
+
+struct PlayerConstGetHeadSlidingSpeed : public mallow::hook::Trampoline<PlayerConstGetHeadSlidingSpeed> {
+    static float Callback(const PlayerConst* thisPtr) {
+        float speed = Orig(thisPtr);
+
+        if (isSuper
+            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor)) speed *= 1.5f;
+        return speed;
+    }
+};
+
 struct PlayerConstGetSpinAirSpeedMax : public mallow::hook::Trampoline<PlayerConstGetSpinAirSpeedMax> {
     static float Callback(PlayerConst* playerConst) {
 
@@ -1524,26 +1553,6 @@ struct PlayerConstGetSpinBrakeFrame : public mallow::hook::Trampoline<PlayerCons
         if(isGalaxySpin && !isPunching)
             return 0;
         return Orig(playerConst);
-    }
-};
-
-struct PlayerConstGetNormalMaxSpeed : public mallow::hook::Trampoline<PlayerConstGetNormalMaxSpeed> {
-    static float Callback(const PlayerConst* thisPtr) {
-
-        float speed = Orig(thisPtr);
-        if (isSuper
-            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor)) speed *= 2.0f;
-        return speed;
-    }
-};
-
-struct PlayerConstGetHeadSlidingSpeed : public mallow::hook::Trampoline<PlayerConstGetHeadSlidingSpeed> {
-    static float Callback(const PlayerConst* thisPtr) {
-
-        float speed = Orig(thisPtr);
-        if (isSuper
-            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor)) speed *= 1.5f;
-        return speed;
     }
 };
 
@@ -1594,7 +1603,6 @@ struct StartWaterSurfaceRunJudge : public mallow::hook::Trampoline<StartWaterSur
 
 struct WaterSurfaceRunJudge : public mallow::hook::Trampoline<WaterSurfaceRunJudge> {
     static bool Callback(const PlayerJudgeWaterSurfaceRun* thisPtr) {
-
         isSuperRunningOnSurface = false;
 
         if (isSuper) {
@@ -1726,17 +1734,15 @@ extern "C" void userMain() {
     exl::patch::CodePatcher invinciblePatcher(0x43F4A8);
     invinciblePatcher.WriteInst(0x1F2003D5); // NOP
 
+    // Modify Mario's Player settings
+    PlayerActionGroundMoveControlUpdate::InstallAtSymbol("_ZN29PlayerActionGroundMoveControl6updateEv");
+    PlayerConstGetHeadSlidingSpeed::InstallAtSymbol("_ZNK11PlayerConst19getHeadSlidingSpeedEv");
     // Do not cancel momentum on spin
     //PlayerConstGetSpinAirSpeedMax::InstallAtSymbol("_ZNK11PlayerConst18getSpinAirSpeedMaxEv");
     //PlayerConstGetSpinBrakeFrame::InstallAtSymbol("_ZNK11PlayerConst17getSpinBrakeFrameEv");
-
-    // Modify Mario's Player settings
-    //PlayerAnimControlRun::InstallAtOffset(0x42C5E0);
     PlayerAnimControlRunUpdate::InstallAtOffset(0x42C6BC);
     PlayerSeCtrlUpdateMove::InstallAtOffset(0x463038);
     PlayerSeCtrlUpdateWearEnd::InstallAtOffset(0x463DE0);
-    PlayerConstGetNormalMaxSpeed::InstallAtSymbol("_ZNK11PlayerConst17getNormalMaxSpeedEv");
-    PlayerConstGetHeadSlidingSpeed::InstallAtSymbol("_ZNK11PlayerConst19getHeadSlidingSpeedEv");
 
     // Running on water
     StartWaterSurfaceRunJudge::InstallAtSymbol("_ZNK31PlayerJudgeStartWaterSurfaceRun5judgeEv");
