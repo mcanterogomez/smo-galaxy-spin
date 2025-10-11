@@ -209,6 +209,7 @@ static inline bool isFireThrowing() { return fireStep >= 0; }
 
 bool tauntRightAlt = false; // Global flag to alternate taunt direction
 bool isDoubleJump = false; // Global flag to track double jump state
+bool isDoubleJumpConsume=false; // Global flag to track double jump consumed
 int isCapeActive = -1; // Global flag to track cape state
 
 struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerActorHakoniwaInitPlayer> {
@@ -559,6 +560,7 @@ public:
                
         if (al::isFirstStep(player)
         ) {
+            player->mAnimator->endSubAnim();
             hitBufferCount = 0;
 
             if (hammer)
@@ -573,8 +575,6 @@ public:
             al::onCollide(isHammer);
             al::invalidateClipping(isHammer);
             al::showShadow(isHammer);
-
-            player->mAnimator->endSubAnim();
 
             if (!isGround) {
                 player->mAnimator->startAnim("RollingStart");
@@ -690,11 +690,11 @@ public:
             anim->endSubAnim();
             anim->startAnim("TauntMario");
             if (tauntRightAlt) anim->startAnim("AreaWait64");
-            if (isBrawl) anim->startAnim("TauntBrawl");
+            if (isBrawl || isSuper) anim->startAnim("TauntBrawl");
             if (isBrawl && tauntRightAlt) anim->startAnim("LandJump3");
             if (isFeather) anim->startAnim("TauntFeather");
             if (isFeather && tauntRightAlt) anim->startAnim("AreaWaitSayCheese");
-            if (isSuper) anim->startAnim("TauntSuper");
+            if (isSuper && tauntRightAlt) anim->startAnim("TauntSuper");
         }
         if (isSuper && anim->isAnim("TauntSuper") && al::isStep(player, 14)
         ) {
@@ -1357,6 +1357,20 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             wasMoveRoll = isMoveRoll;
         }
 
+        // Change animations
+        if (isMario
+            && anim && anim->isAnim("JumpDashFast") && !anim->isAnim("JumpDashFastClassic")) anim->startAnim("JumpDashFastClassic");
+
+        if (isBrawl || isSuper) {
+            if (isBrawl && anim && anim->isAnim("JumpDashFast") && !anim->isAnim("Jump")) anim->startAnim("Jump");
+
+            if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
+            if (anim && anim->isAnim("MofumofuDemoOpening2") && !anim->isAnim("MofumofuDemoOpening2Super")) anim->startAnim("MofumofuDemoOpening2Super");
+            
+            if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
+            if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
+        }
+
         // Change face
         if ((isBrawl || isSuper)
         ) {
@@ -1387,11 +1401,6 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                     al::tryDeleteEffect(model, "DashSuperGlide");
                 }
             }
-            if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
-            if (anim && anim->isAnim("MofumofuDemoOpening2") && !anim->isAnim("MofumofuDemoOpening2Super")) anim->startAnim("MofumofuDemoOpening2Super");
-            
-            if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
-            if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
         }
 
         // Handle Taunt triggers
@@ -1722,7 +1731,7 @@ struct LiveActorMovementHook : public mallow::hook::Trampoline<LiveActorMovement
 struct PlayerActorHakoniwaExeJump : public mallow::hook::Trampoline<PlayerActorHakoniwaExeJump> {
     static void Callback(PlayerActorHakoniwa* thisPtr) {
 
-        auto* anim   = thisPtr->mAnimator;
+        auto* anim = thisPtr->mAnimator;
         auto* model = thisPtr->mModelHolder->findModelActor("Normal");
         auto* keeper = static_cast<al::IUseEffectKeeper*>(model);
 
@@ -1736,22 +1745,31 @@ struct PlayerActorHakoniwaExeJump : public mallow::hook::Trampoline<PlayerActorH
 
         Orig(thisPtr);
 
-        bool isGround =  rs::isOnGround(thisPtr, thisPtr->mCollider);
-        bool isWater  =  al::isInWater(thisPtr);
-        bool isAir     = !isGround && !isWater;
+        bool isGround = rs::isOnGround(thisPtr, thisPtr->mCollider);
+        bool isWater = al::isInWater(thisPtr);
+        bool isAir = !isGround && !isWater;
 
-        if (wasWater || (wasGround && isAir)) isDoubleJump = false;
-
-        if (isAir && !isDoubleJump && (al::isPadTriggerA(-1) || al::isPadTriggerB(-1))
+        if (wasWater || (wasGround && isAir)
+        ) { 
+            isDoubleJump = false; 
+            isDoubleJumpConsume = false;
+        }
+        if (isAir && !isDoubleJump
+            && (al::isPadTriggerA(-1) || al::isPadTriggerB(-1))
         ) {
             isDoubleJump = true;
+            isDoubleJumpConsume = true;
             if (isBrawl) al::tryEmitEffect(keeper, "DoubleJump", nullptr);
             if (isFeather) { al::tryEmitEffect(keeper, "AppearBloom", nullptr); al::tryStartSe(thisPtr, "Bloom"); }
             al::setNerve(thisPtr, getNerveAt(nrvHakoniwaJump));
         }
-
-        if (isBrawl && al::isFirstStep(thisPtr) && isDoubleJump) anim->startAnim("PoleHandStandJump");
-        if (isFeather && al::isFirstStep(thisPtr) && isDoubleJump) anim->startAnim("JumpDashFast");
+        if (isDoubleJumpConsume
+            && al::isFirstStep(thisPtr)
+        ) {
+            if (isBrawl) anim->startAnim("PoleHandStandJump");
+            if (isFeather) anim->startAnim("JumpDashFast");
+            isDoubleJumpConsume = false;
+        }
     }
 };
 
@@ -1772,12 +1790,9 @@ struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActor
         if (isPadTriggerGalaxySpin(-1)
         && !thisPtr->mAnimator->isAnim("SpinSeparate")
         && canGalaxySpin
-
         && isHammer
         && al::isDead(isHammer)
         ) {
-            //triggerGalaxySpin = true;
-            //al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
             al::setNerve(thisPtr, &HammerNrv);
             return;
         }
@@ -1793,12 +1808,9 @@ struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerAct
         if (isPadTriggerGalaxySpin(-1)
         && !thisPtr->mAnimator->isAnim("SpinSeparate")
         && canGalaxySpin
-
         && isHammer
         && al::isDead(isHammer)
         ) {
-            //triggerGalaxySpin = true;
-            //al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
             al::setNerve(thisPtr, &HammerNrv);
             return;
         }
@@ -1825,7 +1837,6 @@ struct PlayerActorHakoniwaExeHeadSliding : public mallow::hook::Trampoline<Playe
 
         if (al::isFirstStep(thisPtr)
         ) {
-            anim->endSubAnim();
             if ((isMario || isBrawl) 
                 && cape && al::isDead(cape)
             ) {
@@ -1980,6 +1991,12 @@ struct PlayerAnimControlRunUpdate : public mallow::hook::Inline<PlayerAnimContro
         if (isSuper
             && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor))
                 *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveSuper"); //mMoveAnimName in PlayerAnimControlRun
+        else if (isMario
+            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor))
+                *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveClassic");
+        else if (isBrawl
+            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor))
+                *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveBrawl");
     }
 };
 
@@ -1989,6 +2006,12 @@ struct PlayerSeCtrlUpdateMove : public mallow::hook::Inline<PlayerSeCtrlUpdateMo
         if (isSuper
             && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor))
                 ctx->X[8] = reinterpret_cast<u64>("MoveSuper");
+        else if (isMario
+            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor))
+                ctx->X[8] = reinterpret_cast<u64>("MoveClassic");
+        else if (isBrawl
+            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor))
+                ctx->X[8] = reinterpret_cast<u64>("MoveBrawl");
     }
 };
 
