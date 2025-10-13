@@ -1122,8 +1122,16 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackAirLeft")
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackAirRight")
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "RabbitGet")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "Rolling")
+
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDrop")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunch")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDrop")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDropPunch")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimDive")
+
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "RollingStart")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "Rolling")
+
                 || al::isActionPlaying(thisPtr->mModelHolder->findModelActor("Normal"), "MoveSuper")
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "JumpBroad8")
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "CapeGlide")
@@ -1348,27 +1356,40 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
         // Add attack to moves
         if (model) {
-            static bool wasMoveRoll = false;
-            const bool isMoveRoll = (al::isActionPlaying(model, "RollingStart") || anim->isAnim("Rolling"));
+            static bool wasAttackMove = false;
+            const bool isAttackMove = (al::isActionPlaying(model, "HipDrop") || al::isActionPlaying(model, "HipDropPunch")
+                || al::isActionPlaying(model, "SwimHipDrop") || anim->isAnim("SwimHipDropPunch") || anim->isAnim("SwimDive")
+                || al::isActionPlaying(model, "RollingStart") || anim->isAnim("Rolling"));
 
-            if (isMoveRoll && !wasMoveRoll) { al::validateHitSensor(thisPtr, "GalaxySpin"); hitBufferCount = 0;}
-            else if (!isMoveRoll && wasMoveRoll) al::invalidateHitSensor(thisPtr, "GalaxySpin");
+            if (isAttackMove && !wasAttackMove) { al::validateHitSensor(thisPtr, "GalaxySpin"); hitBufferCount = 0;}
+            else if (!isAttackMove && wasAttackMove) al::invalidateHitSensor(thisPtr, "GalaxySpin");
 
-            wasMoveRoll = isMoveRoll;
+            wasAttackMove = isAttackMove;
         }
 
         // Change animations
         if (isMario
             && anim && anim->isAnim("JumpDashFast") && !anim->isAnim("JumpDashFastClassic")) anim->startAnim("JumpDashFastClassic");
 
-        if (isBrawl || isSuper) {
+        if ((isMario && cape && al::isAlive(cape))
+            || isBrawl || isFeather || isSuper
+        ) {
             if (isBrawl && anim && anim->isAnim("JumpDashFast") && !anim->isAnim("Jump")) anim->startAnim("Jump");
+            if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
+
+            if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
+
+            if (anim && anim->isAnim("HipDropStart") && !anim->isAnim("HipDropPunchStart")) anim->startAnim("HipDropPunchStart");
+            if (anim && anim->isAnim("HipDrop") && !anim->isAnim("HipDropPunch")) anim->startAnim("HipDropPunch");
+            if (anim && anim->isAnim("HipDropLand") && !anim->isAnim("HipDropPunchLand")) anim->startAnim("HipDropPunchLand");
+            if (anim && anim->isAnim("HipDropReaction") && !anim->isAnim("HipDropPunchReaction")) anim->startAnim("HipDropPunchReaction");
+
+            if (anim && anim->isAnim("SwimHipDropStart") && !anim->isAnim("SwimHipDropPunchStart")) anim->startAnim("SwimHipDropPunchStart");
+            if (anim && (anim->isAnim("SwimHipDrop") || anim->isAnim("SwimDive")) && !anim->isAnim("SwimHipDropPunch")) anim->startAnim("SwimHipDropPunch");
+            if (anim && anim->isAnim("SwimHipDropLand") && !anim->isAnim("SwimHipDropPunchLand")) anim->startAnim("SwimHipDropPunchLand");
 
             if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
             if (anim && anim->isAnim("MofumofuDemoOpening2") && !anim->isAnim("MofumofuDemoOpening2Super")) anim->startAnim("MofumofuDemoOpening2Super");
-            
-            if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
-            if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
         }
 
         // Change face
