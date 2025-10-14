@@ -1339,7 +1339,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             else if (!isGliding && isCapeActive > 0) {
                 if (--isCapeActive == 0) {
                     cape->kill();
-                    if (!al::isEffectEmitting(keeper, "AppearBloom")) al::tryEmitEffect(keeper, "AppearBloom", nullptr);
+                    al::tryEmitEffect(keeper, "AppearBloom", nullptr);
                     al::tryStartSe(thisPtr, "Bloom");
                     isCapeActive = -1;
                 }
@@ -1354,14 +1354,14 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         if (isSuper && !hacked
             && (!al::isHideModel(model) || damageBlink)
         ) {
-            if (!al::isEffectEmitting(keeper, "Bonfire")) al::tryEmitEffect(keeper, "Bonfire", nullptr);
+            al::tryEmitEffect(keeper, "Bonfire", nullptr);
             if (!damagekeep->mIsPreventDamage) {
                 damagekeep->activatePreventDamage();
                 damagekeep->mRemainingInvincibility = INT_MAX;
             }
         } else {
             if (hacked || !damageBlink) {
-                if (al::isEffectEmitting(keeper, "Bonfire")) al::tryDeleteEffect(keeper, "Bonfire");
+                al::tryDeleteEffect(keeper, "Bonfire");
                 damagekeep->mRemainingInvincibility = 0;
             }
         }
