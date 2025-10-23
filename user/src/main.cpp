@@ -1198,11 +1198,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         }
 
         // Change animations
-        if (isMario
-            && anim && anim->isAnim("JumpDashFast") && !anim->isAnim("JumpDashFastClassic")) anim->startAnim("JumpDashFastClassic");
-
-        if ((isMario && cape && al::isAlive(cape))
-            || isBrawl || isFeather || isSuper
+        if (isBrawl || isFeather || isSuper
         ) {
             if (isBrawl && anim && anim->isAnim("JumpDashFast") && !anim->isAnim("Jump")) anim->startAnim("Jump");
             if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
@@ -1220,6 +1216,8 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
             if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
             if (anim && anim->isAnim("MofumofuDemoOpening2") && !anim->isAnim("MofumofuDemoOpening2Super")) anim->startAnim("MofumofuDemoOpening2Super");
+        } else {
+            if (anim && anim->isAnim("JumpDashFast") && !anim->isAnim("JumpDashFastClassic")) anim->startAnim("JumpDashFastClassic");
         }
 
         // Change face
@@ -1345,8 +1343,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             || al::isActionPlaying(model, "CapeGlideFloatSuper")
             || al::isActionPlaying(model, "JumpBroad8");
         
-        if ((isMario || isBrawl)
-            && cape
+        if (isBrawl && cape
         ) {
             if (al::isDead(cape)) isCapeActive = -1;
             else if (!isGliding && isCapeActive > 0) {
@@ -1449,6 +1446,7 @@ struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActor
         Orig(thisPtr);
     }
 };
+
 struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerActorHakoniwaExeRolling> {
     static void Callback(PlayerActorHakoniwa* thisPtr) {
 
@@ -1473,7 +1471,7 @@ struct PlayerActorHakoniwaExeHeadSliding : public mallow::hook::Trampoline<Playe
         auto* cape = al::tryGetSubActor(model, "ケープ");
         auto* keeper = static_cast<al::IUseEffectKeeper*>(model);
 
-        if (!isMario && !isBrawl && !isFeather && !isSuper) return;
+        if (!isBrawl && !isFeather && !isSuper) return;
 
         float vy = al::getVelocity(thisPtr).y;
         if (vy < -2.5f)
@@ -1483,7 +1481,7 @@ struct PlayerActorHakoniwaExeHeadSliding : public mallow::hook::Trampoline<Playe
 
         if (al::isFirstStep(thisPtr)
         ) {
-            if ((isMario || isBrawl) 
+            if (isBrawl
                 && cape && al::isDead(cape)
             ) {
                 cape->appear();
@@ -1573,13 +1571,16 @@ struct PlayerActionGroundMoveControlUpdate : public mallow::hook::Trampoline<Pla
     static float Callback(PlayerActionGroundMoveControl* thisPtr) {
         float update = Orig(thisPtr);
 
+        if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor) return update;
         PlayerConst* playerConst = const_cast<PlayerConst*>(thisPtr->mConst);
 
-        if (isSuper && al::isPadHoldR(-1)) {
+        if (isSuper && al::isPadHoldR(-1)
+        ) {
             playerConst->mNormalMaxSpeed = 28.0f;
             thisPtr->mMaxSpeed = 28.0f;
         }
-        else if ((isMario || isBrawl || isFeather) && al::isPadHoldR(-1)) {
+        else if (al::isPadHoldR(-1)
+        ) {
             playerConst->mNormalMaxSpeed = 21.0f;
             thisPtr->mMaxSpeed = 21.0f;
         }
@@ -1595,8 +1596,9 @@ struct PlayerConstGetHeadSlidingSpeed : public mallow::hook::Trampoline<PlayerCo
     static float Callback(const PlayerConst* thisPtr) {
         float speed = Orig(thisPtr);
 
-        if (isSuper
-            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor)) speed *= 1.5f;
+        if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor) return speed;
+
+        if (isSuper) speed *= 1.5f;
         return speed;
     }
 };
@@ -1622,30 +1624,24 @@ struct PlayerConstGetSpinBrakeFrame : public mallow::hook::Trampoline<PlayerCons
 struct PlayerAnimControlRunUpdate : public mallow::hook::Inline<PlayerAnimControlRunUpdate> {
     static void Callback(exl::hook::InlineCtx* ctx) {
 
-        if (isSuper
-            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor))
-                *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveSuper"); //mMoveAnimName in PlayerAnimControlRun
-        else if (isMario
-            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor))
-                *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveClassic");
-        else if (isBrawl
-            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor))
-                *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveBrawl");
+        if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor) return;
+
+        if (isSuper) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveSuper"); //mMoveAnimName in PlayerAnimControlRun
+        else if (isBrawl) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveBrawl");
+        else if (isFeather) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("Move");
+        else *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveClassic");
     }
 };
 
 struct PlayerSeCtrlUpdateMove : public mallow::hook::Inline<PlayerSeCtrlUpdateMove> {
     static void Callback(exl::hook::InlineCtx* ctx) {
 
-        if (isSuper
-            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor))
-                ctx->X[8] = reinterpret_cast<u64>("MoveSuper");
-        else if (isMario
-            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor))
-                ctx->X[8] = reinterpret_cast<u64>("MoveClassic");
-        else if (isBrawl
-            && !(isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor))
-                ctx->X[8] = reinterpret_cast<u64>("MoveBrawl");
+        if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor) return;
+
+        if (isSuper) ctx->X[8] = reinterpret_cast<u64>("MoveSuper");
+        else if (isBrawl) ctx->X[8] = reinterpret_cast<u64>("MoveBrawl");
+        else if (isFeather) ctx->X[8] = reinterpret_cast<u64>("Move");
+        else ctx->X[8] = reinterpret_cast<u64>("MoveClassic");
     }
 };
 
