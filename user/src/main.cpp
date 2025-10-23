@@ -1254,6 +1254,19 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             }
         }
 
+        // Apply sfx for dash
+        static bool wasDash = false;
+        bool isDashNow = al::isPadHoldR(-1)
+            && al::calcSpeedH(thisPtr) >= 14.0f
+            && rs::isOnGround(thisPtr, thisPtr->mCollider);
+
+        if (isDashNow && !wasDash
+        ) {
+            const char* fx = isSuper ? "AccelSecond" : "Accel";
+            if (!al::isEffectEmitting(keeper, fx)) { al::tryStartSe(thisPtr, fx); al::tryEmitEffect(model, fx, nullptr); }
+        }
+        wasDash = isDashNow;
+
         // Handle Taunt triggers
         /*if (!thisPtr->mInput->isMove()
             && (al::isNerve(thisPtr, getNerveAt(nrvHakoniwaWait))
