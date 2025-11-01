@@ -650,8 +650,8 @@ struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinC
         isNearTreasure = false;
         isNearSwoonedEnemy = false;
 
-        al::invalidateHitSensor(state->mActor, "DoubleSpin");
         al::invalidateHitSensor(state->mActor, "GalaxySpin");
+        al::invalidateHitSensor(state->mActor, "DoubleSpin");
         al::invalidateHitSensor(state->mActor, "Punch");
     }
 };
@@ -917,8 +917,9 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
         if (!thisPtr || !source || !target) return;
 
         if (!al::isSensorName(source, "GalaxySpin")
-            && !al::isSensorName(source, "Punch")
             && !al::isSensorName(source, "DoubleSpin")
+            && !al::isSensorName(source, "Punch")
+            && !al::isSensorName(source, "HipDropKnockDown")
         ) {
             Orig(thisPtr, source, target);
             return;
@@ -939,33 +940,42 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
    
         if (al::isActionPlaying(thisPtr->mModelHolder->findModelActor("Normal"), "MoveSuper")
             && al::isEqualSubString(typeid(*targetHost).name(), "FireBall")) return;
-            
-        if((al::isSensorName(source, "GalaxySpin")
-            || al::isSensorName(source, "Punch")
-            || al::isSensorName(source, "DoubleSpin"))
-            && thisPtr->mAnimator
+
+        bool isSpinAttack = al::isSensorName(source, "GalaxySpin") && thisPtr->mAnimator
             && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinSeparate")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "KoopaCapPunchR")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "KoopaCapPunchL")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackLeft")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackRight")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackAirLeft")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackAirRight")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "RabbitGet")
-
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDrop")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunch")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDrop")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDropPunch")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimDive")
-
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "RollingStart")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "Rolling")
-
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinSeparateSwim")
                 || al::isActionPlaying(thisPtr->mModelHolder->findModelActor("Normal"), "MoveSuper")
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "JumpBroad8")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "CapeGlide")
-                || isGalaxySpin)
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "CapeGlide"));
+
+        bool isDoubleSpinAttack = al::isSensorName(source, "DoubleSpin") && thisPtr->mAnimator
+            && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackLeft")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackRight")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackAirLeft")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackAirRight"));
+
+        bool isPunchAttack = al::isSensorName(source, "Punch") && thisPtr->mAnimator
+            && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "KoopaCapPunchL")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "KoopaCapPunchR")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "RabbitGet")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "Kick"));
+
+        bool isHipDrop = al::isSensorName(source, "HipDropKnockDown") && thisPtr->mAnimator
+            && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDrop")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunch")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropReaction")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunchReaction")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallL")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallR")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDrop")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDropPunch")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimDive"));
+
+        bool isHipDropAttack = isHipDrop && (al::isSensorEnemyBody(target) || rs::isCollidedGround(thisPtr->mCollider));
+        bool isHipDropReflect = !isHipDrop || rs::isCollidedGround(thisPtr->mCollider);
+
+        if(isSpinAttack || isDoubleSpinAttack 
+            || isPunchAttack || isHipDropAttack
         ) {
             bool isInHitBuffer = false;
             for(int i = 0; i < hitBufferCount; i++) {
@@ -983,8 +993,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 isInHitBuffer |= sourceNrv == getNerveAt(0x1D00EC8); // GrowFlowerSeedNrvHold
                 isInHitBuffer |= sourceNrv == getNerveAt(0x1D22B78); // RadishNrvHold
 
-                if (al::isSensorName(source, "Punch")
-                    && !isPunching
+                if (isPunchAttack && !isPunching
                 ) {
                     if (al::isEqualSubString(typeid(*targetHost).name(),"Stake")
                         && sourceNrv == getNerveAt(0x1D36D20)
@@ -1022,8 +1031,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     }
                 }
             }
-            if (al::isSensorName(source, "GalaxySpin")
-                || al::isSensorName(source, "DoubleSpin")
+            if (isSpinAttack || isDoubleSpinAttack
             ) {
                 if (al::isEqualSubString(typeid(*targetHost).name(), "BlockQuestion")
                     || al::isEqualSubString(typeid(*targetHost).name(), "BlockBrick")
@@ -1033,7 +1041,8 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     return;
                 }
             }
-            if(!isInHitBuffer) {
+            if(!isInHitBuffer
+            ) {
                 if (al::isEqualSubString(typeid(*targetHost).name(), "BlockHard")
                     || al::isEqualSubString(typeid(*targetHost).name(), "BossForestBlock")
                     || al::isEqualSubString(typeid(*targetHost).name(), "GolemClimb")
@@ -1066,8 +1075,9 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 if (al::isEqualSubString(typeid(*targetHost).name(), "BreedaWanwan")
                     || al::isEqualSubString(typeid(*targetHost).name(), "TRex")
                 ) {
-                    if (al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
-                        || al::sendMsgPlayerHipDrop(target, source, nullptr)) hitBuffer[hitBufferCount++] = targetHost;
+                    if (isHipDropReflect
+                        && (al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
+                            || al::sendMsgPlayerHipDrop(target, source, nullptr))) hitBuffer[hitBufferCount++] = targetHost;
                     return;
                 }
                 if (al::isEqualSubString(typeid(*targetHost).name(), "CapSwitch")
@@ -1102,8 +1112,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         || rs::sendMsgCapTouchWall(target, source, sead::Vector3f{0,0,0}, sead::Vector3f{0,0,0})) hitBuffer[hitBufferCount++] = targetHost;
                     return;
                 }
-                if (al::isSensorNpc(target)
-                    || al::isSensorRide(target)
+                if (al::isSensorNpc(target) || al::isSensorRide(target)
                 ) {
                     if (al::sendMsgPlayerSpinAttack(target, source, nullptr)
                         || rs::sendMsgCapReflect(target, source)
@@ -1119,7 +1128,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     if (rs::sendMsgHackAttack(target, source)
                         || rs::sendMsgCapReflect(target, source)
                         || rs::sendMsgCapAttack(target, source)
-                        || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
+                        || (isHipDropReflect && al::sendMsgPlayerObjHipDropReflect(target, source, nullptr))
                         || rs::sendMsgTsukkunThrust(target, source, fireDir, 0, true)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
@@ -1155,6 +1164,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         al::HitSensor* sensorSpin = al::getHitSensor(thisPtr, "GalaxySpin");
         al::HitSensor* sensorDoubleSpin = al::getHitSensor(thisPtr, "DoubleSpin");
         al::HitSensor* sensorPunch = al::getHitSensor(thisPtr, "Punch");
+        al::HitSensor* sensorHipDrop = al::getHitSensor(thisPtr, "HipDropKnockDown");
 
         if (sensorSpin && sensorSpin->mIsValid)
             thisPtr->attackSensor(sensorSpin, rs::tryGetCollidedWallSensor(thisPtr->mCollider));
@@ -1164,6 +1174,9 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
         if (sensorPunch && sensorPunch->mIsValid)
             thisPtr->attackSensor(sensorPunch, rs::tryGetCollidedWallSensor(thisPtr->mCollider));
+
+        if (sensorHipDrop && sensorHipDrop->mIsValid)
+            thisPtr->attackSensor(sensorHipDrop, rs::tryGetCollidedGroundSensor(thisPtr->mCollider));
         
         if(galaxySensorRemaining > 0) {
             galaxySensorRemaining--;
@@ -1187,12 +1200,19 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         // Add attack to moves
         if (model) {
             static bool wasAttackMove = false;
-            const bool isAttackMove = (al::isActionPlaying(model, "HipDrop") || al::isActionPlaying(model, "HipDropPunch")
-                || al::isActionPlaying(model, "SwimHipDrop") || anim->isAnim("SwimHipDropPunch") || anim->isAnim("SwimDive")
-                || al::isActionPlaying(model, "RollingStart") || anim->isAnim("Rolling"));
+            const bool isAttackMove = thisPtr->mAnimator
+            && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDrop")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunch")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropReaction")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunchReaction")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallL")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallR")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDrop")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDropPunch")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimDive"));
 
-            if (isAttackMove && !wasAttackMove) { al::validateHitSensor(thisPtr, "GalaxySpin"); hitBufferCount = 0;}
-            else if (!isAttackMove && wasAttackMove) al::invalidateHitSensor(thisPtr, "GalaxySpin");
+            if (isAttackMove && !wasAttackMove) { al::validateHitSensor(thisPtr, "HipDropKnockDown"); hitBufferCount = 0;}
+            else if (!isAttackMove && wasAttackMove) al::invalidateHitSensor(thisPtr, "HipDropKnockDown");
 
             wasAttackMove = isAttackMove;
         }
