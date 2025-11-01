@@ -1234,6 +1234,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         && al::isModelName(targetHost, "TreasureBoxWood"))
                 ) {
                     if (al::sendMsgExplosion(target, source, nullptr)
+                        || rs::sendMsgStatueDrop(target, source)
                         || rs::sendMsgKoopaHackPunch(target, source)
                         || rs::sendMsgKoopaHackPunchCollide(target, source)
                     ) {
@@ -1688,8 +1689,9 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
                     || al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
                 ) {
                     if (al::sendMsgExplosion(target, source, nullptr)
-                    || rs::sendMsgKoopaHackPunch(target, source)
-                    || rs::sendMsgKoopaHackPunchCollide(target, source)
+                        || rs::sendMsgStatueDrop(target, source)
+                        || rs::sendMsgKoopaHackPunch(target, source)
+                        || rs::sendMsgKoopaHackPunchCollide(target, source)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
                         if (!al::isEqualSubString(typeid(*targetHost).name(), "BossForestBlock")) al::tryEmitEffect(sourceHost, "HammerHit", &spawnPos);
