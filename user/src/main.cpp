@@ -1064,6 +1064,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         && al::isModelName(targetHost, "TreasureBoxWood"))
                 ) {
                     if (al::sendMsgExplosion(target, source, nullptr)
+                        || rs::sendMsgStatueDrop(target, source)
                         || rs::sendMsgKoopaHackPunch(target, source)
                         || rs::sendMsgKoopaHackPunchCollide(target, source)
                     ) {
