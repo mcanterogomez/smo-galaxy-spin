@@ -1540,6 +1540,10 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             }
         }
 
+        // Delete Taunt effects
+        if (!al::isNerve(thisPtr, &TauntLeftNrv)
+            && !al::isNerve(thisPtr, &TauntRightNrv)) al::tryDeleteEffect(keeper, "BonfireSuper");
+            
         // Reset proximity flag
         isNearCollectible = false;
         isNearTreasure = false;
