@@ -1081,11 +1081,36 @@ void tryCapSpinAndRethrow(PlayerActorHakoniwa* player, bool a2) {
     }
 }
 
+struct HackCapAttackSensorHook : public mallow::hook::Trampoline<HackCapAttackSensorHook> {
+    static void Callback(PlayerActorHakoniwa* thisPtr, al::HitSensor* source, al::HitSensor* target) {
+
+        if (!thisPtr || !source || !target) return;
+
+        al::LiveActor* sourceHost = al::getSensorHost(source);
+        al::LiveActor* targetHost = al::getSensorHost(target);
+
+        if (!sourceHost || !targetHost) return;
+
+        if (al::isEqualSubString(typeid(*targetHost).name(), "KoopaCap")
+            && al::isModelName(targetHost, "KoopaCap")) return;
+
+        Orig(thisPtr, source, target);
+    }
+};
+
 struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSensorHook> {
     static void Callback(PlayerActorHakoniwa* thisPtr, al::HitSensor* source, al::HitSensor* target) {
 
         if (!thisPtr || !source || !target) return;
 
+        al::LiveActor* sourceHost = al::getSensorHost(source);
+        al::LiveActor* targetHost = al::getSensorHost(target);
+
+        if (!sourceHost || !targetHost) return;
+
+        if (al::isEqualSubString(typeid(*targetHost).name(), "KoopaCap")
+            && al::isModelName(targetHost, "KoopaCap")) return;
+        
         if (!al::isSensorName(source, "GalaxySpin")
             && !al::isSensorName(source, "DoubleSpin")
             && !al::isSensorName(source, "Punch")
@@ -1094,11 +1119,6 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
             Orig(thisPtr, source, target);
             return;
         }
-
-        al::LiveActor* sourceHost = al::getSensorHost(source);
-        al::LiveActor* targetHost = al::getSensorHost(target);
-
-        if (!sourceHost || !targetHost) return;
 
         sead::Vector3f sourcePos = al::getSensorPos(source);
         sead::Vector3f targetPos = al::getSensorPos(target);
@@ -1211,6 +1231,32 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     return;
                 }
             }
+            if (al::isEqualSubString(typeid(*targetHost).name(), "Koopa")
+                && al::isModelName(targetHost, "KoopaBig")
+            ) {
+                static int guard5Count = 0;
+                static bool wasGuard5 = false;
+                bool inGuard5 = al::isActionPlaying(targetHost, "Guard5");
+
+                if (inGuard5 && !wasGuard5) guard5Count++;
+                bool isFinish = inGuard5 && guard5Count >= 5;
+                wasGuard5 = inGuard5;
+
+                if (isFinish) {
+                    rs::sendMsgKoopaCapPunchFinishL(target, source);
+                    guard5Count = 0;
+                    return;
+                }
+                if (!isInHitBuffer) {
+                    if (rs::sendMsgKoopaCapPunchKnockBackL(target, source)
+                        || rs::sendMsgKoopaCapPunchL(target, source)
+                    ) {
+                        hitBuffer[hitBufferCount++] = targetHost;
+                        if (!al::isEffectEmitting(targetHost, "Guard")) al::tryEmitEffect(sourceHost, "KoopaHit", &spawnPos);
+                    }
+                    return;
+                }
+            }
             if(!isInHitBuffer
             ) {
                 if (al::isEqualSubString(typeid(*targetHost).name(), "BlockHard")
@@ -1226,6 +1272,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     || al::isEqualSubString(typeid(*targetHost).name(), "CatchBomb")
                     || al::isEqualSubString(typeid(*targetHost).name(), "DamageBall")
                     || al::isEqualSubString(typeid(*targetHost).name(), "KickStone")
+                    || al::isEqualSubString(typeid(*targetHost).name(), "KoopaDamageBall")
                     || al::isEqualSubString(typeid(*targetHost).name(), "MoonBasement")
                     || al::isEqualSubString(typeid(*targetHost).name(), "PlayGuideBoard")
                     || (al::isEqualSubString(typeid(*targetHost).name(), "SignBoard")
@@ -1235,6 +1282,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 ) {
                     if (al::sendMsgExplosion(target, source, nullptr)
                         || rs::sendMsgStatueDrop(target, source)
+                        || rs::sendMsgKoopaCapPunchL(target, source)
                         || rs::sendMsgKoopaHackPunch(target, source)
                         || rs::sendMsgKoopaHackPunchCollide(target, source)
                     ) {
@@ -1672,13 +1720,15 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
                     break;
                 }
             }
-            if(!isInHitBuffer) {
+            if(!isInHitBuffer
+            ) {
                 if (al::isEqualSubString(typeid(*targetHost).name(), "BlockHard")
                     || al::isEqualSubString(typeid(*targetHost).name(), "BossForestBlock")
                     || al::isEqualSubString(typeid(*targetHost).name(), "BreakMapParts")
                     || al::isEqualSubString(typeid(*targetHost).name(), "CatchBomb")
                     || al::isEqualSubString(typeid(*targetHost).name(), "DamageBall")
                     || al::isEqualSubString(typeid(*targetHost).name(), "FrailBox")
+                    || al::isEqualSubString(typeid(*targetHost).name(), "KoopaDamageBall")
                     || al::isEqualSubString(typeid(*targetHost).name(), "MarchingCubeBlock")
                     || al::isEqualSubString(typeid(*targetHost).name(), "MoonBasement")
                     || al::isEqualSubString(typeid(*targetHost).name(), "PlayGuideBoard")
@@ -1690,6 +1740,7 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
                 ) {
                     if (al::sendMsgExplosion(target, source, nullptr)
                         || rs::sendMsgStatueDrop(target, source)
+                        || rs::sendMsgKoopaCapPunchL(target, source)
                         || rs::sendMsgKoopaHackPunch(target, source)
                         || rs::sendMsgKoopaHackPunchCollide(target, source)
                     ) {
@@ -1718,6 +1769,16 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
                     if (rs::sendMsgCapAttack(target, source)
                         || rs::sendMsgCapAttackCollide(target, source)
                         || rs::sendMsgCapReflectCollide(target, source)) hitBuffer[hitBufferCount++] = targetHost;
+                    return;
+                }
+                if (al::isEqualSubString(typeid(*targetHost).name(), "Koopa")
+                    && al::isModelName(targetHost, "KoopaBig")
+                ) {
+                    if (rs::sendMsgKoopaCapPunchFinishL(target, source)
+                    ) {
+                        hitBuffer[hitBufferCount++] = targetHost;
+                        al::tryEmitEffect(sourceHost, "KoopaFinishHit", &spawnPos);
+                    }
                     return;
                 }
                 if (al::isEqualSubString(typeid(*targetHost).name(), "TRex")
@@ -2185,6 +2246,7 @@ extern "C" void userMain() {
     DisallowCancelOnWaterSurfaceSpinPatch::InstallAtOffset(0x48A3C8);
 
     // Send out attack messages during spins
+    HackCapAttackSensorHook::InstallAtSymbol("_ZN7HackCap12attackSensorEPN2al9HitSensorES2_");
     PlayerAttackSensorHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa12attackSensorEPN2al9HitSensorES2_");
 
     // Mario's control that checks every frame
