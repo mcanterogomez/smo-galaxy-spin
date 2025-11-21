@@ -154,11 +154,6 @@ int hitBufferCount = 0;
 
 const uintptr_t spinCapNrvOffset = 0x1d78940;
 const uintptr_t nrvSpinCapFall = 0x1d7ff70;
-//const uintptr_t nrvHakoniwaWait = 0x01D78918;
-//const uintptr_t nrvHakoniwaSquat = 0x01D78920;
-//const uintptr_t nrvHakoniwaFall = 0x01d78910;
-//const uintptr_t nrvHakoniwaHipDrop = 0x1D78978;
-//const uintptr_t nrvHakoniwaJump = 0x1D78948;
 
 bool isGalaxySpin = false;
 bool canGalaxySpin = true;
@@ -172,7 +167,8 @@ bool prevIsCarry = false;
 int galaxySensorRemaining = -1;
 
 bool isPunching = false; // Global flag to track punch state
-bool isPunchRight = false;
+bool isPunchRight = false; // Global flag to track punch direction
+bool isFinalPunch = false; // Global flag to track final punch
 
 bool isSpinActive = false; // Global flag to track spin state
 bool isNearCollectible = false; // Global flag to track if near a collectible
@@ -186,6 +182,7 @@ bool isFeather = false;
 bool isSuper = false;
 
 static PlayerActorHakoniwa* isHakoniwa = nullptr; // Global pointer for Hakoniwa
+static al::LiveActor* isKoopa = nullptr; // Global pointer for Bowser
 
 struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerActorHakoniwaInitPlayer> {
     static void Callback(PlayerActorHakoniwa* thisPtr, const al::ActorInitInfo* actorInfo, const PlayerInitInfo* playerInfo) {
@@ -248,13 +245,17 @@ static inline int TryCapSpinPre(PlayerActorHakoniwa* player) {
         && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)
     ) {
         if (player->mAnimator->isAnim("SpinSeparate")
+        || player->mAnimator->isAnim("SpinSeparateSwim")
         || player->mAnimator->isAnim("SpinAttackLeft")
         || player->mAnimator->isAnim("SpinAttackRight")
         || player->mAnimator->isAnim("SpinAttackAirLeft")
         || player->mAnimator->isAnim("SpinAttackAirRight")
         || player->mAnimator->isAnim("KoopaCapPunchL")
         || player->mAnimator->isAnim("KoopaCapPunchR")
-        || player->mAnimator->isAnim("RabbitGet")) return -1;
+        || player->mAnimator->isAnim("KoopaCapPunchFinishL")
+        || player->mAnimator->isAnim("KoopaCapPunchFinishR")        
+        || player->mAnimator->isAnim("RabbitGet")
+        || player->mAnimator->isAnim("Kick")) return -1;
 
         if (canGalaxySpin) triggerGalaxySpin = true;
         else { triggerGalaxySpin = true; galaxyFakethrowRemainder = -2; }
@@ -289,13 +290,16 @@ public:
     void execute(al::NerveKeeper* keeper) const override {
         PlayerStateSpinCap* state = keeper->getParent<PlayerStateSpinCap>();
         PlayerActorHakoniwa* player = static_cast<PlayerActorHakoniwa*>(state->mActor);
-        
-        bool isCarrying = player->mCarryKeeper->isCarry();
+
+        bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
         bool isRotatingL = state->mAnimator->isAnim("SpinGroundL");
         bool isRotatingR = state->mAnimator->isAnim("SpinGroundR");
+        bool isCarrying = player->mCarryKeeper->isCarry();
+        bool isFinish = state->mAnimator->isAnim("KoopaCapPunchFinishL")
+            || state->mAnimator->isAnim("KoopaCapPunchFinishR");
+
         bool didSpin = player->mInput->isSpinInput();
         int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
-        bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
 
         isSpinActive = true;
 
@@ -315,33 +319,27 @@ public:
                         state->mAnimator->startAnim ("SpinAttackRight");
                     }
                     al::validateHitSensor(state->mActor, "DoubleSpin");
-
                 } else if (isRotatingL) {
                     state->mAnimator->startSubAnim("SpinAttackLeft");
                     state->mAnimator->startAnim("SpinAttackLeft");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
                     //galaxySensorRemaining = 41;
-
                 } else if (isRotatingR) {
                     state->mAnimator->startSubAnim("SpinAttackRight");
                     state->mAnimator->startAnim("SpinAttackRight");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
                     //galaxySensorRemaining = 41;
-
                 } else if (isCarrying) {
                     state->mAnimator->startSubAnim("SpinSeparate");
                     state->mAnimator->startAnim("SpinSeparate");
                     al::validateHitSensor(state->mActor, "GalaxySpin");
                     galaxySensorRemaining = 21;
-
                 } else if (isNearCollectible) {
-                        state->mAnimator->startAnim("RabbitGet");
-                        al::validateHitSensor(state->mActor, "Punch");
-
+                    state->mAnimator->startAnim("RabbitGet");
+                    al::validateHitSensor(state->mActor, "Punch");
                 } else if (isNearTreasure || isNearSwoonedEnemy) {
-                        state->mAnimator->startAnim("Kick");
-                        al::validateHitSensor(state->mActor, "Punch");
-                        
+                    state->mAnimator->startAnim("Kick");
+                    al::validateHitSensor(state->mActor, "Punch");
                 } else {
                     // only Spin Attack
                     state->mAnimator->startSubAnim("SpinSeparate");
@@ -350,12 +348,23 @@ public:
                     galaxySensorRemaining = 21;
 
                     // only Punch Attack
-                    /*if (isPunchRight) {
-                        state->mAnimator->startSubAnim("KoopaCapPunchRStart");
-                        state->mAnimator->startAnim("KoopaCapPunchR");
+                    /*if (isFinalPunch) {
+                        if (isPunchRight) {
+                            state->mAnimator->startSubAnim("KoopaCapPunchFinishRStart");
+                            state->mAnimator->startAnim("KoopaCapPunchFinishR");
+                        } else {
+                            state->mAnimator->startSubAnim("KoopaCapPunchFinishLStart");
+                            state->mAnimator->startAnim("KoopaCapPunchFinishL");
+                        }
+                        isFinalPunch = false;
                     } else {
-                        state->mAnimator->startSubAnim("KoopaCapPunchLStart");
-                        state->mAnimator->startAnim("KoopaCapPunchL");
+                        if (isPunchRight) {
+                            state->mAnimator->startSubAnim("KoopaCapPunchRStart");
+                            state->mAnimator->startAnim("KoopaCapPunchR");
+                        } else {
+                            state->mAnimator->startSubAnim("KoopaCapPunchLStart");
+                            state->mAnimator->startAnim("KoopaCapPunchL");
+                        }
                     }
                     // Make winding up invincible
                     al::invalidateHitSensor(state->mActor, "Foot");
@@ -384,7 +393,6 @@ public:
                 forward *= 5.0f;
                 al::addVelocity(player, forward);
             }
-        
             if (al::isStep(state, 6)) {
                 // Make Mario vulnerable again
                 al::validateHitSensor(state->mActor, "Foot");
@@ -394,8 +402,9 @@ public:
                 //galaxySensorRemaining = 15;
             }
         }
-                    
-        state->updateSpinGroundNerve();
+        
+        if (isFinish) al::setVelocity(player, sead::Vector3f::zero);
+        else state->updateSpinGroundNerve();
 
         if (al::isGreaterStep(state, 41)) al::invalidateHitSensor(state->mActor, "DoubleSpin");
         if (al::isGreaterStep(state, 21)) al::invalidateHitSensor(state->mActor, "GalaxySpin");
@@ -540,7 +549,7 @@ struct PlayerSpinCapAttackAppear : public mallow::hook::Trampoline<PlayerSpinCap
                 al::alongVectorNormalH(
                     al::getVelocityPtr(state->mActor),
                     al::getVelocity(state->mActor),
-                    -al::getGravity(state->mActor),
+                    al::getGravity(state->mActor),
                     rs::getCollidedGroundNormal(state->mCollider)
                 );
             }
@@ -895,6 +904,8 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
         bool isPunchAttack = al::isSensorName(source, "Punch") && thisPtr->mAnimator
             && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "KoopaCapPunchL")
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "KoopaCapPunchR")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "KoopaCapPunchFinishL")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "KoopaCapPunchFinishR")
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "RabbitGet")
                 || al::isEqualString(thisPtr->mAnimator->mCurAnim, "Kick"));
 
@@ -982,17 +993,34 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
             if (al::isEqualSubString(typeid(*targetHost).name(), "Koopa")
                 && al::isModelName(targetHost, "KoopaBig")
             ) {
-                static int guard5Count = 0;
-                static bool wasGuard5 = false;
-                bool inGuard5 = al::isActionPlaying(targetHost, "Guard5");
+                const char* koopaAct = al::getActionName(targetHost);
 
-                if (inGuard5 && !wasGuard5) guard5Count++;
-                bool isFinish = inGuard5 && guard5Count >= 5;
-                wasGuard5 = inGuard5;
+                if (koopaAct && ((al::isEqualSubString(koopaAct, "AttackTail")
+                    && !al::isEqualSubString(koopaAct, "After") && !al::isEqualSubString(koopaAct, "End"))
+                    || al::isEqualSubString(koopaAct, "DownLand") || al::isEqualSubString(koopaAct, "Jump"))) return;
 
-                if (isFinish) {
+                isKoopa = targetHost;
+
+                static int guardCount = 0;
+                static bool wasGuard = false;
+                bool startGuard = al::isActionPlaying(targetHost, "Guard1");
+                bool isGuard = al::isActionPlaying(targetHost, "Guard5");
+
+                if (isGuard && !wasGuard) guardCount++;
+                wasGuard = isGuard;
+
+                if (startGuard) {
+                    wasGuard = false;
+                    guardCount = 0;
+                    return;
+                }
+                if (isGuard && guardCount == 4) {
+                    isFinalPunch = true;
+                    return;
+                }
+                if (isGuard && guardCount >= 5) {
                     rs::sendMsgKoopaCapPunchFinishL(target, source);
-                    guard5Count = 0;
+                    guardCount = 0;
                     return;
                 }
                 if (!isInHitBuffer) {
@@ -1221,15 +1249,13 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                 al::LiveActor* actor = al::getSensorHost(other);
                 
                 if (actor) {
-                    // Check if sensor belongs to target object type
-                    const char* typeName = typeid(*actor).name();
-                    if (al::isEqualSubString(typeName, "Radish")
-                        || al::isEqualSubString(typeName, "Stake")
-                        || al::isEqualSubString(typeName, "BossRaidRivet")
+                    if (al::isEqualSubString(typeid(*actor).name(), "Radish")
+                        || al::isEqualSubString(typeid(*actor).name(), "Stake")
+                        || al::isEqualSubString(typeid(*actor).name(), "BossRaidRivet")
                     ) {
                         isNearCollectible = true;
                         break;
-                    } else if (al::isEqualSubString(typeName, "TreasureBox")
+                    } else if (al::isEqualSubString(typeid(*actor).name(), "TreasureBox")
                         && !al::isModelName(actor, "TreasureBoxWood")
                     ) {
                         isNearTreasure = true;
@@ -1246,6 +1272,9 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                 }
             }
         }
+
+        // Handle Koopa punch logic
+        if (isKoopa && !al::isNear(thisPtr, isKoopa, 500.0f)) isFinalPunch = false;
 
         // Apply or remove invincibility
         PlayerDamageKeeper* damagekeep = thisPtr->mDamageKeeper;
