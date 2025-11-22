@@ -1092,7 +1092,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 }
                 if ((al::isEqualSubString(typeid(*targetHost).name(), "Car")
                     && (al::isModelName(targetHost, "Car") || al::isModelName(targetHost, "CarBreakable"))
-                    && !al::isSensorName(target,"Brake"))
+                    && !al::isSensorName(target, "Brake"))
                     || al::isEqualSubString(typeid(*targetHost).name(), "ChurchDoor")
                     || al::isEqualSubString(typeid(*targetHost).name(), "CollapseSandHill")
                     || al::isEqualSubString(typeid(*targetHost).name(), "Doshi")
@@ -1107,12 +1107,17 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         || rs::sendMsgCapTouchWall(target, source, sead::Vector3f{0,0,0}, sead::Vector3f{0,0,0})) hitBuffer[hitBufferCount++] = targetHost;
                     return;
                 }
+                if (al::isEqualSubString(typeid(*targetHost).name(), "YoshiFruit")
+                ) {
+                    if (al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)) hitBuffer[hitBufferCount++] = targetHost;
+                    return;
+                }
                 if (al::isSensorNpc(target) || al::isSensorRide(target)
                 ) {
                     if (al::sendMsgPlayerSpinAttack(target, source, nullptr)
                         || rs::sendMsgCapReflect(target, source)
-                        || rs::sendMsgCapAttack(target, source)
                         || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
+                        || rs::sendMsgCapAttack(target, source)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
                         return;
