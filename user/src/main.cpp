@@ -1349,7 +1349,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 }
                 if ((al::isEqualSubString(typeid(*targetHost).name(), "Car")
                     && (al::isModelName(targetHost, "Car") || al::isModelName(targetHost, "CarBreakable"))
-                    && !al::isSensorName(target,"Brake"))
+                    && !al::isSensorName(target, "Brake"))
                     || al::isEqualSubString(typeid(*targetHost).name(), "ChurchDoor")
                     || al::isEqualSubString(typeid(*targetHost).name(), "CollapseSandHill")
                     || al::isEqualSubString(typeid(*targetHost).name(), "Doshi")
@@ -1364,12 +1364,17 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         || rs::sendMsgCapTouchWall(target, source, sead::Vector3f{0,0,0}, sead::Vector3f{0,0,0})) hitBuffer[hitBufferCount++] = targetHost;
                     return;
                 }
+                if (al::isEqualSubString(typeid(*targetHost).name(), "YoshiFruit")
+                ) {
+                    if (al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)) hitBuffer[hitBufferCount++] = targetHost;
+                    return;
+                }
                 if (al::isSensorNpc(target) || al::isSensorRide(target)
                 ) {
                     if (al::sendMsgPlayerSpinAttack(target, source, nullptr)
                         || rs::sendMsgCapReflect(target, source)
-                        || rs::sendMsgCapAttack(target, source)
                         || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
+                        || rs::sendMsgCapAttack(target, source)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
                         return;
@@ -1835,10 +1840,9 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
                     || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
                     || rs::sendMsgHackAttack(target, source)
                     || rs::sendMsgSphinxRideAttackTouchThrough(target, source, fireDir, fireDir)
-                    || ((!al::isEqualSubString(typeid(*targetHost).name(),"Souvenir")
-                        || al::isEqualSubString(typeid(*targetHost).name(),"CactusMini"))
-                        && (rs::sendMsgCapReflect(target, source)
-                            || rs::sendMsgCapAttack(target, source)))
+                    || rs::sendMsgCapReflect(target, source)
+                    || (!al::isEqualSubString(typeid(*targetHost).name(),"Souvenir")
+                        && rs::sendMsgCapAttack(target, source))
                     || (!al::isEqualSubString(typeid(*targetHost).name(),"ReactionObject")
                         && rs::sendMsgTsukkunThrust(target, source, fireDir, 0, true))
                     || al::sendMsgExplosion(target, source, nullptr)
