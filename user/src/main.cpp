@@ -79,9 +79,7 @@ namespace rs {
     al::HitSensor* tryGetCollidedGroundSensor(IUsePlayerCollision const* collider);
 }
 
-namespace PlayerEquipmentFunction {
-    bool isEquipmentNoCapThrow(const PlayerEquipmentUser*);
-}
+namespace PlayerEquipmentFunction { bool isEquipmentNoCapThrow(const PlayerEquipmentUser*); }
 
 class PlayerCarryKeeper {
 public:
@@ -93,9 +91,7 @@ using mallow::log::logLine;
 // Mod code
 
 const al::Nerve* getNerveAt(uintptr_t offset)
-{
-    return (const al::Nerve*)((((u64)malloc) - 0x00724b94) + offset);
-}
+{ return (const al::Nerve*)((((u64)malloc) - 0x00724b94) + offset); }
 
 bool isPadTriggerGalaxySpin(int port) {
     switch (mallow::config::getConfg<ModOptions>()->spinButton) {
@@ -113,18 +109,17 @@ bool isPadTriggerGalaxySpin(int port) {
 
 struct PadTriggerYHook : public mallow::hook::Trampoline<PadTriggerYHook> {
     static bool Callback(int port) {
-        
         if(port == 100) return Orig(-1);
-
         return false;
     };
 };
 
 struct InputIsTriggerActionXexclusivelyHook : public mallow::hook::Trampoline<InputIsTriggerActionXexclusivelyHook> {
     static bool Callback(const al::LiveActor* actor, int port) {
-        if(port == 100)
-            return Orig(actor, PlayerFunction::getPlayerInputPort(actor));
+        if(port == 100) return Orig(actor, PlayerFunction::getPlayerInputPort(actor));
+
         bool canCapThrow = true;
+
         switch (mallow::config::getConfg<ModOptions>()->spinButton) {
             case 'Y':
                 canCapThrow = al::isPadTriggerX(port);
@@ -494,10 +489,8 @@ PlayerStateSpinCapNrvGalaxySpinAir GalaxySpinAir;
 
 struct PlayerSpinCapAttackAppear : public mallow::hook::Trampoline<PlayerSpinCapAttackAppear> {
     static void Callback(PlayerStateSpinCap* state) {
-
         const bool isGrounded = rs::isOnGround(state->mActor, state->mCollider)
-                            && !state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val2);
-
+            && !state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val2);
         const bool forcedGroundSpin = state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val33);
 
         // Safety fix: clear leftover spin state from area load mid-spin
@@ -568,8 +561,8 @@ struct PlayerSpinCapAttackAppear : public mallow::hook::Trampoline<PlayerSpinCap
 struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinCapKill> {
     static void Callback(PlayerStateSpinCap* state) {
         Orig(state);
-        canStandardSpin = true;
-        canGalaxySpin = true;
+        //canStandardSpin = true;
+        //canGalaxySpin = true;
         galaxyFakethrowRemainder = -1; 
         isPunching = false;
         isSpinActive = false;
@@ -586,7 +579,6 @@ struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinC
 struct PlayerStateSpinCapFall : public mallow::hook::Trampoline<PlayerStateSpinCapFall> {
     static void Callback(PlayerStateSpinCap* state) {
         Orig(state);
-
         // If fakethrow is active and the current animation is "SpinSeparate"
         if (galaxyFakethrowRemainder != -1 && state->mAnimator->isAnim("SpinSeparate")) {
             bool onGround = rs::isOnGround(state->mActor, state->mCollider);
@@ -760,7 +752,6 @@ struct DisallowCancelOnWaterSurfaceSpinPatch : public mallow::hook::Inline<Disal
 };
 
 void tryCapSpinAndRethrow(PlayerActorHakoniwa* player, bool a2) {
-
     if(isGalaxySpin) {  // currently in GalaxySpin
         bool trySpin = player->tryActionCapSpinAttackImpl(a2);  // try to start another spin, can only succeed for standard throw
         if(!trySpin)
@@ -1161,6 +1152,15 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
     static void Callback(PlayerActorHakoniwa* thisPtr) {
         Orig(thisPtr);
 
+        if (rs::isOnGround(thisPtr, thisPtr->mCollider)
+        ) {
+            canGalaxySpin = true;
+            canStandardSpin = true;
+            // Reset sequence flags on ground
+            isGalaxyAfterStandardSpin = false;
+            isStandardAfterGalaxySpin = false;
+        }
+
         al::HitSensor* sensorSpin = al::getHitSensor(thisPtr, "GalaxySpin");
         al::HitSensor* sensorDoubleSpin = al::getHitSensor(thisPtr, "DoubleSpin");
         al::HitSensor* sensorPunch = al::getHitSensor(thisPtr, "Punch");
@@ -1305,7 +1305,6 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
 struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActorHakoniwaExeSquat> {
     static void Callback(PlayerActorHakoniwa* thisPtr) {
-
         if(isPadTriggerGalaxySpin(-1)
             && !thisPtr->mAnimator->isAnim("SpinSeparate")
             && canGalaxySpin
@@ -1320,7 +1319,6 @@ struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActor
 
 struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerActorHakoniwaExeRolling> {
     static void Callback(PlayerActorHakoniwa* thisPtr) {
-
         if(isPadTriggerGalaxySpin(-1)
             && !thisPtr->mAnimator->isAnim("SpinSeparate")
             && canGalaxySpin
@@ -1335,7 +1333,6 @@ struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerAct
 
 struct PlayerCarryKeeperStartThrowNoSpin : public mallow::hook::Trampoline<PlayerCarryKeeperStartThrowNoSpin> {
     static bool Callback(PlayerCarryKeeper* state) {
-        
         if (isSpinActive || galaxySensorRemaining != -1 || galaxyFakethrowRemainder != -1) return false;
         return Orig(state); 
     }
@@ -1357,25 +1354,20 @@ struct PlayerCarryKeeperIsCarryDuringSwimSpin : public mallow::hook::Inline<Play
 
 struct PlayerConstGetSpinAirSpeedMax : public mallow::hook::Trampoline<PlayerConstGetSpinAirSpeedMax> {
     static float Callback(PlayerConst* playerConst) {
-
-        if(isGalaxySpin && !isPunching)
-            return playerConst->getNormalMaxSpeed();
+        if(isGalaxySpin && !isPunching) return playerConst->getNormalMaxSpeed();
         return Orig(playerConst);
     }
 };
 
 struct PlayerConstGetSpinBrakeFrame : public mallow::hook::Trampoline<PlayerConstGetSpinBrakeFrame> {
     static s32 Callback(PlayerConst* playerConst) {
-
-        if(isGalaxySpin && !isPunching)
-            return 0;
+        if(isGalaxySpin && !isPunching) return 0;
         return Orig(playerConst);
     }
 };
 
 struct PlayerSeCtrlUpdateWearEnd : public mallow::hook::Inline<PlayerSeCtrlUpdateWearEnd> {
     static void Callback(exl::hook::InlineCtx* ctx) {
-
         if (isBrawl) ctx->X[20] = reinterpret_cast<u64>("WearEndBrawl");
         if (isSuper) ctx->X[20] = reinterpret_cast<u64>("WearEndSuper");
     }
