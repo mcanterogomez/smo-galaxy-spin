@@ -113,18 +113,17 @@ bool isPadTriggerGalaxySpin(int port) {
 
 struct PadTriggerYHook : public mallow::hook::Trampoline<PadTriggerYHook> {
     static bool Callback(int port) {
-        
         if(port == 100) return Orig(-1);
-
         return false;
     };
 };
 
 struct InputIsTriggerActionXexclusivelyHook : public mallow::hook::Trampoline<InputIsTriggerActionXexclusivelyHook> {
     static bool Callback(const al::LiveActor* actor, int port) {
-        if(port == 100)
-            return Orig(actor, PlayerFunction::getPlayerInputPort(actor));
+        if(port == 100) return Orig(actor, PlayerFunction::getPlayerInputPort(actor));
+
         bool canCapThrow = true;
+
         switch (mallow::config::getConfg<ModOptions>()->spinButton) {
             case 'Y':
                 canCapThrow = al::isPadTriggerX(port);
@@ -164,6 +163,7 @@ int galaxyFakethrowRemainder = -1;  // -1 = inactive, -2 = request to start, pos
 bool triggerGalaxySpin = false;
 bool prevIsCarry = false;
 
+bool isSpinRethrow = false; // true only while tryCapSpinAndRethrow is calling tryActionCapSpinAttackImpl
 int galaxySensorRemaining = -1;
 
 bool isPunching = false; // Global flag to track punch state
@@ -236,6 +236,14 @@ struct PlayerStateWaitExeWait : public mallow::hook::Trampoline<PlayerStateWaitE
 
 // shared pre-logic for TryActionCapSpinAttack hooks
 static inline int TryCapSpinPre(PlayerActorHakoniwa* player) {
+    // Fresh spin sequence called from normal input, not from tryCapSpinAndRethrow
+    if (!isSpinRethrow) {
+        canGalaxySpin = true;
+        canStandardSpin = true;
+        isGalaxyAfterStandardSpin = false;
+        isStandardAfterGalaxySpin = false;
+    }
+    
     bool newIsCarry = player->mCarryKeeper->isCarry();
     if (newIsCarry && !prevIsCarry) { prevIsCarry = newIsCarry; return -1; }
     prevIsCarry = newIsCarry;
@@ -425,17 +433,21 @@ public:
 
         // true only while that exact anim is playing
         bool isRotatingAirL  = state->mAnimator->isAnim("StartSpinJumpL")
-                            || state->mAnimator->isAnim("RestartSpinJumpL");
+            || state->mAnimator->isAnim("RestartSpinJumpL");
         bool isRotatingAirR  = state->mAnimator->isAnim("StartSpinJumpR")
-                            || state->mAnimator->isAnim("RestartSpinJumpR");
+            || state->mAnimator->isAnim("RestartSpinJumpR");
         bool didSpin = player->mInput->isSpinInput();
         int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
         bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
+        bool isSpinAttack = state->mAnimator->isAnim("SpinAttackLeft")
+            || state->mAnimator->isAnim("SpinAttackRight");
 
         isSpinActive = true;
         
         if(al::isFirstStep(state)
         ) {
+            if (!isSpinning && !isSpinAttack) state->mAnimator->endSubAnim();
+            
             if (!isSpinning) {
                 if (didSpin) {
                     if (spinDir > 0) {
@@ -494,10 +506,8 @@ PlayerStateSpinCapNrvGalaxySpinAir GalaxySpinAir;
 
 struct PlayerSpinCapAttackAppear : public mallow::hook::Trampoline<PlayerSpinCapAttackAppear> {
     static void Callback(PlayerStateSpinCap* state) {
-
         const bool isGrounded = rs::isOnGround(state->mActor, state->mCollider)
-                            && !state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val2);
-
+            && !state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val2);
         const bool forcedGroundSpin = state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val33);
 
         // Safety fix: clear leftover spin state from area load mid-spin
@@ -568,8 +578,8 @@ struct PlayerSpinCapAttackAppear : public mallow::hook::Trampoline<PlayerSpinCap
 struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinCapKill> {
     static void Callback(PlayerStateSpinCap* state) {
         Orig(state);
-        canStandardSpin = true;
-        canGalaxySpin = true;
+        //canStandardSpin = true;
+        //canGalaxySpin = true;
         galaxyFakethrowRemainder = -1; 
         isPunching = false;
         isSpinActive = false;
@@ -586,7 +596,6 @@ struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinC
 struct PlayerStateSpinCapFall : public mallow::hook::Trampoline<PlayerStateSpinCapFall> {
     static void Callback(PlayerStateSpinCap* state) {
         Orig(state);
-
         // If fakethrow is active and the current animation is "SpinSeparate"
         if (galaxyFakethrowRemainder != -1 && state->mAnimator->isAnim("SpinSeparate")) {
             bool onGround = rs::isOnGround(state->mActor, state->mCollider);
@@ -597,7 +606,6 @@ struct PlayerStateSpinCapFall : public mallow::hook::Trampoline<PlayerStateSpinC
                 return;
             }
         }
-
         // Normal FakeSpin timer logic for when still airborne:
         if (galaxyFakethrowRemainder == -2) {
             galaxyFakethrowRemainder = 21;
@@ -636,10 +644,12 @@ struct PlayerStateSpinCapIsSpinAttackAir : public mallow::hook::Trampoline<Playe
 struct PlayerStateSpinCapIsEnableCancelGround : public mallow::hook::Trampoline<PlayerStateSpinCapIsEnableCancelGround> {
     static bool Callback(PlayerStateSpinCap* state) {
         // Check if Mario is in the GalaxySpinGround nerve and performing the SpinSeparate move
-        bool isSpinSeparate = state->mAnimator->isAnim("SpinSeparate");
+        bool isSpin = state->mAnimator->isAnim("SpinSeparate")
+            || state->mAnimator->isAnim("SpinAttackLeft")
+            || state->mAnimator->isAnim("SpinAttackRight");
 
         // Allow canceling only if Mario is in the SpinSeparate move
-        return Orig(state) || (al::isNerve(state, &GalaxySpinGround) && isSpinSeparate && al::isGreaterStep(state, 10));
+        return Orig(state) || (al::isNerve(state, &GalaxySpinGround) && isSpin && al::isGreaterStep(state, 10));
     }
 };
 
@@ -760,11 +770,12 @@ struct DisallowCancelOnWaterSurfaceSpinPatch : public mallow::hook::Inline<Disal
 };
 
 void tryCapSpinAndRethrow(PlayerActorHakoniwa* player, bool a2) {
-
-    if(isGalaxySpin) {  // currently in GalaxySpin
+    if(isGalaxySpin) { // currently in GalaxySpin
+        isSpinRethrow = true;
         bool trySpin = player->tryActionCapSpinAttackImpl(a2);  // try to start another spin, can only succeed for standard throw
-        if(!trySpin)
-            return;
+        isSpinRethrow = false;
+
+        if(!trySpin) return;
 
         if(!isPadTriggerGalaxySpin(-1)) {  // standard throw or fakethrow
             if(canStandardSpin) {
@@ -802,10 +813,12 @@ void tryCapSpinAndRethrow(PlayerActorHakoniwa* player, bool a2) {
             return;
         }
     }
-    else {  // currently in standard spin
+    else { // currently in standard spin
+        isSpinRethrow = true;
         bool trySpin = player->tryActionCapSpinAttackImpl(a2);  // try to start another spin, can succeed for GalaxySpin and fakethrow
-        if(!trySpin)
-            return;
+        isSpinRethrow = false;
+
+        if(!trySpin) return;
 
         if(!isPadTriggerGalaxySpin(-1)) {  // standard throw or fakethrow
             if(canStandardSpin) {
@@ -1305,10 +1318,9 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
 struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActorHakoniwaExeSquat> {
     static void Callback(PlayerActorHakoniwa* thisPtr) {
-
         if(isPadTriggerGalaxySpin(-1)
             && !thisPtr->mAnimator->isAnim("SpinSeparate")
-            && canGalaxySpin
+            //&& canGalaxySpin
         ) {
             triggerGalaxySpin = true;
             al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
@@ -1320,10 +1332,9 @@ struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActor
 
 struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerActorHakoniwaExeRolling> {
     static void Callback(PlayerActorHakoniwa* thisPtr) {
-
         if(isPadTriggerGalaxySpin(-1)
             && !thisPtr->mAnimator->isAnim("SpinSeparate")
-            && canGalaxySpin
+            //&& canGalaxySpin
         ) {
             triggerGalaxySpin = true;
             al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
@@ -1335,7 +1346,6 @@ struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerAct
 
 struct PlayerCarryKeeperStartThrowNoSpin : public mallow::hook::Trampoline<PlayerCarryKeeperStartThrowNoSpin> {
     static bool Callback(PlayerCarryKeeper* state) {
-        
         if (isSpinActive || galaxySensorRemaining != -1 || galaxyFakethrowRemainder != -1) return false;
         return Orig(state); 
     }
@@ -1357,25 +1367,20 @@ struct PlayerCarryKeeperIsCarryDuringSwimSpin : public mallow::hook::Inline<Play
 
 struct PlayerConstGetSpinAirSpeedMax : public mallow::hook::Trampoline<PlayerConstGetSpinAirSpeedMax> {
     static float Callback(PlayerConst* playerConst) {
-
-        if(isGalaxySpin && !isPunching)
-            return playerConst->getNormalMaxSpeed();
+        if(isGalaxySpin && !isPunching) return playerConst->getNormalMaxSpeed();
         return Orig(playerConst);
     }
 };
 
 struct PlayerConstGetSpinBrakeFrame : public mallow::hook::Trampoline<PlayerConstGetSpinBrakeFrame> {
     static s32 Callback(PlayerConst* playerConst) {
-
-        if(isGalaxySpin && !isPunching)
-            return 0;
+        if(isGalaxySpin && !isPunching) return 0;
         return Orig(playerConst);
     }
 };
 
 struct PlayerSeCtrlUpdateWearEnd : public mallow::hook::Inline<PlayerSeCtrlUpdateWearEnd> {
     static void Callback(exl::hook::InlineCtx* ctx) {
-
         if (isBrawl) ctx->X[20] = reinterpret_cast<u64>("WearEndBrawl");
         if (isSuper) ctx->X[20] = reinterpret_cast<u64>("WearEndSuper");
     }
