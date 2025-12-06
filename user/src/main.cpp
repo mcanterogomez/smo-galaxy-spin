@@ -177,8 +177,9 @@ bool isNearSwoonedEnemy = false;  // Global flag to track if near a swooned enem
 
 // Global flags to track states
 bool isMario = false;
-bool isBrawl = false;
 bool isFeather = false;
+bool isTanooki = false;
+bool isBrawl = false;
 bool isSuper = false;
 
 static PlayerActorHakoniwa* isHakoniwa = nullptr; // Global pointer for Hakoniwa
@@ -196,12 +197,14 @@ struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerAct
         const char* cap = GameDataFunction::getCurrentCapTypeName(thisPtr);
 
         isMario = (costume && al::isEqualString(costume, "Mario"))
-                && (cap && al::isEqualString(cap, "Mario"));
-        isBrawl = (costume && al::isEqualString(costume, "MarioColorBrawl"))
-                && (cap && al::isEqualString(cap, "MarioColorBrawl"));
+            && (cap && al::isEqualString(cap, "Mario"));
         isFeather = (costume && al::isEqualString(costume, "MarioFeather"));
+        isTanooki = (costume && al::isEqualString(costume, "MarioTanooki"))
+            && (cap && al::isEqualString(cap, "MarioTanooki"));
+        isBrawl = (costume && al::isEqualString(costume, "MarioColorBrawl"))
+            && (cap && al::isEqualString(cap, "MarioColorBrawl"));
         isSuper = (costume && al::isEqualString(costume, "MarioColorSuper"))
-                && (cap && al::isEqualString(cap, "MarioColorSuper"));
+            && (cap && al::isEqualString(cap, "MarioColorSuper"));
     }
 };
 
@@ -263,7 +266,8 @@ static inline int TryCapSpinPre(PlayerActorHakoniwa* player) {
         || player->mAnimator->isAnim("KoopaCapPunchFinishL")
         || player->mAnimator->isAnim("KoopaCapPunchFinishR")        
         || player->mAnimator->isAnim("RabbitGet")
-        || player->mAnimator->isAnim("Kick")) return -1;
+        || player->mAnimator->isAnim("Kick")
+        || player->mAnimator->isAnim("TailAttack")) return -1;
 
         if (canGalaxySpin) triggerGalaxySpin = true;
         else { triggerGalaxySpin = true; galaxyFakethrowRemainder = -2; }
@@ -350,37 +354,44 @@ public:
                     state->mAnimator->startAnim("Kick");
                     al::validateHitSensor(state->mActor, "Punch");
                 } else {
-                    // only Spin Attack
-                    state->mAnimator->startSubAnim("SpinSeparate");
-                    state->mAnimator->startAnim("SpinSeparate");
-                    al::validateHitSensor(state->mActor, "GalaxySpin");
-                    galaxySensorRemaining = 21;
-
-                    // only Punch Attack
-                    /*if (isFinalPunch) {
-                        if (isPunchRight) {
-                            state->mAnimator->startSubAnim("KoopaCapPunchFinishRStart");
-                            state->mAnimator->startAnim("KoopaCapPunchFinishR");
-                        } else {
-                            state->mAnimator->startSubAnim("KoopaCapPunchFinishLStart");
-                            state->mAnimator->startAnim("KoopaCapPunchFinishL");
-                        }
-                        isFinalPunch = false;
+                    if (isTanooki) {
+                        state->mAnimator->startSubAnim("TailAttack");
+                        state->mAnimator->startAnim("TailAttack");
+                        al::validateHitSensor(state->mActor, "GalaxySpin");
+                        galaxySensorRemaining = 21;
                     } else {
-                        if (isPunchRight) {
-                            state->mAnimator->startSubAnim("KoopaCapPunchRStart");
-                            state->mAnimator->startAnim("KoopaCapPunchR");
-                        } else {
-                            state->mAnimator->startSubAnim("KoopaCapPunchLStart");
-                            state->mAnimator->startAnim("KoopaCapPunchL");
-                        }
-                    }
-                    // Make winding up invincible
-                    al::invalidateHitSensor(state->mActor, "Foot");
-                    al::invalidateHitSensor(state->mActor, "Body");
-                    al::invalidateHitSensor(state->mActor, "Head");
+                        // only Spin Attack
+                        state->mAnimator->startSubAnim("SpinSeparate");
+                        state->mAnimator->startAnim("SpinSeparate");
+                        al::validateHitSensor(state->mActor, "GalaxySpin");
+                        galaxySensorRemaining = 21;
 
-                    isPunching = true; // Validate punch animations*/
+                        // only Punch Attack
+                        /*if (isFinalPunch) {
+                            if (isPunchRight) {
+                                state->mAnimator->startSubAnim("KoopaCapPunchFinishRStart");
+                                state->mAnimator->startAnim("KoopaCapPunchFinishR");
+                            } else {
+                                state->mAnimator->startSubAnim("KoopaCapPunchFinishLStart");
+                                state->mAnimator->startAnim("KoopaCapPunchFinishL");
+                            }
+                            isFinalPunch = false;
+                        } else {
+                            if (isPunchRight) {
+                                state->mAnimator->startSubAnim("KoopaCapPunchRStart");
+                                state->mAnimator->startAnim("KoopaCapPunchR");
+                            } else {
+                                state->mAnimator->startSubAnim("KoopaCapPunchLStart");
+                                state->mAnimator->startAnim("KoopaCapPunchL");
+                            }
+                        }
+                        // Make winding up invincible
+                        al::invalidateHitSensor(state->mActor, "Foot");
+                        al::invalidateHitSensor(state->mActor, "Body");
+                        al::invalidateHitSensor(state->mActor, "Head");
+
+                        isPunching = true; // Validate punch animations*/
+                    }
                 }
             }
         }
@@ -388,6 +399,7 @@ public:
         if (!isSpinning && !isCarrying
             && !isNearCollectible && !isNearTreasure && !isNearSwoonedEnemy
             && !isRotatingL && !isRotatingR
+            && !isTanooki
         ) {
             if (al::isStep(state, 3)) {
                 // Reduce Mario's existing momentum by 50%
@@ -441,7 +453,8 @@ public:
         int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
         bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
         bool isSpinAttack = state->mAnimator->isAnim("SpinAttackLeft")
-            || state->mAnimator->isAnim("SpinAttackRight");
+            || state->mAnimator->isAnim("SpinAttackRight")
+            || state->mAnimator->isAnim("TailAttack");
 
         isSpinActive = true;
         
@@ -460,10 +473,13 @@ public:
                     al::validateHitSensor(state->mActor, "DoubleSpin");
                     galaxySensorRemaining = 41;
                 } else if (isRotatingAirR) {
-                    //state->mAnimator->startSubAnim("SpinAttackAirRight");
                     state->mAnimator->startAnim("SpinAttackAirRight");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
                     galaxySensorRemaining = 41;
+                } else if (isTanooki) {
+                    state->mAnimator->startAnim("TailAttack");
+                    al::validateHitSensor(state->mActor, "GalaxySpin");
+                    galaxySensorRemaining = 21;
                 } else {
                     state->mAnimator->startAnim("SpinSeparate");
                     al::validateHitSensor(state->mActor, "GalaxySpin");
@@ -474,6 +490,14 @@ public:
         
         state->updateSpinAirNerve();
 
+        if (isTanooki
+            && state->mAnimator->isAnimEnd()
+        ) {
+            al::invalidateHitSensor(state->mActor, "GalaxySpin");
+            al::setNerve(state, getNerveAt(nrvSpinCapFall));
+            isSpinActive = false;
+            return;
+        }
         if (!isSpinning
             && al::isGreaterStep(state, 41)
         ) {
@@ -482,7 +506,6 @@ public:
             isSpinActive = false;
             return;
         }
-
         if (isSpinning
             && al::isGreaterStep(state, 21)
         ) {
@@ -635,8 +658,10 @@ struct PlayerStateSpinCapIsEnableCancelGround : public mallow::hook::Trampoline<
     static bool Callback(PlayerStateSpinCap* state) {
         // Check if Mario is in the GalaxySpinGround nerve and performing the SpinSeparate move
         bool isSpin = state->mAnimator->isAnim("SpinSeparate")
+            || state->mAnimator->isAnim("SpinSeparateSwim")
             || state->mAnimator->isAnim("SpinAttackLeft")
-            || state->mAnimator->isAnim("SpinAttackRight");
+            || state->mAnimator->isAnim("SpinAttackRight")
+            || state->mAnimator->isAnim("TailAttack");
 
         // Allow canceling only if Mario is in the SpinSeparate move
         return Orig(state) || (al::isNerve(state, &GalaxySpinGround) && isSpin && al::isGreaterStep(state, 10));
@@ -728,6 +753,7 @@ struct PlayerSpinCapAttackStartSpinSeparateSwimSurface : public mallow::hook::Tr
 
         if (isNearCollectible) animator->startAnim("RabbitGet");
         else if (isNearTreasure || isNearSwoonedEnemy) animator->startAnim("Kick");
+        else if (isTanooki) animator->startAnim("TailAttack");
         else animator->startAnim("SpinSeparateSwim");
     }
 };
@@ -741,6 +767,7 @@ struct PlayerSpinCapAttackStartSpinSeparateSwim : public mallow::hook::Trampolin
 
         if (isNearCollectible) animator->startAnim("RabbitGet");
         else if (isNearTreasure || isNearSwoonedEnemy) animator->startAnim("Kick");
+        else if (isTanooki) animator->startAnim("TailAttack");
         else animator->startAnim("SpinSeparateSwim");
     }
 };
@@ -895,8 +922,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                 && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinSeparate")
                     || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinSeparateSwim")
                     || al::isActionPlaying(thisPtr->mModelHolder->findModelActor("Normal"), "MoveSuper")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "JumpBroad8")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "CapeGlide"));
+                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "TailAttack"));
 
         bool isDoubleSpinAttack = al::isSensorName(source, "DoubleSpin") && thisPtr->mAnimator
                 && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackLeft")
@@ -1223,8 +1249,9 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         }
 
         // Change animations
-        if (isBrawl || isFeather || isSuper
+        if (isFeather || isTanooki || isBrawl || isSuper
         ) {
+            // Change face
             if (isBrawl || isSuper
             ) {
                 if (face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry"))
@@ -1233,17 +1260,19 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
             if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
 
-            if (anim && anim->isAnim("HipDropStart") && !anim->isAnim("HipDropPunchStart")) anim->startAnim("HipDropPunchStart");
-            if (anim && anim->isAnim("HipDrop") && !anim->isAnim("HipDropPunch")) anim->startAnim("HipDropPunch");
-            if (anim && anim->isAnim("HipDropLand") && !anim->isAnim("HipDropPunchLand")) anim->startAnim("HipDropPunchLand");
-            if (anim && anim->isAnim("HipDropReaction") && !anim->isAnim("HipDropPunchReaction")) anim->startAnim("HipDropPunchReaction");
+            if (!isTanooki) {
+                if (anim && anim->isAnim("HipDropStart") && !anim->isAnim("HipDropPunchStart")) anim->startAnim("HipDropPunchStart");
+                if (anim && anim->isAnim("HipDrop") && !anim->isAnim("HipDropPunch")) anim->startAnim("HipDropPunch");
+                if (anim && anim->isAnim("HipDropLand") && !anim->isAnim("HipDropPunchLand")) anim->startAnim("HipDropPunchLand");
+                if (anim && anim->isAnim("HipDropReaction") && !anim->isAnim("HipDropPunchReaction")) anim->startAnim("HipDropPunchReaction");
 
-            if (anim && anim->isAnim("SwimHipDropStart") && !anim->isAnim("SwimHipDropPunchStart")) anim->startAnim("SwimHipDropPunchStart");
-            if (anim && (anim->isAnim("SwimHipDrop") || anim->isAnim("SwimDive")) && !anim->isAnim("SwimHipDropPunch")) anim->startAnim("SwimHipDropPunch");
-            if (anim && anim->isAnim("SwimHipDropLand") && !anim->isAnim("SwimHipDropPunchLand")) anim->startAnim("SwimHipDropPunchLand");
+                if (anim && anim->isAnim("SwimHipDropStart") && !anim->isAnim("SwimHipDropPunchStart")) anim->startAnim("SwimHipDropPunchStart");
+                if (anim && (anim->isAnim("SwimHipDrop") || anim->isAnim("SwimDive")) && !anim->isAnim("SwimHipDropPunch")) anim->startAnim("SwimHipDropPunch");
+                if (anim && anim->isAnim("SwimHipDropLand") && !anim->isAnim("SwimHipDropPunchLand")) anim->startAnim("SwimHipDropPunchLand");
 
-            if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
-            if (anim && anim->isAnim("MofumofuDemoOpening2") && !anim->isAnim("MofumofuDemoOpening2Super")) anim->startAnim("MofumofuDemoOpening2Super");
+                if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
+                if (anim && anim->isAnim("MofumofuDemoOpening2") && !anim->isAnim("MofumofuDemoOpening2Super")) anim->startAnim("MofumofuDemoOpening2Super");
+            }
         }
 
         // Reset proximity flag
