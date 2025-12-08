@@ -1574,7 +1574,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         // Apply sfx for dash
         static bool wasDash = false;
         bool isDashNow = al::isPadHoldR(-1)
-            && !(canFireball || isFireThrowing())
+            && !isFireThrowing()
             && al::calcSpeedH(thisPtr) >= 14.0f
             && rs::isOnGround(thisPtr, thisPtr->mCollider);
 
@@ -1711,53 +1711,58 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         bool onGround = rs::isOnGround(thisPtr, thisPtr->mCollider);
         bool isWater = al::isInWater(thisPtr);
 
-        if ((canFireball || anim->isAnim("GlideFloat") || anim->isAnim("GlideFloatSuper"))
-            && al::isPadTriggerR(-1)
+        if (isMario || isBrawl
         ) {
-            if (fireStep < 0 && fireBall && al::isDead(fireBall)) {
+            if ((canFireball || anim->isAnim("GlideFloat"))
+                && al::isPadTriggerR(-1)
+            ) {
+                if (fireStep < 0 && fireBall && al::isDead(fireBall)) {
 
-                fireStep = 0;
-                nextThrowLeft = !nextThrowLeft;
-                canFireball = false;
+                    fireStep = 0;
+                    nextThrowLeft = !nextThrowLeft;
+                    canFireball = false;
 
-                anim->startUpperBodyAnim(fireAnim);
-                if (onGround && !isWater) anim->startAnim(fireAnim);
+                    anim->startUpperBodyAnim(fireAnim);
+                    if (onGround && !isWater) anim->startAnim(fireAnim);
 
-            } else {
-                canFireball = false;
-            }
-        }
-        if (fireStep >= 0) {
-            if (fireStep == 5) {
-                if (model && fireBall) {
-                    fireBall->attach(al::getJointMtxPtr(model, jointName), sead::Vector3f(), sead::Vector3f(), "Wait");
-                
-                    sead::Vector3f startPos;
-                    al::calcJointPos(&startPos, model, jointName);
-                    sead::Quatf startQuat = al::getQuat(model);
-                    sead::Vector3f dir;
-                    al::calcQuatFront(&dir, model);
-                    dir.normalize();
-                    sead::Vector3 offset = dir * 10.0f;
-
-                    fireBall->shoot(startPos, startQuat, offset, true, 0, false);
+                } else {
+                    canFireball = false;
                 }
             }
-            if (onGround && !isWater
-                && (anim->isAnimEnd() || anim->isUpperBodyAnimEnd())
-            ) {
-                al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
-                anim->clearUpperBodyAnim();
-                fireStep = -1;
-            }
-            else if (anim->isUpperBodyAnimEnd()
-            ) {
-                anim->clearUpperBodyAnim();
-                fireStep = -1;
-            } else {
-                fireStep++;
+            if (fireStep >= 0) {
+                if (fireStep == 5) {
+                    if (model && fireBall) {
+                        fireBall->attach(al::getJointMtxPtr(model, jointName), sead::Vector3f(), sead::Vector3f(), "Wait");
+                    
+                        sead::Vector3f startPos;
+                        al::calcJointPos(&startPos, model, jointName);
+                        sead::Quatf startQuat = al::getQuat(model);
+                        sead::Vector3f dir;
+                        al::calcQuatFront(&dir, model);
+                        dir.normalize();
+                        sead::Vector3 offset = dir * 10.0f;
+
+                        fireBall->shoot(startPos, startQuat, offset, true, 0, false);
+                    }
+                }
+                if (onGround && !isWater
+                    && (anim->isAnimEnd() || anim->isUpperBodyAnimEnd())
+                ) {
+                    al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
+                    anim->clearUpperBodyAnim();
+                    fireStep = -1;
+                }
+                else if (anim->isUpperBodyAnimEnd()
+                ) {
+                    anim->clearUpperBodyAnim();
+                    fireStep = -1;
+                } else {
+                    fireStep++;
+                }
             }
         }
+
+        canFireball = false;
 
         // Handle hammer attack
         if (isHammer
@@ -1953,10 +1958,7 @@ struct PlayerActorHakoniwaExeJump : public mallow::hook::Trampoline<PlayerActorH
         auto* model = thisPtr->mModelHolder->findModelActor("Normal");
         auto* keeper = static_cast<al::IUseEffectKeeper*>(model);
 
-        if (!isFeather && !isTanooki && !isBrawl) {
-            Orig(thisPtr);
-            return;
-        }
+        if (!isBrawl) { Orig(thisPtr); return; }
 
         bool wasGround = rs::isOnGround(thisPtr, thisPtr->mCollider);
         bool wasWater = al::isInWater(thisPtr);
@@ -1977,14 +1979,14 @@ struct PlayerActorHakoniwaExeJump : public mallow::hook::Trampoline<PlayerActorH
         ) {
             isDoubleJump = true;
             isDoubleJumpConsume = true;
-            if (isFeather || isTanooki) { al::tryEmitEffect(keeper, "AppearBloom", nullptr); al::tryStartSe(thisPtr, "Bloom"); }
+            //if (isFeather || isTanooki) { al::tryEmitEffect(keeper, "AppearBloom", nullptr); al::tryStartSe(thisPtr, "Bloom"); }
             if (isBrawl) al::tryEmitEffect(keeper, "DoubleJump", nullptr);
             al::setNerve(thisPtr, getNerveAt(nrvHakoniwaJump));
         }
         if (isDoubleJumpConsume
             && al::isFirstStep(thisPtr)
         ) {
-            if (isFeather || isTanooki) anim->startAnim("JumpDashFast");
+            //if (isFeather || isTanooki) anim->startAnim("JumpDashFast");
             if (isBrawl) anim->startAnim("PoleHandStandJump");
             isDoubleJumpConsume = false;
         }
@@ -2006,11 +2008,13 @@ struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActor
 
         if (isPadTriggerGalaxySpin(-1)
             && !thisPtr->mAnimator->isAnim("SpinSeparate")
-            //&& canGalaxySpin
-            && isHammer
-            && al::isDead(isHammer)
         ) {
-            al::setNerve(thisPtr, &HammerNrv);
+            if ((isMario || isBrawl)
+                && isHammer && al::isDead(isHammer)) al::setNerve(thisPtr, &HammerNrv);
+            else {
+                triggerGalaxySpin = true;
+                al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
+            }
             return;
         }
         Orig(thisPtr);
@@ -2024,11 +2028,13 @@ struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerAct
 
         if (isPadTriggerGalaxySpin(-1)
             && !thisPtr->mAnimator->isAnim("SpinSeparate")
-            //&& canGalaxySpin
-            && isHammer
-            && al::isDead(isHammer)
         ) {
-            al::setNerve(thisPtr, &HammerNrv);
+            if ((isMario || isBrawl)
+                && isHammer && al::isDead(isHammer)) al::setNerve(thisPtr, &HammerNrv);
+            else {
+                triggerGalaxySpin = true;
+                al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
+            }
             return;
         }
         Orig(thisPtr);
