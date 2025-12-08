@@ -1457,6 +1457,14 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
     static void Callback(PlayerActorHakoniwa* thisPtr) {
         Orig(thisPtr);
 
+        auto* anim   = thisPtr->mAnimator;
+        auto* holder = thisPtr->mModelHolder;
+        auto* model  = holder->findModelActor("Normal");
+        auto* cape = al::tryGetSubActor(model, "ケープ");
+        auto* tail = al::tryGetSubActor(model, "尻尾");
+        al::LiveActor* face = al::tryGetSubActor(model, "顔");
+        al::IUseEffectKeeper* keeper = static_cast<al::IUseEffectKeeper*>(model);
+
         al::HitSensor* sensorSpin = al::getHitSensor(thisPtr, "GalaxySpin");
         al::HitSensor* sensorDoubleSpin = al::getHitSensor(thisPtr, "DoubleSpin");
         al::HitSensor* sensorPunch = al::getHitSensor(thisPtr, "Punch");
@@ -1484,148 +1492,12 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             }
         }
 
-        // Grab model for effects
-        auto* anim   = thisPtr->mAnimator;
-        auto* holder = thisPtr->mModelHolder;
-        auto* model  = holder->findModelActor("Normal");
-        auto* cape = al::tryGetSubActor(model, "ケープ");
-        auto* tail = al::tryGetSubActor(model, "尻尾");
-        al::LiveActor* face = al::tryGetSubActor(model, "顔");
-        al::IUseEffectKeeper* keeper = static_cast<al::IUseEffectKeeper*>(model);
-
-        // Add attack to moves
-        if (model) {
-            static bool wasAttackMove = false;
-            const bool isAttackMove = thisPtr->mAnimator
-            && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDrop")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunch")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropReaction")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunchReaction")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallL")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallR")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDrop")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDropPunch")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimDive"));
-
-            if (isAttackMove && !wasAttackMove) { al::validateHitSensor(thisPtr, "HipDropKnockDown"); hitBufferCount = 0;}
-            else if (!isAttackMove && wasAttackMove) al::invalidateHitSensor(thisPtr, "HipDropKnockDown");
-
-            wasAttackMove = isAttackMove;
-        }
-
-        // Change animations
-        if ((isMario && cape && al::isAlive(cape))
-            || isFeather || isTanooki || isBrawl || isSuper
-        ) {
-            // Change face
-            if (isBrawl || isSuper
-            ) {
-                if (face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry"))
-                    al::startActionSubActor(model, "顔", "WaitAngry");
-            }
-
-            // Activate setup for Super
-            if (isSuper) {
-                static bool wasMoveSuper = false;
-                const bool isMoveSuper =
-                    al::calcSpeedH(thisPtr) >= thisPtr->mConst->getDashFastBorderSpeed()
-                    || anim->isAnim("JumpBroad8") || anim->isAnim("Glide");
-
-                if (isMoveSuper && !wasMoveSuper) { al::validateHitSensor(thisPtr, "GalaxySpin"); hitBufferCount = 0; }
-                else if (!isMoveSuper && wasMoveSuper) al::invalidateHitSensor(thisPtr, "GalaxySpin");
-
-                wasMoveSuper = isMoveSuper;
-                applyMoonMarioConst(thisPtr->mConst); // force Moon every tick
-
-                // Apply sfx for DashFastSuper
-                if (al::isPadHoldR(-1) && al::isActionPlaying(model, "MoveSuper")
-                    && al::calcSpeedH(thisPtr) >= 14.0f)
-                    al::tryEmitEffect(model, "DashSuper", nullptr);
-                else if (al::isActionPlaying(model, "Glide"))
-                    al::tryEmitEffect(model, "DashSuperGlide", nullptr);
-                else {
-                    al::tryDeleteEffect(model, "DashSuper");
-                    al::tryDeleteEffect(model, "DashSuperGlide");
-                }
-            }
-
-            if (isBrawl && anim && anim->isAnim("JumpDashFast") && !anim->isAnim("Jump")) anim->startAnim("Jump");
-            if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
-
-            if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
-
-            if (!isTanooki) {
-                if (anim && anim->isAnim("HipDropStart") && !anim->isAnim("HipDropPunchStart")) anim->startAnim("HipDropPunchStart");
-                if (anim && anim->isAnim("HipDrop") && !anim->isAnim("HipDropPunch")) anim->startAnim("HipDropPunch");
-                if (anim && anim->isAnim("HipDropLand") && !anim->isAnim("HipDropPunchLand")) anim->startAnim("HipDropPunchLand");
-                if (anim && anim->isAnim("HipDropReaction") && !anim->isAnim("HipDropPunchReaction")) anim->startAnim("HipDropPunchReaction");
-
-                if (anim && anim->isAnim("SwimHipDropStart") && !anim->isAnim("SwimHipDropPunchStart")) anim->startAnim("SwimHipDropPunchStart");
-                if (anim && (anim->isAnim("SwimHipDrop") || anim->isAnim("SwimDive")) && !anim->isAnim("SwimHipDropPunch")) anim->startAnim("SwimHipDropPunch");
-                if (anim && anim->isAnim("SwimHipDropLand") && !anim->isAnim("SwimHipDropPunchLand")) anim->startAnim("SwimHipDropPunchLand");
-
-                if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
-                if (anim && anim->isAnim("MofumofuDemoOpening2") && !anim->isAnim("MofumofuDemoOpening2Super")) anim->startAnim("MofumofuDemoOpening2Super");
-            }
-        } else {
-            if (anim && anim->isAnim("JumpDashFast") && !anim->isAnim("JumpDashFastClassic")) anim->startAnim("JumpDashFastClassic");
-        }
-
-        // Apply sfx for dash
-        static bool wasDash = false;
-        bool isDashNow = al::isPadHoldR(-1)
-            && !isFireThrowing()
-            && al::calcSpeedH(thisPtr) >= 14.0f
-            && rs::isOnGround(thisPtr, thisPtr->mCollider);
-
-        if (isDashNow && !wasDash
-        ) {
-            const char* fx = isSuper ? "AccelSecond" : "Accel";
-            if (!al::isEffectEmitting(keeper, fx)) { al::tryStartSe(thisPtr, fx); al::tryEmitEffect(model, fx, nullptr); }
-        }
-        wasDash = isDashNow;
-
-        // Handle Taunt triggers
-        if (!thisPtr->mInput->isMove()
-            && (al::isNerve(thisPtr, getNerveAt(nrvHakoniwaWait))
-            || al::isNerve(thisPtr, getNerveAt(nrvHakoniwaSquat)))
-            && !al::isNerve(thisPtr, &TauntLeftNrv)
-            && !al::isNerve(thisPtr, &TauntRightNrv)
-            && !isFireThrowing()
-        ) {
-            if (al::isPadTriggerLeft(-1)
-            ) {
-                al::setNerve(thisPtr, &TauntLeftNrv);
-                return;
-            }
-            if (al::isPadTriggerRight(-1)
-            ) {
-                tauntRightAlt = al::isPadHoldZR(-1) || al::isPadTriggerZR(-1) || al::isPadHoldZL(-1) || al::isPadTriggerZL(-1);
-                al::setNerve(thisPtr, &TauntRightNrv);
-                return;
-            }
-        }
-        if (al::isNerve(thisPtr, &TauntLeftNrv)
-        ) {
-            if (anim->isAnim("WearEnd")
-                || anim->isAnim("WearEndBrawl")
-                || anim->isAnim("WearEndSuper")
-            ) {
-                al::tryStopSe(thisPtr, "WearEnd", -1, nullptr);
-                al::tryStopSe(thisPtr, "WearEndSetCostume", -1, nullptr);
-            }
-        }
-
-        // Delete Taunt effects
-        if (!al::isNerve(thisPtr, &TauntLeftNrv)
-            && !al::isNerve(thisPtr, &TauntRightNrv)) al::tryDeleteEffect(keeper, "BonfireSuper");
-            
         // Reset proximity flag
         isNearCollectible = false;
         isNearTreasure = false;
         isNearSwoonedEnemy = false;
 
-        // Get Mario's Carry sensor
+        // Handle Mario's Carry sensor
         al::HitSensor* carrySensor = al::getHitSensor(thisPtr, "Carry");
         if (carrySensor && carrySensor->mIsValid) {
             // Check all sensors colliding with Carry sensor
@@ -1660,60 +1532,106 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
         // Handle Koopa punch logic
         if (isKoopa && !al::isNear(thisPtr, isKoopa, 500.0f)) isFinalPunch = false;
+
+        // Add attack to moves
+        static bool wasAttackMove = false;
+        const bool isAttackMove = thisPtr->mAnimator
+            && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDrop")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunch")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropReaction")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunchReaction")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallL")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallR")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDrop")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDropPunch")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimDive"));
+
+        if (isAttackMove && !wasAttackMove) { al::validateHitSensor(thisPtr, "HipDropKnockDown"); hitBufferCount = 0;}
+        else if (!isAttackMove && wasAttackMove) al::invalidateHitSensor(thisPtr, "HipDropKnockDown");
+
+        wasAttackMove = isAttackMove;
+
+        // Change animations
+        if ((isBrawl || isSuper)
+            && face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry")) al::startActionSubActor(model, "顔", "WaitAngry");
+
+        if (isBrawl && anim && anim->isAnim("JumpDashFast") && !anim->isAnim("Jump")) anim->startAnim("Jump");
+        if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
+
+        if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
+
+        if ((isMario && cape && al::isAlive(cape)) || isFeather || isBrawl || isSuper) {
+            if (anim && anim->isAnim("HipDropStart") && !anim->isAnim("HipDropPunchStart")) anim->startAnim("HipDropPunchStart");
+            if (anim && anim->isAnim("HipDrop") && !anim->isAnim("HipDropPunch")) anim->startAnim("HipDropPunch");
+            if (anim && anim->isAnim("HipDropLand") && !anim->isAnim("HipDropPunchLand")) anim->startAnim("HipDropPunchLand");
+            if (anim && anim->isAnim("HipDropReaction") && !anim->isAnim("HipDropPunchReaction")) anim->startAnim("HipDropPunchReaction");
+
+            if (anim && anim->isAnim("SwimHipDropStart") && !anim->isAnim("SwimHipDropPunchStart")) anim->startAnim("SwimHipDropPunchStart");
+            if (anim && (anim->isAnim("SwimHipDrop") || anim->isAnim("SwimDive")) && !anim->isAnim("SwimHipDropPunch")) anim->startAnim("SwimHipDropPunch");
+            if (anim && anim->isAnim("SwimHipDropLand") && !anim->isAnim("SwimHipDropPunchLand")) anim->startAnim("SwimHipDropPunchLand");
+
+            if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
+            if (anim && anim->isAnim("MofumofuDemoOpening2") && !anim->isAnim("MofumofuDemoOpening2Super")) anim->startAnim("MofumofuDemoOpening2Super");
+        } else if (!isTanooki) {
+            if (anim && anim->isAnim("JumpDashFast") && !anim->isAnim("JumpDashFastClassic")) anim->startAnim("JumpDashFastClassic");
+        }
         
-        // Handle cape logic for Brawl Suit
-        bool isGliding =
-            al::isActionPlaying(model, "Glide")
-            || al::isActionPlaying(model, "GlideAlt")
-            || al::isActionPlaying(model, "GlideFloatStart")
-            || al::isActionPlaying(model, "GlideFloat")
-            || al::isActionPlaying(model, "GlideFloatSuper")
-            || al::isActionPlaying(model, "JumpBroad8")
-            || al::isActionPlaying(model, "JumpBroad8Alt");
-        
-        if ((isMario || isBrawl)
-            && cape
+        // Handle Taunt actions
+        if (!thisPtr->mInput->isMove()
+            && (al::isNerve(thisPtr, getNerveAt(nrvHakoniwaWait))
+            || al::isNerve(thisPtr, getNerveAt(nrvHakoniwaSquat)))
+            && !al::isNerve(thisPtr, &TauntLeftNrv)
+            && !al::isNerve(thisPtr, &TauntRightNrv)
+            && !isFireThrowing()
         ) {
-            if (al::isDead(cape)) isCapeActive = -1;
-            else if (!isGliding && isCapeActive > 0) {
-                if (--isCapeActive == 0) {
-                    cape->kill();
-                    al::tryEmitEffect(keeper, "AppearBloom", nullptr);
-                    al::tryStartSe(thisPtr, "Bloom");
-                    isCapeActive = -1;
-                }
+            if (al::isPadTriggerLeft(-1)
+            ) {
+                al::setNerve(thisPtr, &TauntLeftNrv);
+                return;
+            }
+            if (al::isPadTriggerRight(-1)
+            ) {
+                tauntRightAlt = al::isPadHoldZR(-1) || al::isPadTriggerZR(-1) || al::isPadHoldZL(-1) || al::isPadTriggerZL(-1);
+                al::setNerve(thisPtr, &TauntRightNrv);
+                return;
             }
         }
-        // Handle tail logic for Tanooki Suit
-        if (isTanooki
-            && tail && al::isAlive(tail)
+        if (al::isNerve(thisPtr, &TauntLeftNrv)
         ) {
-            if (isGliding) {
-                if (!al::isActionPlaying(tail, "TailSpin")
-                ) {
-                    al::startAction(tail, "TailSpin");
-                    al::tryEmitEffect(keeper, "TailSpin", nullptr);
-                }
-            } else {
-                if (al::isActionPlaying(tail, "TailSpin")
-                ) {
-                    al::startAction(tail, "Wait");
-                    al::tryDeleteEffect(keeper, "TailSpin");
-                }
+            if (anim->isAnim("WearEnd")
+                || anim->isAnim("WearEndBrawl")
+                || anim->isAnim("WearEndSuper")
+            ) {
+                al::tryStopSe(thisPtr, "WearEnd", -1, nullptr);
+                al::tryStopSe(thisPtr, "WearEndSetCostume", -1, nullptr);
             }
+        }
+        if (!al::isNerve(thisPtr, &TauntLeftNrv)
+            && !al::isNerve(thisPtr, &TauntRightNrv)) al::tryDeleteEffect(keeper, "BonfireSuper");
+
+        // Handle hammer attack
+        if (isHammer
+            && al::isAlive(isHammer)
+            && !al::isNerve(thisPtr, &HammerNrv)
+        ) {
+            isHammer->makeActorDead();
+            al::invalidateHitSensor(isHammer, "AttackHack");
         }
 
-        // Fireball throwing logic
+        // Handle fireball attack
         const char* jointName = nextThrowLeft ? "HandL" : "HandR";
         const char* fireAnim  = nextThrowLeft ? "FireL" : "FireR";
 
-        FireBrosFireBall* fireBall = (FireBrosFireBall*)fireBalls->getDeadActor();
+        FireBrosFireBall* fireBall = (FireBrosFireBall*) fireBalls->getDeadActor();
         bool onGround = rs::isOnGround(thisPtr, thisPtr->mCollider);
         bool isWater = al::isInWater(thisPtr);
 
-        if (isMario || isBrawl
-        ) {
-            if ((canFireball || anim->isAnim("GlideFloat"))
+        bool isFloating = al::isActionPlaying(model, "GlideFloat")
+            || al::isActionPlaying(model, "GlideFloatSuper");
+
+        if (isMario || isBrawl || isSuper) {
+            if ((canFireball 
+                || (anim && (isFloating)))
                 && al::isPadTriggerR(-1)
             ) {
                 if (fireStep < 0 && fireBall && al::isDead(fireBall)) {
@@ -1764,32 +1682,103 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
         canFireball = false;
 
-        // Handle hammer attack
-        if (isHammer
-            && al::isAlive(isHammer)
-            && !al::isNerve(thisPtr, &HammerNrv)
+        // Apply effects for dash
+        static bool wasDash = false;
+        bool isDashNow = al::isPadHoldR(-1)
+            && !isFireThrowing()
+            && al::calcSpeedH(thisPtr) >= 14.0f
+            && rs::isOnGround(thisPtr, thisPtr->mCollider);
+
+        if (isDashNow && !wasDash
         ) {
-            isHammer->makeActorDead();
-            al::invalidateHitSensor(isHammer, "AttackHack");
+            const char* fx = isSuper ? "AccelSecond" : "Accel";
+            if (!al::isEffectEmitting(keeper, fx)) { al::tryStartSe(thisPtr, fx); al::tryEmitEffect(model, fx, nullptr); }
+        }
+        wasDash = isDashNow;
+
+        // Handle cape logic for Mario/Brawl suit
+        bool isGliding =
+            al::isActionPlaying(model, "Glide")
+            || al::isActionPlaying(model, "GlideAlt")
+            || al::isActionPlaying(model, "GlideFloatStart")
+            || al::isActionPlaying(model, "JumpBroad8")
+            || al::isActionPlaying(model, "JumpBroad8Alt")
+            || isFloating;
+        
+        if ((isMario || isBrawl)
+            && cape
+        ) {
+            if (al::isDead(cape)) isCapeActive = -1;
+            else if (!isGliding && isCapeActive > 0) {
+                if (--isCapeActive == 0) {
+                    cape->kill();
+                    al::tryEmitEffect(keeper, "AppearBloom", nullptr);
+                    al::tryStartSe(thisPtr, "Bloom");
+                    isCapeActive = -1;
+                }
+            }
         }
 
-        // Apply or remove invincibility
-        PlayerDamageKeeper* damagekeep = thisPtr->mDamageKeeper;
-        bool damageBlink = damagekeep && damagekeep->mIsPreventDamage && (damagekeep->mRemainingInvincibility > 0);
-        bool hacked = thisPtr->mHackKeeper && thisPtr->mHackKeeper->mCurrentHackActor;
-
-        if (isSuper && !hacked
-            && (!al::isHideModel(model) || damageBlink)
+        // Handle tail logic for Tanooki suit
+        if (isTanooki
+            && tail && al::isAlive(tail)
         ) {
-            al::tryEmitEffect(keeper, "Bonfire", nullptr);
-            if (!damagekeep->mIsPreventDamage) {
-                damagekeep->activatePreventDamage();
-                damagekeep->mRemainingInvincibility = INT_MAX;
+            if (isGliding) {
+                if (!al::isActionPlaying(tail, "TailSpin")
+                ) {
+                    al::startAction(tail, "TailSpin");
+                    al::tryEmitEffect(keeper, "TailSpin", nullptr);
+                }
+            } else {
+                if (al::isActionPlaying(tail, "TailSpin")
+                ) {
+                    al::startAction(tail, "Wait");
+                    al::tryDeleteEffect(keeper, "TailSpin");
+                }
             }
-        } else {
-            if (hacked || !damageBlink) {
-                al::tryDeleteEffect(keeper, "Bonfire");
-                damagekeep->mRemainingInvincibility = 0;
+        }
+        
+        // Handle attack and effects for Super suit
+        if (isSuper) {
+            static bool wasMoveSuper = false;
+            const bool isMoveSuper =
+                al::calcSpeedH(thisPtr) >= thisPtr->mConst->getDashFastBorderSpeed()
+                || anim->isAnim("JumpBroad8") || anim->isAnim("Glide");
+
+            if (isMoveSuper && !wasMoveSuper) { al::validateHitSensor(thisPtr, "GalaxySpin"); hitBufferCount = 0; }
+            else if (!isMoveSuper && wasMoveSuper) al::invalidateHitSensor(thisPtr, "GalaxySpin");
+
+            wasMoveSuper = isMoveSuper;
+            applyMoonMarioConst(thisPtr->mConst); // force Moon every tick
+
+            // Apply effects for DashFastSuper
+            if (al::isPadHoldR(-1) && al::isActionPlaying(model, "MoveSuper")
+                && al::calcSpeedH(thisPtr) >= 14.0f)
+                al::tryEmitEffect(model, "DashSuper", nullptr);
+            else if (al::isActionPlaying(model, "Glide"))
+                al::tryEmitEffect(model, "DashSuperGlide", nullptr);
+            else {
+                al::tryDeleteEffect(model, "DashSuper");
+                al::tryDeleteEffect(model, "DashSuperGlide");
+            }
+
+            // Apply effects for invincibility
+            PlayerDamageKeeper* damagekeep = thisPtr->mDamageKeeper;
+            bool damageBlink = damagekeep && damagekeep->mIsPreventDamage && (damagekeep->mRemainingInvincibility > 0);
+            bool hacked = thisPtr->mHackKeeper && thisPtr->mHackKeeper->mCurrentHackActor;
+
+            if (!hacked && (!al::isHideModel(model) || damageBlink)
+            ) {
+                al::tryEmitEffect(keeper, "Bonfire", nullptr);
+                if (!damagekeep->mIsPreventDamage) {
+                    damagekeep->activatePreventDamage();
+                    damagekeep->mRemainingInvincibility = INT_MAX;
+                }
+            } else {
+                if (hacked || !damageBlink) {
+                    al::tryDeleteEffect(keeper, "Bonfire");
+                    damagekeep->mRemainingInvincibility = 0;
+                }
             }
         }
     }
@@ -2168,12 +2157,14 @@ struct PlayerActionGroundMoveControlUpdate : public mallow::hook::Trampoline<Pla
         if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor) return update;
         PlayerConst* playerConst = const_cast<PlayerConst*>(thisPtr->mConst);
 
-        if (isSuper && al::isPadHoldR(-1)
+        bool isDash = al::isPadHoldR(-1) && !isFireThrowing();
+
+        if (isSuper && isDash
         ) {
             playerConst->mNormalMaxSpeed = 28.0f;
             thisPtr->mMaxSpeed = 28.0f;
         }
-        else if (al::isPadHoldR(-1)
+        else if (isDash
         ) {
             playerConst->mNormalMaxSpeed = 21.0f;
             thisPtr->mMaxSpeed = 21.0f;
