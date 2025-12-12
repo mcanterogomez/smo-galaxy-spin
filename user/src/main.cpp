@@ -1683,9 +1683,15 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         canFireball = false;
 
         // Apply effects for dash
+        bool isMoving =
+            al::isActionPlaying(model, "Move")
+            || al::isActionPlaying(model, "MoveClassic")
+            || al::isActionPlaying(model, "MoveBrawl")
+            || al::isActionPlaying(model, "MoveSuper");
+
         static bool wasDash = false;
         bool isDashNow = al::isPadHoldR(-1)
-            && !isFireThrowing()
+            && isMoving && !isFireThrowing()
             && al::calcSpeedH(thisPtr) >= 14.0f
             && rs::isOnGround(thisPtr, thisPtr->mCollider);
 
@@ -1728,12 +1734,14 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                 ) {
                     al::startAction(tail, "TailSpin");
                     al::tryEmitEffect(keeper, "TailSpin", nullptr);
+                    al::tryStartSe(thisPtr, "SpinJumpDownFall");
                 }
             } else {
                 if (al::isActionPlaying(tail, "TailSpin")
                 ) {
                     al::startAction(tail, "Wait");
                     al::tryDeleteEffect(keeper, "TailSpin");
+                    al::tryStopSe(thisPtr, "SpinJumpDownFall", -1, nullptr);
                 }
             }
         }
@@ -1752,11 +1760,11 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             applyMoonMarioConst(thisPtr->mConst); // force Moon every tick
 
             // Apply effects for DashFastSuper
-            if (al::isPadHoldR(-1) && al::isActionPlaying(model, "MoveSuper")
-                && al::calcSpeedH(thisPtr) >= 14.0f)
-                al::tryEmitEffect(model, "DashSuper", nullptr);
-            else if (al::isActionPlaying(model, "Glide"))
-                al::tryEmitEffect(model, "DashSuperGlide", nullptr);
+            if (al::isPadHoldR(-1) && !isFireThrowing()
+                && al::isActionPlaying(model, "MoveSuper")
+                && al::calcSpeedH(thisPtr) >= 14.0f) al::tryEmitEffect(model, "DashSuper", nullptr);
+            else if (al::isActionPlaying(model, "Glide")
+                && !isFireThrowing()) al::tryEmitEffect(model, "DashSuperGlide", nullptr);
             else {
                 al::tryDeleteEffect(model, "DashSuper");
                 al::tryDeleteEffect(model, "DashSuperGlide");
