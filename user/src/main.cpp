@@ -273,6 +273,7 @@ static inline int TryCapSpinPre(PlayerActorHakoniwa* player) {
         else { triggerGalaxySpin = true; galaxyFakethrowRemainder = -2; }
         return 1;
     }
+    
     return 0; // fallthrough to Orig
 }
 
@@ -1194,6 +1195,13 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
     static void Callback(PlayerActorHakoniwa* thisPtr) {
         Orig(thisPtr);
 
+        auto* anim   = thisPtr->mAnimator;
+        auto* holder = thisPtr->mModelHolder;
+        auto* model  = holder->findModelActor("Normal");
+        auto* cape = al::tryGetSubActor(model, "ケープ");
+        al::LiveActor* face = al::tryGetSubActor(model, "顔");
+        al::IUseEffectKeeper* keeper = static_cast<al::IUseEffectKeeper*>(model);
+
         al::HitSensor* sensorSpin = al::getHitSensor(thisPtr, "GalaxySpin");
         al::HitSensor* sensorDoubleSpin = al::getHitSensor(thisPtr, "DoubleSpin");
         al::HitSensor* sensorPunch = al::getHitSensor(thisPtr, "Punch");
@@ -1221,66 +1229,12 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             }
         }
 
-        // Grab model for effects
-        auto* anim   = thisPtr->mAnimator;
-        auto* holder = thisPtr->mModelHolder;
-        auto* model  = holder->findModelActor("Normal");
-        al::LiveActor* face = al::tryGetSubActor(model, "顔");
-        al::IUseEffectKeeper* keeper = static_cast<al::IUseEffectKeeper*>(model);
-
-        // Add attack to moves
-        if (model) {
-            static bool wasAttackMove = false;
-            const bool isAttackMove = thisPtr->mAnimator
-            && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDrop")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunch")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropReaction")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunchReaction")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallL")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallR")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDrop")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDropPunch")
-                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimDive"));
-
-            if (isAttackMove && !wasAttackMove) { al::validateHitSensor(thisPtr, "HipDropKnockDown"); hitBufferCount = 0;}
-            else if (!isAttackMove && wasAttackMove) al::invalidateHitSensor(thisPtr, "HipDropKnockDown");
-
-            wasAttackMove = isAttackMove;
-        }
-
-        // Change animations
-        if (isFeather || isTanooki || isBrawl || isSuper
-        ) {
-            // Change face
-            if (isBrawl || isSuper
-            ) {
-                if (face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry"))
-                    al::startActionSubActor(model, "顔", "WaitAngry");
-            }
-            if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
-            if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
-
-            if (!isTanooki) {
-                if (anim && anim->isAnim("HipDropStart") && !anim->isAnim("HipDropPunchStart")) anim->startAnim("HipDropPunchStart");
-                if (anim && anim->isAnim("HipDrop") && !anim->isAnim("HipDropPunch")) anim->startAnim("HipDropPunch");
-                if (anim && anim->isAnim("HipDropLand") && !anim->isAnim("HipDropPunchLand")) anim->startAnim("HipDropPunchLand");
-                if (anim && anim->isAnim("HipDropReaction") && !anim->isAnim("HipDropPunchReaction")) anim->startAnim("HipDropPunchReaction");
-
-                if (anim && anim->isAnim("SwimHipDropStart") && !anim->isAnim("SwimHipDropPunchStart")) anim->startAnim("SwimHipDropPunchStart");
-                if (anim && (anim->isAnim("SwimHipDrop") || anim->isAnim("SwimDive")) && !anim->isAnim("SwimHipDropPunch")) anim->startAnim("SwimHipDropPunch");
-                if (anim && anim->isAnim("SwimHipDropLand") && !anim->isAnim("SwimHipDropPunchLand")) anim->startAnim("SwimHipDropPunchLand");
-
-                if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
-                if (anim && anim->isAnim("MofumofuDemoOpening2") && !anim->isAnim("MofumofuDemoOpening2Super")) anim->startAnim("MofumofuDemoOpening2Super");
-            }
-        }
-
         // Reset proximity flag
         isNearCollectible = false;
         isNearTreasure = false;
         isNearSwoonedEnemy = false;
 
-        // Get Mario's Carry sensor
+        // Handle Mario's Carry sensor
         al::HitSensor* carrySensor = al::getHitSensor(thisPtr, "Carry");
         if (carrySensor && carrySensor->mIsValid) {
             // Check all sensors colliding with Carry sensor
@@ -1316,23 +1270,66 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         // Handle Koopa punch logic
         if (isKoopa && !al::isNear(thisPtr, isKoopa, 500.0f)) isFinalPunch = false;
 
-        // Apply or remove invincibility
-        PlayerDamageKeeper* damagekeep = thisPtr->mDamageKeeper;
-        bool damageBlink = damagekeep && damagekeep->mIsPreventDamage && (damagekeep->mRemainingInvincibility > 0);
-        bool hacked = thisPtr->mHackKeeper && thisPtr->mHackKeeper->mCurrentHackActor;
+        // Add attack to moves
+        static bool wasAttackMove = false;
+        const bool isAttackMove = thisPtr->mAnimator
+            && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDrop")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunch")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropReaction")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunchReaction")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallL")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallR")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDrop")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDropPunch")
+                || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimDive"));
 
-        if (isSuper && !hacked
-            && (!al::isHideModel(model) || damageBlink)
-        ) {
-            al::tryEmitEffect(keeper, "Bonfire", nullptr);
-            if (!damagekeep->mIsPreventDamage) {
-                damagekeep->activatePreventDamage();
-                damagekeep->mRemainingInvincibility = INT_MAX;
-            }
-        } else {
-            if (hacked || !damageBlink) {
-                al::tryDeleteEffect(keeper, "Bonfire");
-                damagekeep->mRemainingInvincibility = 0;
+        if (isAttackMove && !wasAttackMove) { al::validateHitSensor(thisPtr, "HipDropKnockDown"); hitBufferCount = 0;}
+        else if (!isAttackMove && wasAttackMove) al::invalidateHitSensor(thisPtr, "HipDropKnockDown");
+
+        wasAttackMove = isAttackMove;
+
+        // Change animations
+        if ((isBrawl || isSuper)
+            && face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry")) al::startActionSubActor(model, "顔", "WaitAngry");
+
+        if (isBrawl && anim && anim->isAnim("JumpDashFast") && !anim->isAnim("Jump")) anim->startAnim("Jump");
+        if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
+
+        if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
+
+        if ((isMario && cape && al::isAlive(cape)) || isFeather || isBrawl || isSuper) {
+            if (anim && anim->isAnim("HipDropStart") && !anim->isAnim("HipDropPunchStart")) anim->startAnim("HipDropPunchStart");
+            if (anim && anim->isAnim("HipDrop") && !anim->isAnim("HipDropPunch")) anim->startAnim("HipDropPunch");
+            if (anim && anim->isAnim("HipDropLand") && !anim->isAnim("HipDropPunchLand")) anim->startAnim("HipDropPunchLand");
+            if (anim && anim->isAnim("HipDropReaction") && !anim->isAnim("HipDropPunchReaction")) anim->startAnim("HipDropPunchReaction");
+
+            if (anim && anim->isAnim("SwimHipDropStart") && !anim->isAnim("SwimHipDropPunchStart")) anim->startAnim("SwimHipDropPunchStart");
+            if (anim && (anim->isAnim("SwimHipDrop") || anim->isAnim("SwimDive")) && !anim->isAnim("SwimHipDropPunch")) anim->startAnim("SwimHipDropPunch");
+            if (anim && anim->isAnim("SwimHipDropLand") && !anim->isAnim("SwimHipDropPunchLand")) anim->startAnim("SwimHipDropPunchLand");
+
+            if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
+            if (anim && anim->isAnim("MofumofuDemoOpening2") && !anim->isAnim("MofumofuDemoOpening2Super")) anim->startAnim("MofumofuDemoOpening2Super");
+        }
+        
+        // Handle attack and effects for Super suit
+        if (isSuper) {
+            // Apply effects for invincibility
+            PlayerDamageKeeper* damagekeep = thisPtr->mDamageKeeper;
+            bool damageBlink = damagekeep && damagekeep->mIsPreventDamage && (damagekeep->mRemainingInvincibility > 0);
+            bool hacked = thisPtr->mHackKeeper && thisPtr->mHackKeeper->mCurrentHackActor;
+
+            if (!hacked && (!al::isHideModel(model) || damageBlink)
+            ) {
+                al::tryEmitEffect(keeper, "Bonfire", nullptr);
+                if (!damagekeep->mIsPreventDamage) {
+                    damagekeep->activatePreventDamage();
+                    damagekeep->mRemainingInvincibility = INT_MAX;
+                }
+            } else {
+                if (hacked || !damageBlink) {
+                    al::tryDeleteEffect(keeper, "Bonfire");
+                    damagekeep->mRemainingInvincibility = 0;
+                }
             }
         }
     }
