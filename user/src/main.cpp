@@ -707,6 +707,8 @@ public:
         auto* player = keeper->getParent<PlayerActorHakoniwa>();
         auto* anim = player->mAnimator;
 
+        al::setVelocity(player, sead::Vector3f::zero);
+
         if (al::isFirstStep(player)
         ) {
             anim->endSubAnim();
@@ -730,6 +732,8 @@ public:
         auto* model = player->mModelHolder->findModelActor("Normal");
         auto* cape = al::tryGetSubActor(model, "ケープ");
         auto* effect = static_cast<al::IUseEffectKeeper*>(model);
+
+        al::setVelocity(player, sead::Vector3f::zero);
 
         if (al::isFirstStep(player)
         ) {
@@ -760,12 +764,15 @@ public:
             al::tryEmitEffect(effect, "AppearBloom", nullptr);
             al::tryStartSe(player, "Bloom");
         }
-        if (isBrawl && anim->isAnim("TauntBrawl") && al::isStep(player, 65))
-            al::tryStartSe(player, "FireOn");
-        if (isBrawl && anim->isAnim("TauntBrawl") && al::isStep(player, 160)
+        if ((isBrawl || isSuper)
+            && anim->isAnim("TauntBrawl")
         ) {
-            al::tryStopSe(player, "FireOn", -1, nullptr);
-            al::tryStartSe(player, "FireOff");
+            if (al::isStep(player, 65)) al::tryStartSe(player, "FireOn");
+            if (al::isStep(player, 160)
+            ) {
+                al::tryStopSe(player, "FireOn", -1, nullptr);
+                al::tryStartSe(player, "FireOff");
+            }
         }
         if (anim->isAnimEnd()
         ) {
@@ -1633,33 +1640,28 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             if ((canFireball || (anim && (isFloating)))
                 && al::isPadTriggerR(-1)
             ) {
-                if (fireStep < 0 && fireBall && al::isDead(fireBall)) {
-
+                if (fireStep < 0 && fireBall
+                    && al::isDead(fireBall)
+                ) {
                     fireStep = 0;
-                    nextThrowLeft = !nextThrowLeft;
                     canFireball = false;
 
                     anim->startUpperBodyAnim(fireAnim);
                     if (onGround && !isWater) anim->startAnim(fireAnim);
-
-                } else {
-                    canFireball = false;
-                }
+                } else canFireball = false;
             }
             if (fireStep >= 0) {
-                if (fireStep == 5) {
+                if (fireStep == 2) {
                     if (model && fireBall) {
-                        fireBall->attach(al::getJointMtxPtr(model, jointName), sead::Vector3f(), sead::Vector3f(), "Wait");
-                    
                         sead::Vector3f startPos;
                         al::calcJointPos(&startPos, model, jointName);
-                        sead::Quatf startQuat = al::getQuat(model);
-                        sead::Vector3f dir;
-                        al::calcQuatFront(&dir, model);
-                        dir.normalize();
-                        sead::Vector3 offset = dir * 10.0f;
 
-                        fireBall->shoot(startPos, startQuat, offset, true, 0, false);
+                        sead::Vector3f offset(0.0f, 0.0f, 0.0f);
+
+                        fireBall->shoot(startPos, al::getQuat(model), offset, true, 0, false);
+                        al::tryStartSe(thisPtr, "FireBallShoot");
+                        
+                        nextThrowLeft = !nextThrowLeft;
                     }
                 }
                 if (onGround && !isWater
@@ -1678,7 +1680,6 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                 }
             }
         }
-
         canFireball = false;
 
         // Apply effects for dash
