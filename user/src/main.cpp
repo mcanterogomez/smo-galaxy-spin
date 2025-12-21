@@ -200,6 +200,7 @@ bool isNearSwoonedEnemy = false;  // Global flag to track if near a swooned enem
 // Global flags to track states
 bool isMario = false;
 bool isFeather = false;
+bool isFire = false;
 bool isTanooki = false;
 bool isBrawl = false;
 bool isSuper = false;
@@ -246,6 +247,8 @@ struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerAct
         isMario = (costume && al::isEqualString(costume, "Mario"))
             && (cap && al::isEqualString(cap, "Mario"));
         isFeather = (costume && al::isEqualString(costume, "MarioFeather"));
+        isFire = (costume && al::isEqualString(costume, "MarioColorFire"))
+            && (cap && al::isEqualString(cap, "MarioColorFire"));
         isTanooki = (costume && al::isEqualString(costume, "MarioTanooki"))
             && (cap && al::isEqualString(cap, "MarioTanooki"));
         isBrawl = (costume && al::isEqualString(costume, "MarioColorBrawl"))
@@ -268,9 +271,6 @@ struct PlayerStateWaitExeWait : public mallow::hook::Trampoline<PlayerStateWaitE
     static void Callback(PlayerStateWait* state) {
         Orig(state);
 
-        if (!isMario && !isBrawl && !isSuper)
-        return;
-
         if (al::isFirstStep(state)
         ) {
             const char* special = nullptr;
@@ -278,8 +278,8 @@ struct PlayerStateWaitExeWait : public mallow::hook::Trampoline<PlayerStateWaitE
             ) {
                 if (al::isEqualString(special, "BattleWait")
                 ) {
-                    if (isMario) state->requestAnimName("WaitBrawl");
-                    else if (isBrawl) state->requestAnimName("WaitBrawlFight");
+                    state->requestAnimName("WaitBrawl");
+                    if (isBrawl) state->requestAnimName("WaitBrawlFight");
                     else if (isSuper) state->requestAnimName("WaitSuperFight");
                 }
                 else
@@ -713,7 +713,7 @@ public:
         ) {
             anim->endSubAnim();
             anim->startAnim("WearEnd");
-            if (isBrawl) anim->startAnim("WearEndBrawl");
+            if (isFire || isBrawl) anim->startAnim("WearEndBrawl");
             if (isSuper) anim->startAnim("WearEndSuper");
         }
         if (anim->isAnimEnd()
@@ -740,19 +740,26 @@ public:
             anim->endSubAnim();
             anim->startAnim("TauntMario");
             if (tauntRightAlt) anim->startAnim("AreaWait64");
-            if (isBrawl || isSuper) anim->startAnim("TauntBrawl");
-            if (isBrawl && tauntRightAlt) anim->startAnim("LandJump3");
+            if (isFire || isBrawl || isSuper) anim->startAnim("TauntBrawl");
+            if (isBrawl && tauntRightAlt) {
+                if (cape && al::isDead(cape)) anim->startAnim("LandJump3");
+                else anim->startAnim("TauntFeather");
+            }
             if (isFeather || isTanooki) anim->startAnim("TauntFeather");
             if ((isFeather || isTanooki) && tauntRightAlt) anim->startAnim("AreaWaitSayCheese");
-            if (isSuper && tauntRightAlt) anim->startAnim("TauntSuper");
+            if ((isFire || isSuper) && tauntRightAlt) anim->startAnim("TauntSuper");
         }
-        if (isSuper && anim->isAnim("TauntSuper") && al::isStep(player, 14)
+        if (anim->isAnim("TauntSuper") && al::isStep(player, 14)
         ) {
-            al::tryEmitEffect(player, "InvincibleStart", nullptr);
-            al::tryEmitEffect(effect, "BonfireSuper", nullptr);
-            al::tryEmitEffect(effect, "ChargeSuper", nullptr);
-            al::tryStartSe(player, "StartInvincible");
-            al::tryStartSe(player, "FireOn");
+            if (isFire) {
+                al::tryEmitEffect(effect, "BonfireSuper", nullptr);
+                al::tryStartSe(player, "FireOn");
+            }
+            if (isSuper) {
+                al::tryEmitEffect(player, "InvincibleStart", nullptr);
+                al::tryEmitEffect(effect, "ChargeSuper", nullptr);
+                al::tryStartSe(player, "StartInvincible");
+            }
         }
         if (isBrawl
             && anim->isAnim("LandJump3")
@@ -764,7 +771,7 @@ public:
             al::tryEmitEffect(effect, "AppearBloom", nullptr);
             al::tryStartSe(player, "Bloom");
         }
-        if ((isBrawl || isSuper)
+        if ((isFire || isBrawl || isSuper)
             && anim->isAnim("TauntBrawl")
         ) {
             if (al::isStep(player, 65)) al::tryStartSe(player, "FireOn");
@@ -1283,7 +1290,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     }
                 }
             }
-            if (isSpinAttack || isDoubleSpinAttack
+            if (isSpinAttack || isDoubleSpinAttack || isSpinFallback
             ) {
                 if (al::isEqualSubString(typeid(*targetHost).name(), "BlockQuestion")
                     || al::isEqualSubString(typeid(*targetHost).name(), "BlockBrick")
@@ -1563,7 +1570,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             && face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry")) al::startActionSubActor(model, "顔", "WaitAngry");
 
         if (isBrawl && anim && anim->isAnim("JumpDashFast") && !anim->isAnim("Jump")) anim->startAnim("Jump");
-        if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
+        if ((isFire || isBrawl) && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
 
         if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
 
@@ -1636,7 +1643,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         bool isFloating = al::isActionPlaying(model, "GlideFloat")
             || al::isActionPlaying(model, "GlideFloatSuper");
 
-        if (isMario || isBrawl || isSuper) {
+        if (isMario || isFire || isBrawl || isSuper) {
             if ((canFireball || (anim && (isFloating)))
                 && al::isPadTriggerR(-1)
             ) {
@@ -2231,7 +2238,7 @@ struct PlayerSeCtrlUpdateMove : public mallow::hook::Inline<PlayerSeCtrlUpdateMo
 
 struct PlayerSeCtrlUpdateWearEnd : public mallow::hook::Inline<PlayerSeCtrlUpdateWearEnd> {
     static void Callback(exl::hook::InlineCtx* ctx) {
-        if (isBrawl) ctx->X[20] = reinterpret_cast<u64>("WearEndBrawl");
+        if (isFire || isBrawl) ctx->X[20] = reinterpret_cast<u64>("WearEndBrawl");
         if (isSuper) ctx->X[20] = reinterpret_cast<u64>("WearEndSuper");
     }
 };
