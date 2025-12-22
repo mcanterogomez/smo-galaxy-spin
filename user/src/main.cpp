@@ -373,7 +373,6 @@ public:
         bool isCarrying = player->mCarryKeeper->isCarry();
         bool isFinish = state->mAnimator->isAnim("KoopaCapPunchFinishL")
             || state->mAnimator->isAnim("KoopaCapPunchFinishR");
-
         bool didSpin = player->mInput->isSpinInput();
         int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
 
@@ -509,15 +508,13 @@ public:
         bool didSpin = player->mInput->isSpinInput();
         int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
         bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
-        bool isSpinAttack = state->mAnimator->isAnim("SpinAttackLeft")
-            || state->mAnimator->isAnim("SpinAttackRight")
-            || state->mAnimator->isAnim("TailAttack");
 
         isSpinActive = true;
         
         if(al::isFirstStep(state)
         ) {
-            if (!isSpinning && !isSpinAttack) state->mAnimator->endSubAnim();
+            const char* cur = state->mAnimator->mCurAnim.cstr();
+            if (!al::isEqualSubString(cur, "SpinCap")) state->mAnimator->endSubAnim();
             
             if (!isSpinning) {
                 if (didSpin) {
