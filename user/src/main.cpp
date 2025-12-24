@@ -1634,14 +1634,18 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
         const char* fireAnim  = nextThrowLeft ? "FireL" : "FireR";
 
         FireBrosFireBall* fireBall = (FireBrosFireBall*) fireBalls->getDeadActor();
+        bool isMove = thisPtr->mInput->isMove();
         bool onGround = rs::isOnGround(thisPtr, thisPtr->mCollider);
         bool isWater = al::isInWater(thisPtr);
+        bool isSurface = thisPtr->mWaterSurfaceFinder->isFoundSurface();
 
+        bool isFullBody = (!isMove && onGround && (!isWater || isSurface));
         bool isFloating = al::isActionPlaying(model, "GlideFloat")
             || al::isActionPlaying(model, "GlideFloatSuper");
 
-        if (isMario || isFire || isBrawl || isSuper) {
-            if ((canFireball || (anim && (isFloating)))
+        if (isMario || isFire || isBrawl || isSuper
+        ) {
+            if ((canFireball || isFloating)
                 && al::isPadTriggerR(-1)
             ) {
                 if (fireStep < 0 && fireBall
@@ -1651,37 +1655,35 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                     canFireball = false;
 
                     anim->startUpperBodyAnim(fireAnim);
-                    if (onGround && !isWater) anim->startAnim(fireAnim);
-                } else canFireball = false;
+                    if (isFullBody) anim->startAnim(fireAnim);
+                }
+                else canFireball = false;
             }
-            if (fireStep >= 0) {
-                if (fireStep == 2) {
-                    if (model && fireBall) {
-                        sead::Vector3f startPos;
-                        al::calcJointPos(&startPos, model, jointName);
-
-                        sead::Vector3f offset(0.0f, 0.0f, 0.0f);
-
-                        fireBall->shoot(startPos, al::getQuat(model), offset, true, 0, false);
-                        al::tryStartSe(thisPtr, "FireBallShoot");
-                        
-                        nextThrowLeft = !nextThrowLeft;
-                    }
-                }
-                if (onGround && !isWater
-                    && (anim->isAnimEnd() || anim->isUpperBodyAnimEnd())
+            if (fireStep >= 0
+            ) {
+                if (fireStep > 0 && !(anim->isUpperBodyAnim("FireL") || anim->isUpperBodyAnim("FireR"))
                 ) {
-                    al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
+                    fireStep = -1;
+                    return;
+                }
+                if (fireStep == 2
+                ) {
+                    sead::Vector3f startPos;
+                    al::calcJointPos(&startPos, model, jointName);
+                    sead::Vector3f offset(0.0f, 0.0f, 0.0f);
+
+                    fireBall->shoot(startPos, al::getQuat(model), offset, true, 0, false);
+                    al::tryStartSe(thisPtr, "FireBallShoot");
+
+                    nextThrowLeft = !nextThrowLeft;
+                }
+                if (isFullBody ? (anim->isAnimEnd() || anim->isUpperBodyAnimEnd()) : anim->isUpperBodyAnimEnd()
+                ) {
+                    if (isFullBody) al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
                     anim->clearUpperBodyAnim();
                     fireStep = -1;
                 }
-                else if (anim->isUpperBodyAnimEnd()
-                ) {
-                    anim->clearUpperBodyAnim();
-                    fireStep = -1;
-                } else {
-                    fireStep++;
-                }
+                else fireStep++;
             }
         }
         canFireball = false;
@@ -2004,7 +2006,6 @@ struct PlayerStateJumpTryCountUp : public mallow::hook::Trampoline<PlayerStateJu
 
 struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActorHakoniwaExeSquat> {
     static void Callback(PlayerActorHakoniwa* thisPtr) {
-        // Block while Fire throwing
         if (isFireThrowing()) return;
 
         if (isPadTriggerGalaxySpin(-1)
@@ -2024,9 +2025,6 @@ struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActor
 
 struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerActorHakoniwaExeRolling> {
     static void Callback(PlayerActorHakoniwa* thisPtr) {
-        // Block while Fire throwing
-        if (isFireThrowing()) return;
-
         if (isPadTriggerGalaxySpin(-1)
             && !thisPtr->mAnimator->isAnim("SpinSeparate")
         ) {
