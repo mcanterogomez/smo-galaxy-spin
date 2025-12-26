@@ -1798,6 +1798,20 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
     }
 };
 
+struct FireballAttackSensorHook : public mallow::hook::Trampoline<FireballAttackSensorHook> {
+    static void Callback(FireBrosFireBall* thisPtr, al::HitSensor* source, al::HitSensor* target) {
+        if (!thisPtr || !source || !target) return;
+
+        al::LiveActor* sourceHost = al::getSensorHost(source);
+        al::LiveActor* targetHost = al::getSensorHost(target);
+        
+        if (!sourceHost || !targetHost) return;
+        if (targetHost == isHakoniwa) return;
+
+        Orig(thisPtr, source, target);
+    }
+};
+
 struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSensorHook> {
     static void Callback(HammerBrosHammer* thisPtr, al::HitSensor* source, al::HitSensor* target) {
         if (!thisPtr || !source || !target) return;
@@ -2351,6 +2365,7 @@ extern "C" void userMain() {
     PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
 
     // Handles Mario's hammer attack
+    FireballAttackSensorHook::InstallAtSymbol("_ZN16FireBrosFireBall12attackSensorEPN2al9HitSensorES2_");
     HammerAttackSensorHook::InstallAtSymbol("_ZN16HammerBrosHammer12attackSensorEPN2al9HitSensorES2_");
     LiveActorMovementHook::InstallAtSymbol("_ZN2al9LiveActor8movementEv");
     PlayerCarryKeeperStartCarry::InstallAtSymbol("_ZN17PlayerCarryKeeper10startCarryEPN2al9HitSensorE");
