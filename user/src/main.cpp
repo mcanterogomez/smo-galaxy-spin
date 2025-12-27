@@ -224,11 +224,11 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
         if (isFire
         ) {
-            if ((canFireball || isFloating)
+            if (fireStep < 0
+                && (canFireball || isFloating)
                 && al::isPadTriggerR(-1)
             ) {
-                if (fireStep < 0 && fireBall
-                    && al::isDead(fireBall)
+                if (fireBall && al::isDead(fireBall)
                 ) {
                     fireStep = 0;
                     canFireball = false;
@@ -236,15 +236,14 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                     anim->startUpperBodyAnim(fireAnim);
                     if (isFullBody) anim->startAnim(fireAnim);
                 }
-                else canFireball = false;
             }
             if (fireStep >= 0
             ) {
-                if (fireStep > 0 && !(anim->isUpperBodyAnim("FireL") || anim->isUpperBodyAnim("FireR"))
-                ) {
-                    fireStep = -1;
-                    return;
-                }
+                bool isShooting = anim->isUpperBodyAnim("FireL") || anim->isUpperBodyAnim("FireR")
+                    || anim->isAnim("FireL") || anim->isAnim("FireR");
+
+                if (fireStep >= 0 && !isShooting) { fireStep = -1; return; }
+
                 if (fireStep == 2
                 ) {
                     sead::Vector3f startPos;
@@ -256,7 +255,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
                     nextThrowLeft = !nextThrowLeft;
                 }
-                if (isFullBody ? (anim->isAnimEnd() || anim->isUpperBodyAnimEnd()) : anim->isUpperBodyAnimEnd()
+                if (isFullBody ? anim->isAnimEnd() : anim->isUpperBodyAnimEnd()
                 ) {
                     if (isFullBody) al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
                     anim->clearUpperBodyAnim();
