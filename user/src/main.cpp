@@ -1645,11 +1645,11 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
         if (isMario || isFire || isBrawl || isSuper
         ) {
-            if ((canFireball || isFloating)
+            if (fireStep < 0
+                && (canFireball || isFloating)
                 && al::isPadTriggerR(-1)
             ) {
-                if (fireStep < 0 && fireBall
-                    && al::isDead(fireBall)
+                if (fireBall && al::isDead(fireBall)
                 ) {
                     fireStep = 0;
                     canFireball = false;
@@ -1657,15 +1657,14 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                     anim->startUpperBodyAnim(fireAnim);
                     if (isFullBody) anim->startAnim(fireAnim);
                 }
-                else canFireball = false;
             }
             if (fireStep >= 0
             ) {
-                if (fireStep > 0 && !(anim->isUpperBodyAnim("FireL") || anim->isUpperBodyAnim("FireR"))
-                ) {
-                    fireStep = -1;
-                    return;
-                }
+                bool isShooting = anim->isUpperBodyAnim("FireL") || anim->isUpperBodyAnim("FireR")
+                    || anim->isAnim("FireL") || anim->isAnim("FireR");
+
+                if (fireStep >= 0 && !isShooting) { fireStep = -1; return; }
+
                 if (fireStep == 2
                 ) {
                     sead::Vector3f startPos;
@@ -1677,7 +1676,7 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
 
                     nextThrowLeft = !nextThrowLeft;
                 }
-                if (isFullBody ? (anim->isAnimEnd() || anim->isUpperBodyAnimEnd()) : anim->isUpperBodyAnimEnd()
+                if (isFullBody ? anim->isAnimEnd() : anim->isUpperBodyAnimEnd()
                 ) {
                     if (isFullBody) al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
                     anim->clearUpperBodyAnim();
@@ -1795,6 +1794,20 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                 }
             }
         }
+    }
+};
+
+struct FireballAttackSensorHook : public mallow::hook::Trampoline<FireballAttackSensorHook> {
+    static void Callback(FireBrosFireBall* thisPtr, al::HitSensor* source, al::HitSensor* target) {
+        if (!thisPtr || !source || !target) return;
+
+        al::LiveActor* sourceHost = al::getSensorHost(source);
+        al::LiveActor* targetHost = al::getSensorHost(target);
+        
+        if (!sourceHost || !targetHost) return;
+        if (targetHost == isHakoniwa) return;
+
+        Orig(thisPtr, source, target);
     }
 };
 
@@ -2351,6 +2364,7 @@ extern "C" void userMain() {
     PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
 
     // Handles Mario's hammer attack
+    FireballAttackSensorHook::InstallAtSymbol("_ZN16FireBrosFireBall12attackSensorEPN2al9HitSensorES2_");
     HammerAttackSensorHook::InstallAtSymbol("_ZN16HammerBrosHammer12attackSensorEPN2al9HitSensorES2_");
     LiveActorMovementHook::InstallAtSymbol("_ZN2al9LiveActor8movementEv");
     PlayerCarryKeeperStartCarry::InstallAtSymbol("_ZN17PlayerCarryKeeper10startCarryEPN2al9HitSensorE");
