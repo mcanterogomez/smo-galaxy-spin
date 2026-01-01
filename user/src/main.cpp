@@ -193,6 +193,7 @@ bool isNearSwoonedEnemy = false;  // Global flag to track if near a swooned enem
 
 // Global flags to track states
 bool isMario = false;
+bool isNoCap = false;
 bool isFeather = false;
 bool isFire = false;
 bool isTanooki = false;
@@ -669,6 +670,7 @@ struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerAct
 
         isMario = (costume && al::isEqualString(costume, "Mario"))
             && (cap && al::isEqualString(cap, "Mario"));
+        isNoCap = (cap && al::isEqualString(cap, "MarioNoCap"));
         isFeather = (costume && al::isEqualString(costume, "MarioFeather"));
         isFire = (costume && al::isEqualString(costume, "MarioColorFire"))
             && (cap && al::isEqualString(cap, "MarioColorFire"));
@@ -1505,7 +1507,33 @@ struct FireballAttackSensorHook : public mallow::hook::Trampoline<FireballAttack
         if (!sourceHost || !targetHost) return;
         if (targetHost == isHakoniwa) return;
 
+        sead::Vector3f sourcePos = al::getSensorPos(source);
+        sead::Vector3f targetPos = al::getSensorPos(target);
+        sead::Vector3f spawnPos = (sourcePos + targetPos) * 0.5f;
+        spawnPos.y += 20.0f;
+
         Orig(thisPtr, source, target);
+
+        if(thisPtr && al::isSensorName(source, "AttackHack")
+        ) {
+            bool isInHitBuffer = false;
+            for(int i = 0; i < hitBufferCount; i++) {
+                if(hitBuffer[i] == targetHost) {
+                    isInHitBuffer = true;
+                    break;
+                }
+            }
+            if(!isInHitBuffer
+            ) {
+                if (rs::sendMsgHackAttack(target, source)
+                    || al::sendMsgExplosion(target, source, nullptr)
+                ) {
+                    hitBuffer[hitBufferCount++] = targetHost;
+                    if (!al::isEffectEmitting(sourceHost, "Hit")) al::tryEmitEffect(isHakoniwa, "Hit", &spawnPos);
+                    return;
+                }
+            }
+        }
     }
 };
 
@@ -1715,6 +1743,25 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
             }
         }
 
+        // Handle life recovery
+		static int stillFrames = 0;
+		static int healFrames = 0;
+
+        if (isMario || isNoCap) {
+            if (GameDataFunction::isPlayerHitPointMax(thisPtr)) { stillFrames = 0; healFrames = 0; }
+            else {
+                bool still = rs::isOnGround(thisPtr, thisPtr->mCollider) && thisPtr->mInput && !thisPtr->mInput->isMove();
+
+                if (!still) { stillFrames = 0; healFrames = 0; }
+                else {
+                    if (stillFrames < 120) stillFrames++;
+                    int interval = (stillFrames >= 120) ? 60 : 600;
+
+                    if (++healFrames >= interval) { GameDataFunction::recoveryPlayer(thisPtr); healFrames = 0; }
+                }
+            }
+        } else { stillFrames = 0; healFrames = 0; }
+
         // Handle Koopa punch logic
         if (isKoopa && !al::isNear(thisPtr, isKoopa, 500.0f)) isFinalPunch = false;
 
@@ -1840,6 +1887,8 @@ struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> 
                 if (!isShooting) { fireStep = -1; return; }
                 if (fireStep == 2
                 ) {
+                    hitBufferCount = 0;
+
                     sead::Vector3f startPos;
                     al::calcJointPos(&startPos, model, jointName);
                     sead::Vector3f offset(0.0f, 0.0f, 0.0f);
