@@ -216,11 +216,17 @@ bool isDoubleJumpConsume=false; // Global flag to track double jump consumed
 int isCapeActive = -1; // Global flag to track cape state
 
 // Custom Nerves
+class PlayerStateSpinCapNrvGalaxySpinAir; 
+extern PlayerStateSpinCapNrvGalaxySpinAir GalaxySpinAir; 
+
 class PlayerStateSpinCapNrvGalaxySpinGround : public al::Nerve {
 public:
     void execute(al::NerveKeeper* keeper) const override {
         PlayerStateSpinCap* state = keeper->getParent<PlayerStateSpinCap>();
         PlayerActorHakoniwa* player = static_cast<PlayerActorHakoniwa*>(state->mActor);
+        auto* model = player->mModelHolder->findModelActor("Normal");
+        auto* cape = al::tryGetSubActor(model, "ケープ");
+        bool isCape = (isMario && cape && al::isAlive(cape)) || isFeather;
 
         bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
         bool isRotatingL = state->mAnimator->isAnim("SpinGroundL");
@@ -272,7 +278,10 @@ public:
                     state->mAnimator->startAnim("Kick");
                     al::validateHitSensor(state->mActor, "Punch");
                 } else {
-                    if (isTanooki) {
+                    if (isCape) {
+                        al::setNerve(state, reinterpret_cast<al::Nerve*>(&GalaxySpinAir));
+                        return;
+                    } else if (isTanooki) {
                         state->mAnimator->startSubAnim("TailAttack");
                         state->mAnimator->startAnim("TailAttack");
                         al::validateHitSensor(state->mActor, "GalaxySpin");
@@ -354,17 +363,28 @@ public:
     void execute(al::NerveKeeper* keeper) const override {
         PlayerStateSpinCap* state = keeper->getParent<PlayerStateSpinCap>();
         PlayerActorHakoniwa* player = static_cast<PlayerActorHakoniwa*>(state->mActor);
+        auto* model = player->mModelHolder->findModelActor("Normal");
+        auto* cape = al::tryGetSubActor(model, "ケープ");
+        bool isCape = (isMario && cape && al::isAlive(cape)) || isFeather;
 
-        // true only while that exact anim is playing
         bool isRotatingAirL  = state->mAnimator->isAnim("StartSpinJumpL")
             || state->mAnimator->isAnim("RestartSpinJumpL");
         bool isRotatingAirR  = state->mAnimator->isAnim("StartSpinJumpR")
             || state->mAnimator->isAnim("RestartSpinJumpR");
+        bool isCarrying = player->mCarryKeeper->isCarry();
         bool didSpin = player->mInput->isSpinInput();
         int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
         bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
 
         isSpinActive = true;
+
+        if (state->mAnimator->isAnim("CapeAttack")
+            && cape && al::isDead(cape)
+        ) {
+            state->mAnimator->startAnim("SpinSeparate");
+            al::validateHitSensor(state->mActor, "GalaxySpin"); 
+            galaxySensorRemaining = 21; 
+        }
         
         if(al::isFirstStep(state)
         ) {
@@ -385,6 +405,14 @@ public:
                     state->mAnimator->startAnim("SpinAttackAirRight");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
                     galaxySensorRemaining = 41;
+                } else if (isCarrying) {
+                    state->mAnimator->startAnim("SpinSeparate");
+                    al::validateHitSensor(state->mActor, "GalaxySpin");
+                    galaxySensorRemaining = 21;
+                } else if (isCape) {
+                    state->mAnimator->startAnim("CapeAttack");
+                    al::validateHitSensor(state->mActor, "GalaxySpin");
+                    galaxySensorRemaining = 21;
                 } else if (isTanooki) {
                     state->mAnimator->startAnim("TailAttack");
                     al::validateHitSensor(state->mActor, "GalaxySpin");
@@ -399,7 +427,7 @@ public:
         
         state->updateSpinAirNerve();
 
-        if (isTanooki
+        if ((isCape || isTanooki)
             && state->mAnimator->isAnimEnd()
         ) {
             al::invalidateHitSensor(state->mActor, "GalaxySpin");
@@ -748,6 +776,7 @@ static inline int TryCapSpinPre(PlayerActorHakoniwa* player) {
         || player->mAnimator->isAnim("KoopaCapPunchFinishR")        
         || player->mAnimator->isAnim("RabbitGet")
         || player->mAnimator->isAnim("Kick")
+        || player->mAnimator->isAnim("CapeAttack")
         || player->mAnimator->isAnim("TailAttack")) return -1;
 
         if (canGalaxySpin) triggerGalaxySpin = true;
@@ -930,6 +959,7 @@ struct PlayerStateSpinCapIsEnableCancelGround : public mallow::hook::Trampoline<
             || state->mAnimator->isAnim("SpinSeparateSwim")
             || state->mAnimator->isAnim("SpinAttackLeft")
             || state->mAnimator->isAnim("SpinAttackRight")
+            || state->mAnimator->isAnim("CapeAttack")
             || state->mAnimator->isAnim("TailAttack");
 
         // Allow canceling only if Mario is in the SpinSeparate move
@@ -1006,6 +1036,10 @@ struct PlayerStateSwimKill : public mallow::hook::Trampoline<PlayerStateSwimKill
 
 struct PlayerSpinCapAttackStartSpinSeparateSwimSurface : public mallow::hook::Trampoline<PlayerSpinCapAttackStartSpinSeparateSwimSurface> {
     static void Callback(PlayerSpinCapAttack* thisPtr, PlayerAnimator* animator) {
+        auto* holder = isHakoniwa->mModelHolder;
+        auto* model  = holder->findModelActor("Normal");
+        auto* cape = al::tryGetSubActor(model, "ケープ");
+
         if(!isGalaxySpin && !triggerGalaxySpin) {
             Orig(thisPtr, animator);
             return;
@@ -1013,6 +1047,7 @@ struct PlayerSpinCapAttackStartSpinSeparateSwimSurface : public mallow::hook::Tr
 
         if (isNearCollectible) animator->startAnim("RabbitGet");
         else if (isNearTreasure || isNearSwoonedEnemy) animator->startAnim("Kick");
+        else if ((isMario && cape && al::isAlive(cape)) || isFeather) animator->startAnim("CapeAttack");
         else if (isTanooki) animator->startAnim("TailAttack");
         else animator->startAnim("SpinSeparateSwim");
     }
@@ -1020,6 +1055,10 @@ struct PlayerSpinCapAttackStartSpinSeparateSwimSurface : public mallow::hook::Tr
 
 struct PlayerSpinCapAttackStartSpinSeparateSwim : public mallow::hook::Trampoline<PlayerSpinCapAttackStartSpinSeparateSwim> {
     static void Callback(PlayerSpinCapAttack* thisPtr, PlayerAnimator* animator) {
+        auto* holder = isHakoniwa->mModelHolder;
+        auto* model  = holder->findModelActor("Normal");
+        auto* cape = al::tryGetSubActor(model, "ケープ");
+
         if(!isGalaxySpin && !triggerGalaxySpin) {
             Orig(thisPtr, animator);
             return;
@@ -1027,6 +1066,7 @@ struct PlayerSpinCapAttackStartSpinSeparateSwim : public mallow::hook::Trampolin
 
         if (isNearCollectible) animator->startAnim("RabbitGet");
         else if (isNearTreasure || isNearSwoonedEnemy) animator->startAnim("Kick");
+        else if ((isMario && cape && al::isAlive(cape)) || isFeather) animator->startAnim("CapeAttack");
         else if (isTanooki) animator->startAnim("TailAttack");
         else animator->startAnim("SpinSeparateSwim");
     }
@@ -1217,6 +1257,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     || al::isActionPlaying(thisPtr->mModelHolder->findModelActor("Normal"), "MoveSuper")
                     || al::isEqualString(thisPtr->mAnimator->mCurAnim, "JumpBroad8")
                     || al::isEqualString(thisPtr->mAnimator->mCurAnim, "Glide")
+                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "CapeAttack")
                     || al::isEqualString(thisPtr->mAnimator->mCurAnim, "TailAttack"));
 
         bool isDoubleSpinAttack = al::isSensorName(source, "DoubleSpin") && thisPtr->mAnimator
@@ -1460,6 +1501,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         || rs::sendMsgCapAttack(target, source)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
+                        al::tryStartSe(thisPtr, "BlowHit");
                         return;
                     }
                 }
@@ -1472,6 +1514,7 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                         || rs::sendMsgTsukkunThrust(target, source, fireDir, 0, true)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
+                        al::tryStartSe(thisPtr, "BlowHit");
                         return;
                     }
                 }
@@ -1479,15 +1522,17 @@ struct PlayerAttackSensorHook : public mallow::hook::Trampoline<PlayerAttackSens
                     && !al::isEqualSubString(typeid(*targetHost).name(), "HipDrop")
                     && !al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
                 ) {
+                    bool isBlowHit = false;
                     if (rs::sendMsgHackAttack(target, source)
                         || al::sendMsgPlayerSpinAttack(target, source, nullptr)
                         || rs::sendMsgCapReflect(target, source)
                         || al::sendMsgPlayerHipDrop(target, source, nullptr)
                         || rs::sendMsgCapAttack(target, source)
                         || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
-                        || rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero)
+                        || (isBlowHit = rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero))
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
+                        if (!isBlowHit) al::tryStartSe(thisPtr, "BlowHit");
                         return;
                     }
                 }
@@ -1648,6 +1693,7 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
                     || al::sendMsgPlayerHipDrop(target, source, nullptr)
                     || al::sendMsgPlayerObjHipDrop(target, source, nullptr)
                     || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
+                    || rs::sendMsgPlayerHipDropHipDropSwitch(target, source)
                     || rs::sendMsgHackAttack(target, source)
                     || rs::sendMsgSphinxRideAttackTouchThrough(target, source, fireDir, fireDir)
                     || rs::sendMsgCapReflect(target, source)
@@ -1658,6 +1704,7 @@ struct HammerAttackSensorHook : public mallow::hook::Trampoline<HammerAttackSens
                     || al::sendMsgExplosion(target, source, nullptr)
                 ) {
                     hitBuffer[hitBufferCount++] = targetHost;
+                    al::tryStartSe(isHakoniwa, "BlowHit");
                     return;
                 }
             }
