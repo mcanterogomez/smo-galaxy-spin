@@ -479,6 +479,13 @@ namespace AttackSensor {
         static void Callback(FireBrosFireBall* thisPtr, al::HitSensor* source, al::HitSensor* target) {
             if (!thisPtr || !source || !target) return;
 
+            const char* name = thisPtr->getName();
+            bool isFireball = al::isEqualString(name, "MarioFireBall");
+            bool isIceball  = al::isEqualString(name, "MarioIceBall");
+
+            if (!isIceball) Orig(thisPtr, source, target);
+            if (!isFireball && !isIceball) return;
+            
             al::LiveActor* sourceHost = al::getSensorHost(source);
             al::LiveActor* targetHost = al::getSensorHost(target);
 
@@ -489,8 +496,6 @@ namespace AttackSensor {
             sead::Vector3f targetPos = al::getSensorPos(target);
             sead::Vector3f spawnPos = (sourcePos + targetPos) * 0.5f;
             spawnPos.y += 20.0f;
-
-            Orig(thisPtr, source, target);
 
             if(al::isSensorName(source, "AttackHack")
             ) {

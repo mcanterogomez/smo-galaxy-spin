@@ -7,7 +7,7 @@
 
 struct TriggerCameraReset : public mallow::hook::Trampoline<TriggerCameraReset> {
     static bool Callback(al::LiveActor* actor, int port) {
-        if ((isMario || isFire || isBrawl || isSuper)
+        if ((isMario || isFire || isIce || isBrawl || isSuper)
             && al::isPadTriggerR(-1)) return false;
 
         return Orig(actor, port);

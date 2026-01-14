@@ -5,6 +5,14 @@
 
 namespace PowerUps {
 
+    struct FireBrosFireBallInitArchive : public mallow::hook::Inline<FireBrosFireBallInitArchive> {
+        static void Callback(exl::hook::InlineCtx* ctx) {
+            auto* actor = reinterpret_cast<al::LiveActor*>(ctx->X[0]);
+
+            if (al::isEqualString(actor->getName(), "MarioIceBall")) ctx->X[8] = reinterpret_cast<u64>("PlayerIceBall");
+        }
+    };
+
     inline void executeInitPlayer(PlayerActorHakoniwa* thisPtr, const al::ActorInitInfo* actorInfo, const PlayerInitInfo* playerInfo) {
         #ifdef ALLOW_POWERUPS
             auto* model = thisPtr->mModelHolder->findModelActor("Normal");
@@ -20,6 +28,15 @@ namespace PowerUps {
                 fireBalls->registerActor(fb);
             }
             fireBalls->makeActorDeadAll();
+
+            // Create and hide iceballs
+            iceBalls = new al::LiveActorGroup("PlayerIceBall", 4);
+            while (!iceBalls->isFull()) {
+                auto* ib = new FireBrosFireBall("MarioIceBall", model);
+                al::initCreateActorNoPlacementInfo(ib, *actorInfo);
+                iceBalls->registerActor(ib);
+            }
+            iceBalls->makeActorDeadAll();
         #endif
     }
 
@@ -29,6 +46,7 @@ namespace PowerUps {
             
             if (isHammer) isHammer->makeActorDead();
             if (fireBalls) fireBalls->makeActorDeadAll();
+            if (iceBalls) iceBalls->makeActorDeadAll();
         }
     };
 
@@ -111,19 +129,20 @@ namespace PowerUps {
             const char* jointName = nextThrowLeft ? "HandL" : "HandR";
             const char* fireAnim  = nextThrowLeft ? "FireL" : "FireR";
 
-            auto* fireBall = (FireBrosFireBall*) fireBalls->getDeadActor();
+            al::LiveActorGroup* currentPool = isIce ? iceBalls : fireBalls;
+            auto* projectile = (FireBrosFireBall*) currentPool->getDeadActor();
 
             bool isFullBody = (!isMove && onGround && (!isWater || isSurface));
             bool isFloating = al::isActionPlaying(model, "GlideFloat")
                 || al::isActionPlaying(model, "GlideFloatSuper");
 
-            if (isMario || isFire || isBrawl || isSuper
+            if (isMario || isFire || isIce || isBrawl || isSuper
             ) {
                 if (fireStep < 0
                     && (canFireball || isFloating)
                     && al::isPadTriggerR(-1)
                 ) {
-                    if (fireBall && al::isDead(fireBall)
+                    if (projectile && al::isDead(projectile)
                     ) {
                         fireStep = 0;
                         canFireball = false;
@@ -146,8 +165,8 @@ namespace PowerUps {
                         al::calcJointPos(&startPos, model, jointName);
                         sead::Vector3f offset(0.0f, 0.0f, 0.0f);
                         
-                        if (isSuper) fireBall->shoot(startPos, al::getQuat(model), offset, true, 0, true);
-                        else fireBall->shoot(startPos, al::getQuat(model), offset, true, 0, false);
+                        if (isSuper) projectile->shoot(startPos, al::getQuat(model), offset, true, 0, true);
+                        else projectile->shoot(startPos, al::getQuat(model), offset, true, 0, false);
                         al::tryStartSe(thisPtr, "FireBallShoot");
 
                         nextThrowLeft = !nextThrowLeft;
@@ -609,6 +628,7 @@ namespace PowerUps {
 
     inline void Install() {
         #ifdef ALLOW_POWERUPS
+            FireBrosFireBallInitArchive::InstallAtOffset(0x10082C);
             PlayerActorHakoniwaInitAfterPlacement::InstallAtSymbol("_ZN19PlayerActorHakoniwa18initAfterPlacementEv");
             
             #ifdef ALLOW_CAPPY_ONLY // Handles Fireball logic

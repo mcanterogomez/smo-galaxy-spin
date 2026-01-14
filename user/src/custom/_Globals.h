@@ -149,6 +149,7 @@ bool isMario = false;
 bool isNoCap = false;
 bool isFeather = false;
 bool isFire = false;
+bool isIce = false;
 bool isTanooki = false;
 bool isBrawl = false;
 bool isSuper = false;
@@ -158,6 +159,7 @@ static PlayerActorHakoniwa* isHakoniwa = nullptr;
 static HammerBrosHammer* isHammer = nullptr;
 static al::LiveActor* isKoopa = nullptr;
 static al::LiveActorGroup* fireBalls = nullptr;
+static al::LiveActorGroup* iceBalls = nullptr;
 
 // Powerup Specifics
 bool nextThrowLeft = true;
