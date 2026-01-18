@@ -4,6 +4,7 @@
 #include "custom/PlayerCore.h"
 #include "custom/PlayerSpinAttack.h"
 #include "custom/PowerUps.h"
+#include "custom/PlayerFreeze.h"
 
 struct TriggerCameraReset : public mallow::hook::Trampoline<TriggerCameraReset> {
     static bool Callback(al::LiveActor* actor, int port) {
@@ -22,6 +23,7 @@ extern "C" void userMain() {
     PlayerSpinAttack::Install();
     AttackSensor::Install();
     PowerUps::Install();
+    PlayerFreeze::Install();
 
     TriggerCameraReset::InstallAtSymbol("_ZN19PlayerInputFunction20isTriggerCameraResetEPKN2al9LiveActorEi");
 

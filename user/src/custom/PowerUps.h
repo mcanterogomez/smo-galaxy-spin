@@ -316,6 +316,9 @@ namespace PowerUps {
 
     struct LiveActorMovementHook : public mallow::hook::Trampoline<LiveActorMovementHook> {
         static void Callback(al::LiveActor* actor) {
+            // Check if this actor is frozen
+            if (PlayerFreeze::updateFrozenActor(actor)) return; // Skip normal movement
+            
             Orig(actor);
 
             static bool hammerEffect = false;

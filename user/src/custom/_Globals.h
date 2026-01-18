@@ -19,6 +19,7 @@
 #include "Library/Controller/SpinInputAnalyzer.h"
 #include "Library/Effect/EffectKeeper.h"
 #include "Library/Effect/EffectSystemInfo.h"
+#include "Library/HitSensor/HitSensorKeeper.h"
 #include "Library/LiveActor/ActorActionFunction.h"
 #include "Library/LiveActor/ActorCollisionFunction.h"
 #include "Library/LiveActor/ActorClippingFunction.h"
@@ -75,6 +76,7 @@
 #include "headers/PlayerJudgeWallHitDown.h"
 #include "headers/PlayerStateJump.h"
 #include "headers/PlayerStateWait.h"
+#include "headers/PlayerStainControl.h"
 #include "ModOptions.h"
 #include "math/seadVectorFwd.h"
 
