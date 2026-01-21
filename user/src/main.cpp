@@ -22,6 +22,7 @@ extern "C" void userMain() {
     PlayerSpinAttack::Install();
     AttackSensor::Install();
     PowerUps::Install();
+    PlayerFreeze::Install();
 
     TriggerCameraReset::InstallAtSymbol("_ZN19PlayerInputFunction20isTriggerCameraResetEPKN2al9LiveActorEi");
 

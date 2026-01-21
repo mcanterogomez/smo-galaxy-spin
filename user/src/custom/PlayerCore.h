@@ -3,6 +3,7 @@
 #include "custom/_Globals.h"
 #include "custom/_Nerves.h"
 #include "custom/PowerUps.h"
+#include "custom/PlayerFreeze.h"
 
 namespace PlayerCore {
 
@@ -221,6 +222,33 @@ namespace PlayerCore {
         }
     };
 
+    struct PlayerActorHakoniwaReceiveMsgHook : public mallow::hook::Trampoline<PlayerActorHakoniwaReceiveMsgHook> {
+        static bool Callback(PlayerActorHakoniwa* thisPtr, const al::SensorMsg* msg, al::HitSensor* source, al::HitSensor* target) {
+
+            if (PlayerFreeze::handleReceiveMsg(msg, source)) return false;
+
+            if (thisPtr && rs::isMsgPlayerDamage(msg)
+            ) {
+                if (isSuper) {
+                    if (source && target) al::sendMsgPush(source, target);
+                    return true;
+                }
+                auto* anim = thisPtr->mAnimator;
+                if (anim && (al::isEqualString(anim->mCurAnim, "HipDrop")
+                    || al::isEqualString(anim->mCurAnim, "HipDropPunch")
+                    || al::isEqualString(anim->mCurAnim, "HipDropReaction")
+                    || al::isEqualString(anim->mCurAnim, "HipDropPunchReaction")
+                    || al::isEqualString(anim->mCurAnim, "SpinJumpDownFallL")
+                    || al::isEqualString(anim->mCurAnim, "SpinJumpDownFallR")
+                    || al::isEqualString(anim->mCurAnim, "SwimHipDrop")
+                    || al::isEqualString(anim->mCurAnim, "SwimHipDropPunch")
+                    || al::isEqualString(anim->mCurAnim, "SwimDive"))
+                ) return true;
+            }
+            return Orig(thisPtr, msg, source, target);
+        }
+    };
+
     inline void Install() {
         // Initialize player actor
         PlayerActorHakoniwaInitPlayer::InstallAtSymbol("_ZN19PlayerActorHakoniwa10initPlayerERKN2al13ActorInitInfoERK14PlayerInitInfo");
@@ -231,5 +259,6 @@ namespace PlayerCore {
         // Handles control/movement
         //PlayerControlHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa7controlEv");
         PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
+        PlayerActorHakoniwaReceiveMsgHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa10receiveMsgEPKN2al9SensorMsgEPNS0_9HitSensorES5_");
     }
 }

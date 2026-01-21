@@ -259,10 +259,12 @@ public:
         if (al::isFirstStep(player)
         ) {
             anim->endSubAnim();
-            anim->startAnim("WearEnd");
+            
             if (isFire || isBrawl) anim->startAnim("WearEndBrawl");
-            if (isSuper) anim->startAnim("WearEndSuper");
+            else if (isSuper) anim->startAnim("WearEndSuper");
+            else anim->startAnim("WearEnd");
         }
+
         if (anim->isAnimEnd()
         ) {
             al::setNerve(player, getNerveAt(nrvHakoniwaWait));
@@ -285,41 +287,36 @@ public:
         if (al::isFirstStep(player)
         ) {
             anim->endSubAnim();
-            anim->startAnim("TauntMario");
-            if (tauntRightAlt) anim->startAnim("AreaWait64");
-            if (isFire || isBrawl || isSuper) anim->startAnim("TauntBrawl");
-            if (isBrawl && tauntRightAlt) {
-                if (cape && al::isDead(cape)) anim->startAnim("LandJump3");
-                else anim->startAnim("TauntFeather");
+
+            if (tauntRightAlt) {
+                if (isBrawl) {
+                    if (cape && al::isDead(cape)) anim->startAnim("LandJump3");
+                    else anim->startAnim("TauntFeather");
+                }
+                else if (isFire || isIce || isSuper) anim->startAnim("TauntSuper");
+                else if (isFeather || isTanooki) anim->startAnim("AreaWaitSayCheese");
+                else anim->startAnim("AreaWait64");
             }
-            if (isFeather || isTanooki) anim->startAnim("TauntFeather");
-            if ((isFeather || isTanooki) && tauntRightAlt) anim->startAnim("AreaWaitSayCheese");
-            if ((isFire || isSuper) && tauntRightAlt) anim->startAnim("TauntSuper");
+            else if (isIce) {
+                anim->startAnim("TauntIce");
+                al::tryStartSe(player, "IceOn");
+            }
+            else if (isFire || isBrawl || isSuper) anim->startAnim("TauntFire");
+            else if (isFeather || isTanooki) anim->startAnim("TauntFeather");
+            else anim->startAnim("TauntMario");
         }
-        if (anim->isAnim("TauntSuper") && al::isStep(player, 14)
+
+        if (anim->isAnim("LandJump3")
         ) {
-            if (isFire || isSuper) {
-                al::tryEmitEffect(effect, "BonfireSuper", nullptr);
-                al::tryStartSe(player, "FireOn");
-            }
-            if (isSuper) {
-                al::tryEmitEffect(player, "InvincibleStart", nullptr);
-                al::tryEmitEffect(effect, "ChargeSuper", nullptr);
-                al::tryStartSe(player, "StartInvincible");
+            if (al::isStep(player, 25)
+            ) {
+                if (cape) cape->appear();
+                isCapeActive = 1200;
+                al::tryEmitEffect(effect, "AppearBloom", nullptr);
+                al::tryStartSe(player, "Bloom");
             }
         }
-        if (isBrawl
-            && cape && al::isDead(cape)
-            && al::isStep(player, 25)
-            && anim->isAnim("LandJump3")
-        ) {
-            cape->appear();
-            isCapeActive = 1200;
-            al::tryEmitEffect(effect, "AppearBloom", nullptr);
-            al::tryStartSe(player, "Bloom");
-        }
-        if ((isFire || isBrawl || isSuper)
-            && anim->isAnim("TauntBrawl")
+        else if (anim->isAnim("TauntFire")
         ) {
             if (al::isStep(player, 65)) al::tryStartSe(player, "FireOn");
             if (al::isStep(player, 160)
@@ -328,11 +325,44 @@ public:
                 al::tryStartSe(player, "FireOff");
             }
         }
+        else if (anim->isAnim("TauntIce")
+        ) {
+            if (al::isStep(player, 160)
+            ) {
+                al::tryStopSe(player, "IceOn", -1, nullptr);
+                al::tryStartSe(player, "IceOff");
+            }
+        }
+        else if (anim->isAnim("TauntSuper")
+        ) {
+            if (isFire) player->mStainControl->recordDamageFire();
+            if (isIce) player->mStainControl->recordIceWater();
+
+            if (al::isStep(player, 14)
+            ) {
+                if (isIce) {
+                    al::tryEmitEffect(effect, "IceEffect", nullptr);
+                    al::tryStartSe(player, "FireOn");
+                }
+                if (isFire || isSuper) {
+                    al::tryEmitEffect(effect, "BonfireSuper", nullptr);
+                    al::tryStartSe(player, "FireOn");
+                }
+                if (isSuper) {
+                    al::tryEmitEffect(player, "InvincibleStart", nullptr);
+                    al::tryEmitEffect(effect, "ChargeSuper", nullptr);
+                    al::tryStartSe(player, "StartInvincible");
+                }
+            }
+        }
+
         if (anim->isAnimEnd()
         ) {
             tauntRightAlt = false;
             al::tryDeleteEffect(effect, "BonfireSuper");
+            al::tryDeleteEffect(effect, "IceEffect");
             al::tryStopSe(player, "FireOn", -1, nullptr);
+            al::tryStopSe(player, "IceOn", -1, nullptr);
             al::setNerve(player, getNerveAt(nrvHakoniwaWait));
             return;
         }
