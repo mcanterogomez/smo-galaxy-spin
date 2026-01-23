@@ -24,6 +24,7 @@
 #include "Library/LiveActor/ActorCollisionFunction.h"
 #include "Library/LiveActor/ActorClippingFunction.h"
 #include "Library/LiveActor/ActorFlagFunction.h"
+#include "Library/LiveActor/ActorInitInfo.h"
 #include "Library/LiveActor/ActorModelFunction.h"
 #include "Library/LiveActor/ActorMovementFunction.h"
 #include "Library/LiveActor/ActorPoseUtil.h"
@@ -68,6 +69,7 @@
 #include "Player/HackCap.h"
 
 // Mod‑specific & custom actors
+#include "headers/CustomGauge.h"
 #include "headers/CustomPlayerConst.h"
 #include "headers/FireBall.h"
 #include "headers/HammerBrosHammer.h"
@@ -158,11 +160,12 @@ bool isBrawl = false;
 bool isSuper = false;
 
 // Actor Pointers
-static PlayerActorHakoniwa* isHakoniwa = nullptr;
-static HammerBrosHammer* isHammer = nullptr;
-static al::LiveActor* isKoopa = nullptr;
-static al::LiveActorGroup* fireBalls = nullptr;
-static al::LiveActorGroup* iceBalls = nullptr;
+inline PlayerActorHakoniwa* isHakoniwa = nullptr;
+inline HammerBrosHammer* isHammer = nullptr;
+inline al::LiveActor* isKoopa = nullptr;
+inline al::LiveActorGroup* fireBalls = nullptr;
+inline al::LiveActorGroup* iceBalls = nullptr;
+inline CustomGauge* isGauge = nullptr;
 
 // Powerup Specifics
 bool nextThrowLeft = true;

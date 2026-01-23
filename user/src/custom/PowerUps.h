@@ -38,6 +38,9 @@ namespace PowerUps {
                 iceBalls->registerActor(ib);
             }
             iceBalls->makeActorDeadAll();
+
+            // Create custom gauge
+            isGauge = new CustomGauge(*actorInfo->layoutInitInfo);
         #endif
     }
 
@@ -191,7 +194,34 @@ namespace PowerUps {
                 || al::isActionPlaying(model, "JumpBroad8")
                 || al::isActionPlaying(model, "JumpBroad8Alt")
                 || isFloating;
-            
+
+            // Handle glide gauge
+            if (isGauge && !isSuper
+            ) {
+                static bool wasInAir = false;
+                bool inAir = !onGround && !isWater;
+                
+                // Landing
+                if (wasInAir && !inAir && isGauge->isAlive()) {
+                    isGauge->refill();
+                    isGauge->endMax();
+                }
+
+                // Gliding
+                if (isGliding && isGauge->canUse()) {
+                    isGauge->start();  // Has internal guard now
+                    isGauge->drain();
+                    if (isGauge->isEmpty()) isGauge->startTimer();
+                }
+
+                // Penalty
+                if (isGauge->tickTimer()) {
+                    if (isGliding) al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
+                }
+
+                wasInAir = inAir;
+            }
+
             if ((isMario || isBrawl)
                 && cape
             ) {
@@ -412,9 +442,14 @@ namespace PowerUps {
     };
 
     struct PlayerActorHakoniwaExeHeadSliding : public mallow::hook::Trampoline<PlayerActorHakoniwaExeHeadSliding> {
-        static void Callback(PlayerActorHakoniwa* thisPtr) {
+        static void Callback(PlayerActorHakoniwa* thisPtr) {        
             Orig(thisPtr);
-                    
+
+            static bool blockGlide = false;
+
+            if (al::isFirstStep(thisPtr)) blockGlide = (isGauge && isGauge->isEmpty());
+            if (blockGlide) return;
+
             auto* anim   = thisPtr->mAnimator;
             auto* model = thisPtr->mModelHolder->findModelActor("Normal");
             auto* cape = al::tryGetSubActor(model, "ケープ");
