@@ -75,6 +75,7 @@
 #include "headers/HammerBrosHammer.h"
 #include "headers/PlayerAnimator.h"
 #include "headers/PlayerDamageKeeper.h"
+#include "headers/PlayerIceCube.h"
 #include "headers/PlayerJudgeWallHitDown.h"
 #include "headers/PlayerStateJump.h"
 #include "headers/PlayerStateWait.h"
@@ -165,6 +166,7 @@ inline HammerBrosHammer* isHammer = nullptr;
 inline al::LiveActor* isKoopa = nullptr;
 inline al::LiveActorGroup* fireBalls = nullptr;
 inline al::LiveActorGroup* iceBalls = nullptr;
+inline al::LiveActorGroup* iceCubes = nullptr;
 inline CustomGauge* isGauge = nullptr;
 
 // Powerup Specifics

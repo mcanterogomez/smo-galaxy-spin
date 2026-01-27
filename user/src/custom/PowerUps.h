@@ -3,6 +3,7 @@
 #include "custom/_Globals.h"
 #include "custom/_Nerves.h"
 #include "custom/PlayerFreeze.h"
+#include "headers/PlayerIceCube.h"
 
 namespace PowerUps {
 
@@ -38,6 +39,14 @@ namespace PowerUps {
                 iceBalls->registerActor(ib);
             }
             iceBalls->makeActorDeadAll();
+
+            // Create ice cube
+            iceCubes = new al::LiveActorGroup("IceCubes", 32);
+            while (!iceCubes->isFull()) {
+                auto* cube = new PlayerIceCube("IceCube");
+                al::initCreateActorNoPlacementInfo(cube, *actorInfo);
+                iceCubes->registerActor(cube);
+            }
 
             // Create custom gauge
             isGauge = new CustomGauge(*actorInfo->layoutInitInfo);
