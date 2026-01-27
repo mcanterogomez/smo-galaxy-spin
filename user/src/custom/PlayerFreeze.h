@@ -25,7 +25,7 @@ namespace PlayerFreeze {
             frozenCount++;
 
             al::setActionFrameRate(actor, 0.0f);
-            al::setVelocity(actor, sead::Vector3f::zero);
+            //al::setVelocity(actor, sead::Vector3f::zero);
         }
     }
 
@@ -40,7 +40,7 @@ namespace PlayerFreeze {
         for (int i = 0; i < frozenCount; i++) {
             if (frozenList[i].actor == actor) {
                 al::setActionFrameRate(actor, 1.0f);
-                al::setVelocity(actor, sead::Vector3f::zero);
+                //al::setVelocity(actor, sead::Vector3f::zero);
 
                 if (isTimer) {                        
                     if (frozenList[i].prevAction) al::tryStartAction(actor, frozenList[i].prevAction);
@@ -58,7 +58,7 @@ namespace PlayerFreeze {
         for (int i = 0; i < frozenCount; i++) {
             if (frozenList[i].actor == actor) {
                 al::setActionFrameRate(actor, 0.0f);
-                al::setVelocity(actor, sead::Vector3f::zero);
+                //al::setVelocity(actor, sead::Vector3f::zero);
 
                 if (actor->getHitSensorKeeper()) {
                     actor->getHitSensorKeeper()->update();
@@ -91,25 +91,31 @@ namespace PlayerFreeze {
 
     // Handle Mario attacking freezed enemies
     struct SendMsgSensorToSensorUnfreeze : public mallow::hook::Trampoline<SendMsgSensorToSensorUnfreeze> {
-        static bool Callback(const al::SensorMsg& message, al::HitSensor* sender, al::HitSensor* receiver) {
+        static bool Callback(const al::SensorMsg& message, al::HitSensor* source, al::HitSensor* target) {
 
-            al::LiveActor* target = receiver ? receiver->mParentActor : nullptr;
+            al::LiveActor* sourceHost = al::getSensorHost(source);
+            al::LiveActor* targetHost = al::getSensorHost(target);
 
-            if (target && PlayerFreeze::isFrozen(target)
+            bool isMario = al::isEqualSubString(typeid(*sourceHost).name(), "PlayerActorHakoniwa");
+            bool isCappy = al::isEqualSubString(typeid(*sourceHost).name(), "HackCap");
+
+            if (!isMario && !isCappy) return Orig(message, source, target);
+            
+            if (targetHost && PlayerFreeze::isFrozen(targetHost)
             ) {
-                const char* type = typeid(message).name();
-
-                if (type && (al::isEqualSubString(type, "Trample")
-                    || al::isEqualSubString(type, "Reflect")
-                    || al::isEqualSubString(type, "HipDrop")
-                    || al::isEqualSubString(type, "Kick")
-                    || al::isEqualSubString(type, "Spin")
-                    || al::isEqualSubString(type, "Punch")
-                    || al::isEqualSubString(type, "Cap")
-                    || al::isEqualSubString(type, "Hack"))) PlayerFreeze::unfreezeActor(target);
+                if (al::isMsgPlayerTrample(&message)
+                    || al::isMsgPlayerHipDropAll(&message)
+                    || al::isMsgPlayerObjHipDropReflectAll(&message)
+                    || al::isMsgPlayerSpinAttack(&message)
+                    || rs::isMsgHackAttack(&message)
+                    || rs::isMsgCapReflect(&message)
+                    || rs::isMsgCapAttack(&message)
+                    || rs::isMsgCapAttackCollide(&message)
+                    || rs::isMsgCapAttackStayRolling(&message)
+                    || rs::isMsgCapStartLockOn(&message)
+                    || rs::isMsgTsukkunThrustAll(&message)) PlayerFreeze::unfreezeActor(targetHost);
             }
-
-            return Orig(message, sender, receiver);
+            return Orig(message, source, target);
         }
     };
 

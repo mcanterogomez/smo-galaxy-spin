@@ -481,13 +481,13 @@ namespace AttackSensor {
         static void Callback(FireBrosFireBall* thisPtr, al::HitSensor* source, al::HitSensor* target) {
             if (!thisPtr || !source || !target) return;
 
-            const char* name = thisPtr->getName();
-            bool isFireball = al::isEqualString(name, "MarioFireBall");
-            bool isIceball  = al::isEqualString(name, "MarioIceBall");
+            bool isFireball = al::isEqualString(thisPtr->getName(), "MarioFireBall");
+            bool isIceball  = al::isEqualString(thisPtr->getName(), "MarioIceBall");
 
             if (!isIceball) Orig(thisPtr, source, target);
             if (!isFireball && !isIceball) return;
-            
+            if (isIceball && al::isSensorName(target, "Wick")) return;
+
             al::LiveActor* sourceHost = al::getSensorHost(source);
             al::LiveActor* targetHost = al::getSensorHost(target);
 
@@ -520,12 +520,14 @@ namespace AttackSensor {
                         ) {
                             if (PlayerFreeze::isFrozen(targetHost)
                             ) {
-                                if (rs::sendMsgHackAttack(target, source)
+                                if (al::sendMsgPlayerFireBallAttack(target, source)
+                                    || rs::sendMsgHackAttack(target, source)
                                     || al::sendMsgExplosion(target, source, nullptr)
                                 ) {
                                     hitBuffer[hitBufferCount++] = targetHost;
+                                    PlayerFreeze::unfreezeActor(targetHost);
                                     if (!al::isEffectEmitting(sourceHost, "Hit")) al::tryEmitEffect(isHakoniwa, "Hit", &spawnPos);
-                                    al::tryEmitEffect(sourceHost, "IceHit", &spawnPos);
+                                    al::tryEmitEffect(sourceHost, "IceHit", &targetPos);
                                     al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
                                     thisPtr->kill();
                                     return;
@@ -533,25 +535,31 @@ namespace AttackSensor {
                             } else {
                                 hitBuffer[hitBufferCount++] = targetHost;
                                 PlayerFreeze::freezeActor(targetHost, 1800);
-                                al::tryEmitEffect(sourceHost, "IceHit", &spawnPos);
+                                al::tryEmitEffect(sourceHost, "IceHit", &targetPos);
                                 al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
                                 thisPtr->kill();
                                 return;
                             }
                         }
-                        else if (al::isSensorNpc(target) || al::isSensorMapObj(target)
-                        ) {
-                            if (rs::sendMsgWeaponItemGet(target, source)
-                                ||rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero)
-                                || (!al::isSensorName(target, "Wick") && al::sendMsgPlayerFireBallAttack(target, source))
+                        else {
+                            if (al::sendMsgPlayerFireBallAttack(target, source)
+                                || rs::sendMsgWeaponItemGet(target, source)
+                                || rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero)
                             ) {
                                 hitBuffer[hitBufferCount++] = targetHost;
-                                if (al::isSensorNpc(target)
-                                ) {
-                                    al::tryEmitEffect(sourceHost, "IceHit", &spawnPos);
-                                    al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
-                                    thisPtr->kill();
-                                }
+                                al::tryEmitEffect(sourceHost, "IceHit", &targetPos);
+                                al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
+                                thisPtr->kill();
+                                return;
+                            }
+                            else if (rs::sendMsgHackAttack(target, source)
+                                || al::sendMsgExplosion(target, source, nullptr)
+                            ) {
+                                hitBuffer[hitBufferCount++] = targetHost;
+                                if (!al::isEffectEmitting(sourceHost, "Hit")) al::tryEmitEffect(isHakoniwa, "Hit", &spawnPos);
+                                al::tryEmitEffect(sourceHost, "IceHit", &targetPos);
+                                al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
+                                thisPtr->kill();
                                 return;
                             }
                         }

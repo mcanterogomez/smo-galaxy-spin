@@ -199,18 +199,32 @@ namespace PowerUps {
             if (isGauge && !isSuper
             ) {
                 static bool wasInAir = false;
+                static bool isFirstGlide = true; // Track first glide
                 bool inAir = !onGround && !isWater;
                 
                 // Landing
                 if (wasInAir && !inAir && isGauge->isAlive()) {
                     isGauge->refill();
                     isGauge->endMax();
+                    isFirstGlide = true; // Reset: Next takeoff is free
                 }
 
                 // Gliding
                 if (isGliding && isGauge->canUse()) {
                     isGauge->start();  // Has internal guard now
                     isGauge->drain();
+
+                    bool isStartup = al::isActionPlaying(model, "JumpBroad8") 
+                                  || al::isActionPlaying(model, "JumpBroad8Alt");
+
+                    bool isLooping = al::isActionPlaying(model, "Glide") 
+                                  || al::isActionPlaying(model, "GlideAlt")
+                                  || al::isActionPlaying(model, "GlideFloat")
+                                  || al::isActionPlaying(model, "GlideFloatSuper");
+
+                    if (isLooping) isFirstGlide = false;
+                    if (isStartup && !isFirstGlide) isGauge->setRate(isGauge->getRate() - 0.004f); // Extra penalty
+                    
                     if (isGauge->isEmpty()) isGauge->startTimer();
                 }
 
