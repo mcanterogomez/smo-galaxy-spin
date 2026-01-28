@@ -2,11 +2,12 @@
 
 #include "ModConfig.h"
 #include "custom/_Globals.h"
+#include "headers/PlayerIceCube.h"
 
 namespace PlayerFreeze {
 
     // Frozen actor tracking
-    struct FrozenState { al::LiveActor* actor; int timer; const char* prevAction; };
+    struct FrozenState { al::LiveActor* actor; int timer; const char* prevAction; PlayerIceCube* cube; };
     inline FrozenState frozenList[32];
     inline int frozenCount = 0;
 
@@ -20,8 +21,14 @@ namespace PlayerFreeze {
         if (frozenCount < 32) {
             const char* curAction = al::getActionName(actor);
             bool isBlowDown = al::tryStartAction(actor, "BlowDown");
+            PlayerIceCube* cube = nullptr;
 
-            frozenList[frozenCount] = { actor, duration, isBlowDown ? curAction : nullptr };
+            if (iceCubes) {
+                cube = (PlayerIceCube*)iceCubes->getDeadActor();
+                if (cube) cube->freeze(actor);
+            }
+
+            frozenList[frozenCount] = { actor, duration, isBlowDown ? curAction : nullptr, cube };
             frozenCount++;
 
             al::setActionFrameRate(actor, 0.0f);
@@ -39,6 +46,8 @@ namespace PlayerFreeze {
     inline void unfreezeActor(al::LiveActor* actor, bool isTimer = false) {
         for (int i = 0; i < frozenCount; i++) {
             if (frozenList[i].actor == actor) {
+            if (frozenList[i].cube) frozenList[i].cube->unfreeze();
+
                 al::setActionFrameRate(actor, 1.0f);
                 //al::setVelocity(actor, sead::Vector3f::zero);
 
@@ -57,6 +66,11 @@ namespace PlayerFreeze {
     inline bool updateFrozenActor(al::LiveActor* actor) {
         for (int i = 0; i < frozenCount; i++) {
             if (frozenList[i].actor == actor) {
+            if (frozenList[i].cube && frozenList[i].cube->wasHit()) {
+                unfreezeActor(actor);
+                return false;
+            }
+
                 al::setActionFrameRate(actor, 0.0f);
                 //al::setVelocity(actor, sead::Vector3f::zero);
 
@@ -96,10 +110,29 @@ namespace PlayerFreeze {
             al::LiveActor* sourceHost = al::getSensorHost(source);
             al::LiveActor* targetHost = al::getSensorHost(target);
 
-            bool isMario = al::isEqualSubString(typeid(*sourceHost).name(), "PlayerActorHakoniwa");
-            bool isCappy = al::isEqualSubString(typeid(*sourceHost).name(), "HackCap");
+            bool isMario = sourceHost && al::isEqualSubString(typeid(*sourceHost).name(), "PlayerActorHakoniwa");
+            bool isCappy = sourceHost && al::isEqualSubString(typeid(*sourceHost).name(), "HackCap");
+            bool isIceCube = targetHost && al::isEqualSubString(typeid(*targetHost).name(), "PlayerIceCube");
 
             if (!isMario && !isCappy) return Orig(message, source, target);
+
+            if (isIceCube) {
+                if (al::isMsgPlayerTrample(&message)
+                    || al::isMsgPlayerHipDropAll(&message)
+                    || al::isMsgPlayerObjHipDropReflectAll(&message)
+                    || al::isMsgPlayerSpinAttack(&message)
+                    || rs::isMsgHackAttack(&message)
+                    || rs::isMsgCapReflect(&message)
+                    || rs::isMsgCapAttack(&message)
+                    || rs::isMsgCapAttackCollide(&message)
+                    || rs::isMsgCapAttackStayRolling(&message)
+                    || rs::isMsgCapStartLockOn(&message)
+                    || rs::isMsgTsukkunThrustAll(&message)
+                ) {
+                    ((PlayerIceCube*)targetHost)->markHit();
+                    return true;
+                }
+            }
             
             if (targetHost && PlayerFreeze::isFrozen(targetHost)
             ) {
@@ -121,7 +154,7 @@ namespace PlayerFreeze {
 
     inline void Install() {
         #ifdef ALLOW_POWERUPS
-            SendMsgSensorToSensorUnfreeze::InstallAtSymbol("_ZN21alActorSensorFunction21sendMsgSensorToSensorERKN2al9SensorMsgEPNS0_9HitSensorES5_");
+           //SendMsgSensorToSensorUnfreeze::InstallAtSymbol("_ZN21alActorSensorFunction21sendMsgSensorToSensorERKN2al9SensorMsgEPNS0_9HitSensorES5_");
         #endif
     }
 }

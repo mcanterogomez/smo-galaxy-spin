@@ -2,6 +2,7 @@
 #include "custom/_Globals.h"
 #include "custom/_Nerves.h"
 #include "custom/PlayerFreeze.h"
+#include "headers/PlayerIceCube.h"
 
 namespace AttackSensor {
 
@@ -100,6 +101,9 @@ namespace AttackSensor {
                 || isPunchAttack || isHipDropAttack
                 || isSpinFallback
             ) {
+                // Handle ice cubes
+                if (al::isEqualSubString(typeid(*targetHost).name(), "PlayerIceCube")) { ((PlayerIceCube*)targetHost)->markHit(); return; }
+
                 bool isInHitBuffer = false;
                 for(int i = 0; i < hitBufferCount; i++) {
                     if(hitBuffer[i] == targetHost) {
@@ -506,6 +510,9 @@ namespace AttackSensor {
 
             if(al::isSensorName(source, "AttackHack")
             ) {
+                // Handle ice cubes
+                if (al::isEqualSubString(typeid(*targetHost).name(), "PlayerIceCube")) { ((PlayerIceCube*)targetHost)->markHit(); return; }
+
                 bool isInHitBuffer = false;
                 for(int i = 0; i < hitBufferCount; i++) {
                     if(hitBuffer[i] == targetHost) {
@@ -543,6 +550,7 @@ namespace AttackSensor {
                         }
                         else {
                             if (al::sendMsgPlayerFireBallAttack(target, source)
+                                || rs::sendMsgFireBrosFireBallCollide(target, source)
                                 || rs::sendMsgWeaponItemGet(target, source)
                                 || rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero)
                             ) {

@@ -21,7 +21,7 @@ public:
         }
     }
 
-    bool receiveMsg(const al::SensorMsg* message, al::HitSensor* other, al::HitSensor* self) override {
+    /*bool receiveMsg(const al::SensorMsg* message, al::HitSensor* other, al::HitSensor* self) override {
         if (al::isMsgPlayerTrample(message)
             || al::isMsgPlayerHipDropAll(message)
             || al::isMsgPlayerObjHipDropReflectAll(message)
@@ -30,15 +30,13 @@ public:
             || rs::isMsgCapReflect(message)
             || rs::isMsgCapAttack(message)
             || rs::isMsgCapAttackCollide(message)
-            || rs::isMsgCapAttackStayRolling(message)
-            || rs::isMsgCapStartLockOn(message)
             || rs::isMsgTsukkunThrustAll(message)
         ) {
             mWasHit = true;
             return true;
         }
         return false;
-    }
+    }*/
 
     void freeze(al::LiveActor* target) {
         mTargetActor = target;
@@ -55,6 +53,7 @@ public:
 
     al::LiveActor* getTarget() const { return mTargetActor; }
     bool wasHit() const { return mWasHit; }
+    void markHit() { mWasHit = true; }
 
 private:
     al::LiveActor* mTargetActor = nullptr;
