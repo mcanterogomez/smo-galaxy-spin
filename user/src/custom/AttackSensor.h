@@ -101,15 +101,18 @@ namespace AttackSensor {
                 || isPunchAttack || isHipDropAttack
                 || isSpinFallback
             ) {
-                // Handle ice cubes
-                if (al::isEqualSubString(typeid(*targetHost).name(), "PlayerIceCube")) { ((PlayerIceCube*)targetHost)->markHit(); return; }
-
                 bool isInHitBuffer = false;
                 for(int i = 0; i < hitBufferCount; i++) {
                     if(hitBuffer[i] == targetHost) {
                         isInHitBuffer = true;
                         break;
                     }
+                }
+                // Handle ice cubes
+                if (al::isEqualSubString(typeid(*targetHost).name(), "PlayerIceCube")
+                ) {
+                    ((PlayerIceCube*)targetHost)->markHit(source);
+                    return;
                 }
                 if (!targetHost->getNerveKeeper()) return;
 
@@ -488,9 +491,10 @@ namespace AttackSensor {
             bool isFireball = al::isEqualString(thisPtr->getName(), "MarioFireBall");
             bool isIceball  = al::isEqualString(thisPtr->getName(), "MarioIceBall");
 
+            if (isIceball && al::isSensorName(target, "Wick")) return;
+
             if (!isIceball) Orig(thisPtr, source, target);
             if (!isFireball && !isIceball) return;
-            if (isIceball && al::isSensorName(target, "Wick")) return;
 
             al::LiveActor* sourceHost = al::getSensorHost(source);
             al::LiveActor* targetHost = al::getSensorHost(target);
@@ -510,9 +514,6 @@ namespace AttackSensor {
 
             if(al::isSensorName(source, "AttackHack")
             ) {
-                // Handle ice cubes
-                if (al::isEqualSubString(typeid(*targetHost).name(), "PlayerIceCube")) { ((PlayerIceCube*)targetHost)->markHit(); return; }
-
                 bool isInHitBuffer = false;
                 for(int i = 0; i < hitBufferCount; i++) {
                     if(hitBuffer[i] == targetHost) {
@@ -520,42 +521,32 @@ namespace AttackSensor {
                         break;
                     }
                 }
+                // Handle ice cubes
+                if (al::isEqualSubString(typeid(*targetHost).name(), "PlayerIceCube")
+                ) {
+                    ((PlayerIceCube*)targetHost)->markHit(source);
+                    al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
+                    thisPtr->kill();
+                    return;
+                }
                 if(!isInHitBuffer
                 ) {
                     if (isIceball) {
-                        if (al::isSensorEnemyBody(target)
+                        if (al::isSensorEnemy(target)
                         ) {
-                            if (PlayerFreeze::isFrozen(targetHost)
-                            ) {
-                                if (al::sendMsgPlayerFireBallAttack(target, source)
-                                    || rs::sendMsgHackAttack(target, source)
-                                    || al::sendMsgExplosion(target, source, nullptr)
-                                ) {
-                                    hitBuffer[hitBufferCount++] = targetHost;
-                                    PlayerFreeze::unfreezeActor(targetHost);
-                                    if (!al::isEffectEmitting(sourceHost, "Hit")) al::tryEmitEffect(isHakoniwa, "Hit", &spawnPos);
-                                    al::tryEmitEffect(sourceHost, "IceHit", &targetPos);
-                                    al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
-                                    thisPtr->kill();
-                                    return;
-                                }
-                            } else {
-                                hitBuffer[hitBufferCount++] = targetHost;
-                                PlayerFreeze::freezeActor(targetHost, 1800);
-                                al::tryEmitEffect(sourceHost, "IceHit", &targetPos);
-                                al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
-                                thisPtr->kill();
-                                return;
-                            }
+                            hitBuffer[hitBufferCount++] = targetHost;
+                            PlayerFreeze::freezeActor(targetHost, 1800);
+                            al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
+                            thisPtr->kill();
+                            return;
                         }
                         else {
-                            if (al::sendMsgPlayerFireBallAttack(target, source)
+                            if (rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero)
+                                || al::sendMsgPlayerFireBallAttack(target, source)
                                 || rs::sendMsgFireBrosFireBallCollide(target, source)
                                 || rs::sendMsgWeaponItemGet(target, source)
-                                || rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero)
                             ) {
                                 hitBuffer[hitBufferCount++] = targetHost;
-                                al::tryEmitEffect(sourceHost, "IceHit", &targetPos);
                                 al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
                                 thisPtr->kill();
                                 return;
@@ -565,7 +556,6 @@ namespace AttackSensor {
                             ) {
                                 hitBuffer[hitBufferCount++] = targetHost;
                                 if (!al::isEffectEmitting(sourceHost, "Hit")) al::tryEmitEffect(isHakoniwa, "Hit", &spawnPos);
-                                al::tryEmitEffect(sourceHost, "IceHit", &targetPos);
                                 al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
                                 thisPtr->kill();
                                 return;

@@ -6,34 +6,47 @@
 
 namespace PlayerFreeze {
 
-    // Frozen actor tracking
-    struct FrozenState { al::LiveActor* actor; int timer; const char* prevAction; PlayerIceCube* cube; };
+    // Frozen actor state tracking
+    struct FrozenState {
+        al::LiveActor* actor;
+        int timer;
+        const char* prevAction;
+        PlayerIceCube* cube;
+    };
+
     inline FrozenState frozenList[32];
     inline int frozenCount = 0;
 
+    // Freeze any actor for specified duration, spawn ice cube visual
     inline void freezeActor(al::LiveActor* actor, int duration) {
-        // Check if already frozen
+        if (!actor) return;
+        
+        // Skip if already frozen
         for (int i = 0; i < frozenCount; i++) {
             if (frozenList[i].actor == actor) return;
         }
         
-        // Add to list
-        if (frozenCount < 32) {
-            const char* curAction = al::getActionName(actor);
-            bool isBlowDown = al::tryStartAction(actor, "BlowDown");
-            PlayerIceCube* cube = nullptr;
+        if (frozenCount >= 32) return;
 
-            if (iceCubes) {
-                cube = (PlayerIceCube*)iceCubes->getDeadActor();
-                if (cube) cube->freeze(actor);
-            }
-
-            frozenList[frozenCount] = { actor, duration, isBlowDown ? curAction : nullptr, cube };
-            frozenCount++;
-
-            al::setActionFrameRate(actor, 0.0f);
-            //al::setVelocity(actor, sead::Vector3f::zero);
+        // Store current action if transitioning to BlowDown
+        const char* curAction = al::getActionName(actor);
+        bool usedBlowDown = al::tryStartAction(actor, "BlowDown");
+        
+        // Allocate cube from pool
+        PlayerIceCube* cube = nullptr;
+        if (iceCubes) {
+            cube = (PlayerIceCube*)iceCubes->getDeadActor();
+            if (cube) cube->freeze(actor);
         }
+
+        // Register frozen state
+        frozenList[frozenCount++] = { actor, duration, usedBlowDown ? curAction : nullptr, cube };
+
+        // Lock animation
+        al::setActionFrameRate(actor, 0.0f);
+        
+        // Invalidate all sensors so actor can't be hit or attack
+        al::invalidateHitSensors(actor);
     }
 
     inline bool isFrozen(al::LiveActor* actor) {
@@ -43,118 +56,126 @@ namespace PlayerFreeze {
         return false;
     }
 
+    // Remove freeze, restore action frame rate
+    // isTimer = true restores previous action (timeout unfreeze)
     inline void unfreezeActor(al::LiveActor* actor, bool isTimer = false) {
         for (int i = 0; i < frozenCount; i++) {
-            if (frozenList[i].actor == actor) {
+            if (frozenList[i].actor != actor) continue;
+
+            // Destroy visual cube
             if (frozenList[i].cube) frozenList[i].cube->unfreeze();
 
-                al::setActionFrameRate(actor, 1.0f);
-                //al::setVelocity(actor, sead::Vector3f::zero);
+            // Restore animation speed
+            al::setActionFrameRate(actor, 1.0f);
+            
+            // Re-enable sensors
+            al::validateHitSensors(actor);
 
-                if (isTimer) {                        
-                    if (frozenList[i].prevAction) al::tryStartAction(actor, frozenList[i].prevAction);
-                }
-                
-                // Remove from list
-                frozenList[i] = frozenList[frozenCount - 1];
-                frozenCount--;
-                return;
-            }
+            // Restore previous action on timeout
+            if (isTimer && frozenList[i].prevAction) al::tryStartAction(actor, frozenList[i].prevAction);
+
+            // Remove from registry (swap with last, decrement)
+            frozenList[i] = frozenList[--frozenCount];
+            return;
         }
     }
 
+    // Try sending attack message to enemy's primary sensor
+    inline bool sendAttackToEnemy(al::LiveActor* enemy, al::HitSensor* attacker) {
+        if (!attacker || !enemy) return false;
+
+        // Find target sensor (prefer Body)
+        al::HitSensor* target = al::getHitSensor(enemy, "Body");
+        if (!target && enemy->getHitSensorKeeper()) target = enemy->getHitSensorKeeper()->getSensor(0);
+        if (!target) return false;
+
+        sead::Vector3f targetPos = al::getTrans(enemy);
+        sead::Vector3f sourcePos = al::getSensorPos(attacker);
+        sead::Vector3f spawnPos = (sourcePos + targetPos) * 0.5f;
+        spawnPos.y += 20.0f;
+
+        al::LiveActor* attackerHost = al::getSensorHost(attacker);
+
+        // Fireball/Iceball specific messages
+        if (al::isEqualSubString(typeid(*attackerHost).name(), "FireBrosFireBall")
+        ) {
+            if (al::sendMsgPlayerFireBallAttack(target, attacker)
+                || rs::sendMsgFireBrosFireBallCollide(target, attacker)) return true;
+            
+            else if (rs::sendMsgHackAttack(target, attacker)
+                || al::sendMsgExplosion(target, attacker, nullptr)
+            ) {
+                if (attackerHost && !al::isEffectEmitting(attackerHost, "Hit")) al::tryEmitEffect(isHakoniwa, "Hit", &spawnPos);
+                return true;
+            }
+        }
+        // Standard attack messages (Mario/Cappy attacks)
+        else {
+            if (rs::sendMsgHackAttack(target, attacker)
+                || rs::sendMsgCapReflect(target, attacker)
+                || rs::sendMsgCapAttack(target, attacker)
+                || al::sendMsgPlayerObjHipDropReflect(target, attacker, nullptr)) return true;
+        }
+        
+        return false;
+    }
+
+    // Update frozen actor each frame
+    // Returns true if actor remains frozen
     inline bool updateFrozenActor(al::LiveActor* actor) {
         for (int i = 0; i < frozenCount; i++) {
-            if (frozenList[i].actor == actor) {
+            if (frozenList[i].actor != actor) continue;
+
+            // Handle cube hit -> kill enemy
             if (frozenList[i].cube && frozenList[i].cube->wasHit()) {
+                al::HitSensor* attacker = frozenList[i].cube->getAttackerSensor();
                 unfreezeActor(actor);
+                sendAttackToEnemy(actor, attacker);
                 return false;
             }
 
-                al::setActionFrameRate(actor, 0.0f);
-                //al::setVelocity(actor, sead::Vector3f::zero);
+            // Maintain frozen state
+            al::setActionFrameRate(actor, 0.0f);
 
-                if (actor->getHitSensorKeeper()) {
-                    actor->getHitSensorKeeper()->update();
-                    actor->getHitSensorKeeper()->attackSensor();
-                }
-                
-                if (--frozenList[i].timer <= 0) {
-                    unfreezeActor(actor, true);
-                    return false;
-                }
-                return true;
+            // Check timer expiration
+            if (--frozenList[i].timer <= 0) {
+                unfreezeActor(actor, true);
+                return false;
             }
+
+            return true;
         }
         return false;
     }
 
-    // Handle freezed enemies attacking Mario
+    // Clear all frozen actors (call on stage change/warp)
+    inline void clearAllFrozen() {
+        for (int i = 0; i < frozenCount; i++) {
+            if (frozenList[i].actor && al::isAlive(frozenList[i].actor)) {
+                // Destroy cube
+                if (frozenList[i].cube) frozenList[i].cube->unfreeze();
+                
+                // Restore animation and sensors
+                al::setActionFrameRate(frozenList[i].actor, 1.0f);
+                al::validateHitSensors(frozenList[i].actor);
+                
+                // Restore previous action
+                if (frozenList[i].prevAction) {
+                    al::tryStartAction(frozenList[i].actor, frozenList[i].prevAction);
+                }
+            }
+        }
+        frozenCount = 0;
+    }
+
+    // Prevent frozen enemies from attacking Mario
     inline bool handleReceiveMsg(const al::SensorMsg* msg, al::HitSensor* source) {
         #ifdef ALLOW_POWERUPS
             if (!msg || !source) return false;
 
             al::LiveActor* attacker = al::getSensorHost(source);
-            if (attacker && PlayerFreeze::isFrozen(attacker)
-            ) {
-                if (al::isMsgEnemyAttack(msg)) return true;
-            }
+            if (attacker && isFrozen(attacker) && al::isMsgEnemyAttack(msg)) return true;
         #endif
         return false;
-    }
-
-    // Handle Mario attacking freezed enemies
-    struct SendMsgSensorToSensorUnfreeze : public mallow::hook::Trampoline<SendMsgSensorToSensorUnfreeze> {
-        static bool Callback(const al::SensorMsg& message, al::HitSensor* source, al::HitSensor* target) {
-
-            al::LiveActor* sourceHost = al::getSensorHost(source);
-            al::LiveActor* targetHost = al::getSensorHost(target);
-
-            bool isMario = sourceHost && al::isEqualSubString(typeid(*sourceHost).name(), "PlayerActorHakoniwa");
-            bool isCappy = sourceHost && al::isEqualSubString(typeid(*sourceHost).name(), "HackCap");
-            bool isIceCube = targetHost && al::isEqualSubString(typeid(*targetHost).name(), "PlayerIceCube");
-
-            if (!isMario && !isCappy) return Orig(message, source, target);
-
-            if (isIceCube) {
-                if (al::isMsgPlayerTrample(&message)
-                    || al::isMsgPlayerHipDropAll(&message)
-                    || al::isMsgPlayerObjHipDropReflectAll(&message)
-                    || al::isMsgPlayerSpinAttack(&message)
-                    || rs::isMsgHackAttack(&message)
-                    || rs::isMsgCapReflect(&message)
-                    || rs::isMsgCapAttack(&message)
-                    || rs::isMsgCapAttackCollide(&message)
-                    || rs::isMsgCapAttackStayRolling(&message)
-                    || rs::isMsgCapStartLockOn(&message)
-                    || rs::isMsgTsukkunThrustAll(&message)
-                ) {
-                    ((PlayerIceCube*)targetHost)->markHit();
-                    return true;
-                }
-            }
-            
-            if (targetHost && PlayerFreeze::isFrozen(targetHost)
-            ) {
-                if (al::isMsgPlayerTrample(&message)
-                    || al::isMsgPlayerHipDropAll(&message)
-                    || al::isMsgPlayerObjHipDropReflectAll(&message)
-                    || al::isMsgPlayerSpinAttack(&message)
-                    || rs::isMsgHackAttack(&message)
-                    || rs::isMsgCapReflect(&message)
-                    || rs::isMsgCapAttack(&message)
-                    || rs::isMsgCapAttackCollide(&message)
-                    || rs::isMsgCapAttackStayRolling(&message)
-                    || rs::isMsgCapStartLockOn(&message)
-                    || rs::isMsgTsukkunThrustAll(&message)) PlayerFreeze::unfreezeActor(targetHost);
-            }
-            return Orig(message, source, target);
-        }
-    };
-
-    inline void Install() {
-        #ifdef ALLOW_POWERUPS
-           //SendMsgSensorToSensorUnfreeze::InstallAtSymbol("_ZN21alActorSensorFunction21sendMsgSensorToSensorERKN2al9SensorMsgEPNS0_9HitSensorES5_");
-        #endif
     }
 }

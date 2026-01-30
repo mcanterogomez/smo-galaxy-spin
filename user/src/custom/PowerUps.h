@@ -60,6 +60,8 @@ namespace PowerUps {
             if (isHammer) isHammer->makeActorDead();
             if (fireBalls) fireBalls->makeActorDeadAll();
             if (iceBalls) iceBalls->makeActorDeadAll();
+            // Clear frozen enemies on stage load
+            PlayerFreeze::clearAllFrozen();
         }
     };
 
@@ -180,7 +182,8 @@ namespace PowerUps {
                         
                         if (isSuper) projectile->shoot(startPos, al::getQuat(model), offset, true, 0, true);
                         else projectile->shoot(startPos, al::getQuat(model), offset, true, 0, false);
-                        al::tryStartSe(thisPtr, "FireBallShoot");
+                        if (isIce) al::tryStartSe(thisPtr, "IceBallShoot");
+                        else al::tryStartSe(thisPtr, "FireBallShoot");
 
                         nextThrowLeft = !nextThrowLeft;
                     }
