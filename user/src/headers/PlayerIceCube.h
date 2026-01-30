@@ -6,6 +6,7 @@
 #include "Library/LiveActor/ActorSensorUtil.h"
 #include "Library/LiveActor/ActorModelFunction.h"
 #include "Library/LiveActor/ActorActionFunction.h"
+#include "Library/Collision/CollisionPartsKeeperUtil.h"
 
 class PlayerIceCube : public al::LiveActor {
 public:
@@ -17,7 +18,6 @@ public:
     }
 
     void control() override {
-        // Break animation lifecycle
         if (mIsBreaking) {
             if (al::isActionEnd(this)) {
                 mIsBreaking = false;
@@ -26,92 +26,83 @@ public:
             return;
         }
 
-        // Track frozen target, match size
-        if (mTargetActor && al::isAlive(mTargetActor)) {
-            al::setTrans(this, al::getTrans(mTargetActor));
-            updateScaleToMatchTarget();
+        if (mTarget && al::isAlive(mTarget)) {
+            updateTransform();
         }
     }
 
-    // Activate cube, play appear anim, size to target
     void freeze(al::LiveActor* target) {
-        mTargetActor = target;
+        mTarget = target;
         mWasHit = false;
-        mAttackerSensor = nullptr;
+        mAttacker = nullptr;
         mIsBreaking = false;
 
-        al::setTrans(this, al::getTrans(target));
         makeActorAlive();
         al::tryStartAction(this, "Appear");
-        updateScaleToMatchTarget();
+        updateTransform();
     }
 
-    // Play break anim at frozen pos, then kill
     void unfreeze() {
-        // Lock pos at final target location
-        if (mTargetActor && al::isAlive(mTargetActor)) {
-            al::setTrans(this, al::getTrans(mTargetActor));
-        }
+        if (mTarget && al::isAlive(mTarget)) updateTransform();
 
-        mTargetActor = nullptr;
+        mTarget = nullptr;
         mWasHit = false;
-        mAttackerSensor = nullptr;
+        mAttacker = nullptr;
 
-        // Play destruction anim
         makeActorAlive();
         mIsBreaking = al::tryStartAction(this, "Break");
-        
-        // Fallback if Break doesn't exist
         if (!mIsBreaking) makeActorDead();
     }
 
-    al::LiveActor* getTarget() const { return mTargetActor; }
+    al::LiveActor* getTarget() const { return mTarget; }
     bool wasHit() const { return mWasHit; }
-    al::HitSensor* getAttackerSensor() const { return mAttackerSensor; }
-    
+    al::HitSensor* getAttackerSensor() const { return mAttacker; }
+
     void markHit(al::HitSensor* source) {
         mWasHit = true;
-        mAttackerSensor = source;
+        mAttacker = source;
     }
 
 private:
-    static constexpr float kScalePadding = 1.2f;
+    static constexpr float kPadding = 1.5f;
     static constexpr float kMinScale = 0.5f;
+    static constexpr float kGroundRayDist = 500.0f;
 
-    // Get per-axis scale ratio
-    sead::Vector3f getScaleRatio() const {
+    void updateTransform() {
+        if (!mTarget) return;
+
+        // Scale: uniform based on largest target dimension
         sead::BoundBox3f cubeBox, targetBox;
         al::calcModelBoundingBox(&cubeBox, this);
-        al::calcModelBoundingBox(&targetBox, mTargetActor);
+        al::calcModelBoundingBox(&targetBox, mTarget);
 
-        auto tryDivide = [](float num, float den) -> float {
-            return (den != 0.0f) ? (num / den) : 0.0f;
-        };
-        
-        return sead::Vector3f(
-            tryDivide(targetBox.getSizeX(), cubeBox.getSizeX()),
-            tryDivide(targetBox.getSizeY(), cubeBox.getSizeY()),
-            tryDivide(targetBox.getSizeZ(), cubeBox.getSizeZ())
-        );
+        sead::Vector3f cubeSize = cubeBox.getMax() - cubeBox.getMin();
+        sead::Vector3f targetSize = targetBox.getMax() - targetBox.getMin();
+
+        float maxRatio = 0.0f;
+        if (cubeSize.x > 0) maxRatio = sead::Mathf::max(maxRatio, targetSize.x / cubeSize.x);
+        if (cubeSize.y > 0) maxRatio = sead::Mathf::max(maxRatio, targetSize.y / cubeSize.y);
+        if (cubeSize.z > 0) maxRatio = sead::Mathf::max(maxRatio, targetSize.z / cubeSize.z);
+
+        float scale = sead::Mathf::max(maxRatio * kPadding, kMinScale);
+        al::setScale(this, sead::Vector3f(scale, scale, scale));
+
+        // Position: center on target, lift if clipping ground
+        sead::Vector3f pos = al::getTrans(mTarget);
+        float halfHeight = (cubeSize.y * scale) * 0.5f;
+
+        sead::Vector3f groundHit;
+        if (alCollisionUtil::getHitPosOnArrow(mTarget, &groundHit, pos,
+                sead::Vector3f(0, -kGroundRayDist, 0), nullptr, nullptr)) {
+            float bottom = pos.y - halfHeight;
+            if (bottom < groundHit.y) pos.y = groundHit.y + halfHeight;
+        }
+
+        al::setTrans(this, pos);
     }
 
-    // Match scale with uniform max axis + padding
-    void updateScaleToMatchTarget() {
-        if (!mTargetActor) return;
-
-        sead::Vector3f scale = getScaleRatio();
-        
-        // Use max axis for uniform coverage
-        float uniform = sead::Mathf::max(scale.x, sead::Mathf::max(scale.y, scale.z));
-        
-        // Apply padding and clamp to minimum
-        uniform = sead::Mathf::max(uniform * kScalePadding, kMinScale);
-
-        al::setScale(this, sead::Vector3f(uniform, uniform, uniform));
-    }
-
-    al::LiveActor* mTargetActor = nullptr;
+    al::LiveActor* mTarget = nullptr;
+    al::HitSensor* mAttacker = nullptr;
     bool mWasHit = false;
-    al::HitSensor* mAttackerSensor = nullptr;
     bool mIsBreaking = false;
 };
