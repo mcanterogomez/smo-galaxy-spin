@@ -3,9 +3,12 @@
 #include "Library/LiveActor/LiveActor.h"
 #include "Library/LiveActor/ActorInitUtil.h"
 #include "Library/LiveActor/ActorPoseUtil.h"
-#include "Library/LiveActor/ActorSensorUtil.h"
 #include "Library/LiveActor/ActorModelFunction.h"
 #include "Library/LiveActor/ActorActionFunction.h"
+#include "Library/LiveActor/ActorSensorUtil.h"
+#include "Library/LiveActor/ActorCollisionFunction.h"
+#include "Library/LiveActor/ActorMovementFunction.h"
+#include "Library/HitSensor/HitSensorKeeper.h"
 #include "Library/Collision/CollisionPartsKeeperUtil.h"
 
 class PlayerIceCube : public al::LiveActor {
@@ -26,9 +29,14 @@ public:
             return;
         }
 
-        if (mTarget && al::isAlive(mTarget)) {
-            updateTransform();
+        // Guard: kill cube if target is gone
+        if (!mTarget || !al::isAlive(mTarget)) {
+            mTarget = nullptr;
+            makeActorDead();
+            return;
         }
+
+        syncToTarget();
     }
 
     void freeze(al::LiveActor* target) {
@@ -39,11 +47,13 @@ public:
 
         makeActorAlive();
         al::tryStartAction(this, "Appear");
-        updateTransform();
+        syncToTarget();
+        sendAOEExplosion();
     }
 
     void unfreeze() {
-        if (mTarget && al::isAlive(mTarget)) updateTransform();
+        if (mTarget && al::isAlive(mTarget))
+            syncToTarget();
 
         mTarget = nullptr;
         mWasHit = false;
@@ -51,54 +61,91 @@ public:
 
         makeActorAlive();
         mIsBreaking = al::tryStartAction(this, "Break");
-        if (!mIsBreaking) makeActorDead();
+        if (!mIsBreaking)
+            makeActorDead();
     }
 
     al::LiveActor* getTarget() const { return mTarget; }
     bool wasHit() const { return mWasHit; }
-    al::HitSensor* getAttackerSensor() const { return mAttacker; }
+    al::HitSensor* getAttacker() const { return mAttacker; }
 
-    void markHit(al::HitSensor* source) {
+    void markHit(al::HitSensor* attacker) {
         mWasHit = true;
-        mAttacker = source;
+        mAttacker = attacker;
     }
 
 private:
-    static constexpr float kPadding = 1.5f;
-    static constexpr float kMinScale = 0.5f;
-    static constexpr float kGroundRayDist = 500.0f;
+    static constexpr f32 kScalePadding = 1.5f;
+    static constexpr f32 kMinScale = 0.5f;
+    static constexpr f32 kGroundRayLength = 500.0f;
+    static constexpr f32 kAOERadius = 500.0f;
 
-    void updateTransform() {
+    void syncToTarget() {
         if (!mTarget) return;
 
-        // Scale: uniform based on largest target dimension
+        f32 scale = calcTargetScale();
+        al::setScaleAll(this, scale);
+
+        sead::Vector3f pos = al::getTrans(mTarget);
+
+        sead::BoundBox3f cubeBox;
+        al::calcModelBoundingBox(&cubeBox, this);
+        f32 halfHeight = cubeBox.getSizeY() * scale * 0.5f;
+
+        // Grounded: use collision data directly
+        if (al::isOnGround(mTarget, 0)) {
+            pos.y = al::getCollidedGroundPos(mTarget).y + halfHeight;
+        }
+        // Airborne: raycast to check if near ground
+        else {
+            sead::Vector3f groundPos;
+            sead::Vector3f rayDelta(0.0f, -kGroundRayLength, 0.0f);
+
+            if (alCollisionUtil::getHitPosOnArrow(mTarget, &groundPos, pos, rayDelta, nullptr, nullptr)) {
+                if (pos.y - halfHeight < groundPos.y)
+                    pos.y = groundPos.y + halfHeight;
+            }
+        }
+
+        al::setTrans(this, pos);
+    }
+
+    f32 calcTargetScale() const {
         sead::BoundBox3f cubeBox, targetBox;
         al::calcModelBoundingBox(&cubeBox, this);
         al::calcModelBoundingBox(&targetBox, mTarget);
 
-        sead::Vector3f cubeSize = cubeBox.getMax() - cubeBox.getMin();
-        sead::Vector3f targetSize = targetBox.getMax() - targetBox.getMin();
+        auto safeDivide = [](f32 a, f32 b) { return b > 0.001f ? a / b : 0.0f; };
 
-        float maxRatio = 0.0f;
-        if (cubeSize.x > 0) maxRatio = sead::Mathf::max(maxRatio, targetSize.x / cubeSize.x);
-        if (cubeSize.y > 0) maxRatio = sead::Mathf::max(maxRatio, targetSize.y / cubeSize.y);
-        if (cubeSize.z > 0) maxRatio = sead::Mathf::max(maxRatio, targetSize.z / cubeSize.z);
+        f32 ratioX = safeDivide(targetBox.getSizeX(), cubeBox.getSizeX());
+        f32 ratioY = safeDivide(targetBox.getSizeY(), cubeBox.getSizeY());
+        f32 ratioZ = safeDivide(targetBox.getSizeZ(), cubeBox.getSizeZ());
 
-        float scale = sead::Mathf::max(maxRatio * kPadding, kMinScale);
-        al::setScale(this, sead::Vector3f(scale, scale, scale));
+        f32 maxRatio = sead::Mathf::max(ratioX, sead::Mathf::max(ratioY, ratioZ));
+        return sead::Mathf::max(maxRatio * kScalePadding, kMinScale);
+    }
 
-        // Position: center on target, lift if clipping ground
-        sead::Vector3f pos = al::getTrans(mTarget);
-        float halfHeight = (cubeSize.y * scale) * 0.5f;
+    void sendAOEExplosion() {
+        if (!mTarget) return;
 
-        sead::Vector3f groundHit;
-        if (alCollisionUtil::getHitPosOnArrow(mTarget, &groundHit, pos,
-                sead::Vector3f(0, -kGroundRayDist, 0), nullptr, nullptr)) {
-            float bottom = pos.y - halfHeight;
-            if (bottom < groundHit.y) pos.y = groundHit.y + halfHeight;
+        al::HitSensor* selfSensor = al::getHitSensor(mTarget, "Body");
+        if (!selfSensor && mTarget->getHitSensorKeeper())
+            selfSensor = mTarget->getHitSensorKeeper()->getSensor(0);
+        if (!selfSensor) return;
+
+        sead::Vector3f center = al::getTrans(this);
+
+        for (u16 i = 0; i < selfSensor->mSensorCount; i++) {
+            al::HitSensor* other = selfSensor->mSensors[i];
+            if (!other) continue;
+
+            al::LiveActor* otherActor = other->getParentActor();
+            if (!otherActor || otherActor == mTarget || !al::isAlive(otherActor))
+                continue;
+
+            if (al::isNear(otherActor, center, kAOERadius))
+                al::sendMsgExplosion(other, selfSensor, nullptr);
         }
-
-        al::setTrans(this, pos);
     }
 
     al::LiveActor* mTarget = nullptr;

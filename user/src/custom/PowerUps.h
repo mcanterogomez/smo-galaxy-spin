@@ -60,8 +60,7 @@ namespace PowerUps {
             if (isHammer) isHammer->makeActorDead();
             if (fireBalls) fireBalls->makeActorDeadAll();
             if (iceBalls) iceBalls->makeActorDeadAll();
-            // Clear frozen enemies on stage load
-            PlayerFreeze::clearAllFrozen();
+            if (iceCubes) iceCubes->makeActorDeadAll();
         }
     };
 
