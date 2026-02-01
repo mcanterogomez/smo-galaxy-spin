@@ -29,7 +29,6 @@ public:
             return;
         }
 
-        // Guard: kill cube if target is gone
         if (!mTarget || !al::isAlive(mTarget)) {
             mTarget = nullptr;
             makeActorDead();
@@ -46,8 +45,13 @@ public:
         mIsBreaking = false;
 
         makeActorAlive();
-        al::tryStartAction(this, "Appear");
         syncToTarget();
+
+        al::tryStartAction(this, "Appear");
+
+        f32 effectScale = mScale * kEffectScaleMult;
+        al::setEffectAllScale(this, "Appear", sead::Vector3f(effectScale, effectScale, effectScale));
+
         sendAOEExplosion();
     }
 
@@ -61,8 +65,12 @@ public:
 
         makeActorAlive();
         mIsBreaking = al::tryStartAction(this, "Break");
-        if (!mIsBreaking)
+        if (mIsBreaking) {
+            f32 effectScale = mScale * kEffectScaleMult;
+            al::setEffectAllScale(this, "Break", sead::Vector3f(effectScale, effectScale, effectScale));
+        } else {
             makeActorDead();
+        }
     }
 
     al::LiveActor* getTarget() const { return mTarget; }
@@ -77,40 +85,14 @@ public:
 private:
     static constexpr f32 kScalePadding = 1.5f;
     static constexpr f32 kMinScale = 0.5f;
+    static constexpr f32 kEffectScaleMult = 0.5f;
     static constexpr f32 kGroundRayLength = 500.0f;
     static constexpr f32 kAOERadius = 500.0f;
 
     void syncToTarget() {
         if (!mTarget) return;
 
-        f32 scale = calcTargetScale();
-        al::setScaleAll(this, scale);
-
-        sead::Vector3f pos = al::getTrans(mTarget);
-
-        sead::BoundBox3f cubeBox;
-        al::calcModelBoundingBox(&cubeBox, this);
-        f32 halfHeight = cubeBox.getSizeY() * scale * 0.5f;
-
-        // Grounded: use collision data directly
-        if (al::isOnGround(mTarget, 0)) {
-            pos.y = al::getCollidedGroundPos(mTarget).y + halfHeight;
-        }
-        // Airborne: raycast to check if near ground
-        else {
-            sead::Vector3f groundPos;
-            sead::Vector3f rayDelta(0.0f, -kGroundRayLength, 0.0f);
-
-            if (alCollisionUtil::getHitPosOnArrow(mTarget, &groundPos, pos, rayDelta, nullptr, nullptr)) {
-                if (pos.y - halfHeight < groundPos.y)
-                    pos.y = groundPos.y + halfHeight;
-            }
-        }
-
-        al::setTrans(this, pos);
-    }
-
-    f32 calcTargetScale() const {
+        // Calculate scale from bounding boxes
         sead::BoundBox3f cubeBox, targetBox;
         al::calcModelBoundingBox(&cubeBox, this);
         al::calcModelBoundingBox(&targetBox, mTarget);
@@ -122,7 +104,32 @@ private:
         f32 ratioZ = safeDivide(targetBox.getSizeZ(), cubeBox.getSizeZ());
 
         f32 maxRatio = sead::Mathf::max(ratioX, sead::Mathf::max(ratioY, ratioZ));
-        return sead::Mathf::max(maxRatio * kScalePadding, kMinScale);
+        mScale = sead::Mathf::max(maxRatio * kScalePadding, kMinScale);
+
+        al::setScaleAll(this, mScale);
+
+        // Scale sensor radius to match cube
+        f32 maxDim = sead::Mathf::max(cubeBox.getSizeX(),
+                      sead::Mathf::max(cubeBox.getSizeY(), cubeBox.getSizeZ()));
+        al::setSensorRadius(this, "Body", maxDim * mScale * 0.5f);
+
+        // Position cube
+        sead::Vector3f pos = al::getTrans(mTarget);
+        f32 halfHeight = cubeBox.getSizeY() * mScale * 0.5f;
+
+        if (al::isOnGround(mTarget, 0)) {
+            pos.y = al::getCollidedGroundPos(mTarget).y + halfHeight;
+        } else {
+            sead::Vector3f groundPos;
+            sead::Vector3f rayDelta(0.0f, -kGroundRayLength, 0.0f);
+
+            if (alCollisionUtil::getHitPosOnArrow(mTarget, &groundPos, pos, rayDelta, nullptr, nullptr)) {
+                if (pos.y - halfHeight < groundPos.y)
+                    pos.y = groundPos.y + halfHeight;
+            }
+        }
+
+        al::setTrans(this, pos);
     }
 
     void sendAOEExplosion() {
@@ -150,6 +157,7 @@ private:
 
     al::LiveActor* mTarget = nullptr;
     al::HitSensor* mAttacker = nullptr;
+    f32 mScale = 1.0f;
     bool mWasHit = false;
     bool mIsBreaking = false;
 };

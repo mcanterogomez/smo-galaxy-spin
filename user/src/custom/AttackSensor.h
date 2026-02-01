@@ -531,35 +531,34 @@ namespace AttackSensor {
                 }
                 if(!isInHitBuffer
                 ) {
-                    if (isIceball) {
-                        if (al::isSensorEnemy(target)
+                    if (isIceball && al::isSensorEnemyBody(target)
+                    ) {
+                        hitBuffer[hitBufferCount++] = targetHost;
+                        PlayerFreeze::freezeActor(targetHost, 1800);
+                        al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
+                        thisPtr->kill();
+                        return;
+                    }
+                    if (isIceball && !al::isSensorEnemyBody(target)
+                    ) {
+                        if (rs::sendMsgWeaponItemGet(target, source)
+                            || rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero)
+                            || al::sendMsgPlayerFireBallAttack(target, source)
+                            || rs::sendMsgFireBrosFireBallCollide(target, source)
                         ) {
                             hitBuffer[hitBufferCount++] = targetHost;
-                            PlayerFreeze::freezeActor(targetHost, 1800);
                             al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
                             thisPtr->kill();
                             return;
                         }
-                        else {
-                            if (rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero)
-                                || al::sendMsgPlayerFireBallAttack(target, source)
-                                || rs::sendMsgFireBrosFireBallCollide(target, source)
-                                || rs::sendMsgWeaponItemGet(target, source)
-                            ) {
-                                hitBuffer[hitBufferCount++] = targetHost;
-                                al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
-                                thisPtr->kill();
-                                return;
-                            }
-                            else if (rs::sendMsgHackAttack(target, source)
-                                || al::sendMsgExplosion(target, source, nullptr)
-                            ) {
-                                hitBuffer[hitBufferCount++] = targetHost;
-                                if (!al::isEffectEmitting(sourceHost, "Hit")) al::tryEmitEffect(isHakoniwa, "Hit", &spawnPos);
-                                al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
-                                thisPtr->kill();
-                                return;
-                            }
+                        else if (rs::sendMsgHackAttack(target, source)
+                            || al::sendMsgExplosion(target, source, nullptr)
+                        ) {
+                            hitBuffer[hitBufferCount++] = targetHost;
+                            if (!al::isEffectEmitting(sourceHost, "Hit")) al::tryEmitEffect(isHakoniwa, "Hit", &spawnPos);
+                            al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
+                            thisPtr->kill();
+                            return;
                         }
                     }
                     if (isFireball) {
