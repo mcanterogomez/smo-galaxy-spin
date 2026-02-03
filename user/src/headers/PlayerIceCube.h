@@ -115,17 +115,17 @@ private:
 
         // Position cube
         sead::Vector3f pos = al::getTrans(mTarget);
+        sead::Vector3f gravity = al::getGravity(mTarget);
         f32 halfHeight = cubeBox.getSizeY() * mScale * 0.5f;
 
-        if (al::isOnGround(mTarget, 0)) {
-            pos.y = al::getCollidedGroundPos(mTarget).y + halfHeight;
-        } else {
-            sead::Vector3f groundPos;
-            sead::Vector3f rayDelta(0.0f, -kGroundRayLength, 0.0f);
+        // Raycast slightly above enemy position
+        sead::Vector3f rayStart = pos - gravity;
+        sead::Vector3f rayDelta = gravity * kGroundRayLength;
+        sead::Vector3f groundPos;
 
-            if (alCollisionUtil::getHitPosOnArrow(mTarget, &groundPos, pos, rayDelta, nullptr, nullptr)) {
-                if (pos.y - halfHeight < groundPos.y)
-                    pos.y = groundPos.y + halfHeight;
+        if (alCollisionUtil::getHitPosOnArrow(mTarget, &groundPos, rayStart, rayDelta, nullptr, nullptr)) {
+            if ((groundPos - pos).dot(gravity) < halfHeight) {
+                pos = groundPos - (gravity * halfHeight);
             }
         }
 
@@ -148,6 +148,9 @@ private:
 
             al::LiveActor* otherActor = other->getParentActor();
             if (!otherActor || otherActor == mTarget || !al::isAlive(otherActor))
+                continue;
+
+            if (al::isSensorPlayerAll(other))
                 continue;
 
             if (al::isNear(otherActor, center, kAOERadius))

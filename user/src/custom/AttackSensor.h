@@ -531,7 +531,7 @@ namespace AttackSensor {
                 }
                 if(!isInHitBuffer
                 ) {
-                    if (isIceball && al::isSensorEnemyBody(target)
+                    if (isIceball && al::isSensorEnemyBody(target) && al::getHitSensor(targetHost, "Attack")
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
                         PlayerFreeze::freezeActor(targetHost, 1800);
@@ -547,8 +547,6 @@ namespace AttackSensor {
                             || rs::sendMsgFireBrosFireBallCollide(target, source)
                         ) {
                             hitBuffer[hitBufferCount++] = targetHost;
-                            al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
-                            thisPtr->kill();
                             return;
                         }
                         else if (rs::sendMsgHackAttack(target, source)
@@ -556,8 +554,6 @@ namespace AttackSensor {
                         ) {
                             hitBuffer[hitBufferCount++] = targetHost;
                             if (!al::isEffectEmitting(sourceHost, "Hit")) al::tryEmitEffect(isHakoniwa, "Hit", &spawnPos);
-                            al::tryEmitEffect(sourceHost, "Disappear", &sourcePos);
-                            thisPtr->kill();
                             return;
                         }
                     }

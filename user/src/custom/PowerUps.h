@@ -56,11 +56,12 @@ namespace PowerUps {
     struct PlayerActorHakoniwaInitAfterPlacement : public mallow::hook::Trampoline<PlayerActorHakoniwaInitAfterPlacement> {
         static void Callback(PlayerActorHakoniwa* thisPtr) {
             Orig(thisPtr);
+
+            PlayerFreeze::clearAllFrozen();
             
             if (isHammer) isHammer->makeActorDead();
             if (fireBalls) fireBalls->makeActorDeadAll();
             if (iceBalls) iceBalls->makeActorDeadAll();
-            if (iceCubes) iceCubes->makeActorDeadAll();
         }
     };
 

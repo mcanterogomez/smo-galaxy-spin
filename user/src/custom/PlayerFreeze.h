@@ -17,6 +17,10 @@ namespace PlayerFreeze {
     inline FrozenEntry sFrozenList[kMaxFrozen];
     inline s32 sFrozenCount = 0;
 
+    inline void clearAllFrozen() {
+        sFrozenCount = 0;
+    }
+
     inline FrozenEntry* findEntry(al::LiveActor* actor) {
         for (s32 i = 0; i < sFrozenCount; i++) {
             if (sFrozenList[i].actor == actor)
@@ -61,17 +65,19 @@ namespace PlayerFreeze {
         if (entry->cube && al::isAlive(entry->cube))
             entry->cube->unfreeze();
 
-        al::setActionFrameRate(actor, 1.0f);
-        al::validateHitSensors(actor);
+        if (actor && al::isAlive(actor)) {
+            al::setActionFrameRate(actor, 1.0f);
+            al::validateHitSensors(actor);
 
-        if (restoreAction && entry->prevAction)
-            al::tryStartAction(actor, entry->prevAction);
+            if (restoreAction && entry->prevAction)
+                al::tryStartAction(actor, entry->prevAction);
+        }
 
         *entry = sFrozenList[--sFrozenCount];
     }
 
     inline bool sendAttackToEnemy(al::LiveActor* enemy, al::HitSensor* attacker) {
-        if (!attacker || !enemy) return false;
+        if (!attacker || !enemy || !al::isAlive(enemy)) return false;
 
         al::HitSensor* target = al::getHitSensor(enemy, "Body");
         if (!target && enemy->getHitSensorKeeper())
@@ -111,9 +117,16 @@ namespace PlayerFreeze {
         FrozenEntry* entry = findEntry(actor);
         if (!entry) return false;
 
+        if (!actor || !al::isAlive(actor)) {
+            if (entry->cube && al::isAlive(entry->cube))
+                entry->cube->makeActorDead();
+            *entry = sFrozenList[--sFrozenCount];
+            return false;
+        }
+
         // Guard: cube gone (died or scene change) -> unfreeze actor
         if (entry->cube && !al::isAlive(entry->cube)) {
-            entry->cube = nullptr;  // Clear reference before unfreeze
+            entry->cube = nullptr;
             unfreezeActor(actor, true);
             return false;
         }
