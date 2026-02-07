@@ -297,12 +297,9 @@ public:
                 else if (isFeather || isTanooki) anim->startAnim("AreaWaitSayCheese");
                 else anim->startAnim("AreaWait64");
             }
-            else if (isIce) {
-                anim->startAnim("TauntIce");
-                al::tryStartSe(player, "IceOn");
-            }
             else if (isFire || isBrawl || isSuper) anim->startAnim("TauntFire");
             else if (isFeather || isTanooki) anim->startAnim("TauntFeather");
+            else if (isIce) anim->startAnim("TauntIce");
             else anim->startAnim("TauntMario");
         }
 
@@ -317,20 +314,14 @@ public:
             }
         }
         else if (anim->isAnim("TauntFire")
+            || anim->isAnim("TauntIce")
         ) {
             if (al::isStep(player, 65)) al::tryStartSe(player, "FireOn");
             if (al::isStep(player, 160)
             ) {
                 al::tryStopSe(player, "FireOn", -1, nullptr);
-                al::tryStartSe(player, "FireOff");
-            }
-        }
-        else if (anim->isAnim("TauntIce")
-        ) {
-            if (al::isStep(player, 160)
-            ) {
-                al::tryStopSe(player, "IceOn", -1, nullptr);
-                al::tryStartSe(player, "IceOff");
+                if (isIce) al::tryStartSe(player, "IceOff");
+                else al::tryStartSe(player, "FireOff");
             }
         }
         else if (anim->isAnim("TauntSuper")
@@ -362,12 +353,34 @@ public:
             al::tryDeleteEffect(effect, "BonfireSuper");
             al::tryDeleteEffect(effect, "IceEffect");
             al::tryStopSe(player, "FireOn", -1, nullptr);
-            al::tryStopSe(player, "IceOn", -1, nullptr);
             al::setNerve(player, getNerveAt(nrvHakoniwaWait));
             return;
         }
     }
 };
+
+// Hammer specific setup
+inline sead::Matrix34f hammerMtx;
+inline al::LiveActor* hammerParentModel = nullptr;  // Track the model we're watching
+
+inline void updateHammerMtx() {
+    if (!hammerParentModel) return;
+
+    const sead::Matrix34f* mL = al::getJointMtxPtr(hammerParentModel, "ArmL2");
+    const sead::Matrix34f* mR = al::getJointMtxPtr(hammerParentModel, "ArmR2");
+    if (!mL || !mR) return; 
+
+    sead::Vector3f posL = mL->getTranslation();
+    sead::Vector3f posR = mR->getTranslation();
+    sead::Vector3f mid = (posL + posR) * 0.5f;
+
+    sead::Quatf qL, qR, qMid;
+    mL->toQuat(qL);
+    mR->toQuat(qR);
+    al::slerpQuat(&qMid, qL, qR, 0.5f);
+
+    hammerMtx.makeQT(qMid, mid);
+}
 
 class PlayerActorHakoniwaNrvHammer : public al::Nerve {
 public:
@@ -380,21 +393,6 @@ public:
         bool isWater = al::isInWater(player);
         bool isSurface = player->mWaterSurfaceFinder->isFoundSurface();
 
-        const sead::Matrix34f* mL = al::getJointMtxPtr(model, "ArmL2");
-        const sead::Matrix34f* mR = al::getJointMtxPtr(model, "ArmR2");
-
-        sead::Vector3 posL = mL->getTranslation();
-        sead::Vector3 posR = mR->getTranslation();
-        sead::Vector3 mid  = (posL + posR) * 0.5f;
-
-        sead::Quatf qMid;
-        sead::Quatf qL; mL->toQuat(qL);
-        sead::Quatf qR; mR->toQuat(qR);
-        al::slerpQuat(&qMid, qL, qR, 0.5f);
-
-        static sead::Matrix34f hammerMtx;
-        hammerMtx.makeQT(qMid, mid);
-               
         if (al::isFirstStep(player)
         ) {
             player->mAnimator->endSubAnim();
@@ -402,12 +400,15 @@ public:
 
             if (hammer) al::hideModelIfShow(hammer);
 
+            hammerParentModel = model;
+            updateHammerMtx();
+
             isHammer->makeActorAlive();
             isHammer->attach(
-            &hammerMtx,
-            sead::Vector3(0.0f, -12.5f, -37.5f),
-            sead::Vector3(0.0f, sead::Mathf::deg2rad(-90.0f), 0.0f),
-            nullptr);
+                &hammerMtx,
+                sead::Vector3f(0.0f, -12.5f, -37.5f),
+                sead::Vector3f(0.0f, sead::Mathf::deg2rad(-90.0f), 0.0f),
+                nullptr);
 
             al::onCollide(isHammer);
             al::invalidateClipping(isHammer);
@@ -416,32 +417,30 @@ public:
             if (!isGround) {
                 player->mAnimator->startAnim("RollingStart");
                 al::validateHitSensor(isHammer, "AttackHack");
-            } else {
-                player->mAnimator->startAnim("HammerAttack");
-            }
+            } else player->mAnimator->startAnim("HammerAttack");
         }
+
         if (player->mAnimator->isAnimEnd()
             && player->mAnimator->isAnim("RollingStart")
         ) {
             player->mAnimator->startAnim("Rolling");
             al::tryStartAction(isHammer, "Spin");
         }
+        
         if (isGround
             && (player->mAnimator->isAnim("RollingStart") || player->mAnimator->isAnim("Rolling"))
         ) {
             player->mAnimator->endSubAnim();
-            al::tryStartAction(isHammer, "Hammer");
             player->mAnimator->startAnim("HammerAttack");
+            al::tryStartAction(isHammer, "Wait");
         }
+
         if (al::isStep(player, 3)
         ) {
-            sead::Vector3 currentVelocity = al::getVelocity(player);
-            if (isGround) {
-                currentVelocity *= 0.5f;
-            } else {
-                if (currentVelocity.y > 0.0f) currentVelocity.y = 0.0f;
-                //currentVelocity += al::getGravity(player);
-            }
+            sead::Vector3f currentVelocity = al::getVelocity(player);
+            if (isGround) currentVelocity *= 0.5f;
+            else if (currentVelocity.y > 0.0f) currentVelocity.y = 0.0f;
+            
             al::setVelocity(player, currentVelocity);
         }
 
@@ -451,23 +450,31 @@ public:
         
         if (player->mAnimator->isAnimEnd()
         ) {
-            isHammer->makeActorDead();
+            hammerParentModel = nullptr;
             if (hammer) al::showModelIfHide(hammer);
-            al::offCollide(isHammer);
-            al::invalidateHitSensor(isHammer, "AttackHack");
+            if (isHammer) {
+                al::offCollide(isHammer);
+                al::invalidateHitSensor(isHammer, "AttackHack");
+                isHammer->makeActorDead();
+            }
             al::setNerve(player, getNerveAt(nrvHakoniwaFall));
             return;
         }
-        else if (isWater && !isSurface
+        
+        if (isWater && !isSurface
         ) {
-            isHammer->makeActorDead();
+            hammerParentModel = nullptr;
             if (hammer) al::showModelIfHide(hammer);
-            al::offCollide(isHammer);
-            al::invalidateHitSensor(isHammer, "AttackHack");
+            if (isHammer) {
+                al::offCollide(isHammer);
+                al::invalidateHitSensor(isHammer, "AttackHack");
+                isHammer->makeActorDead();
+            }
             al::setNerve(player, getNerveAt(nrvHakoniwaFall));
             al::tryEmitEffect(isHammer, "Break", nullptr);
             return;
         }
+        
         if (hammer && al::isDead(isHammer)) al::showModelIfHide(hammer);
     }
 
@@ -475,6 +482,8 @@ public:
         auto* player = keeper->getParent<PlayerActorHakoniwa>();
         auto* model  = player->mModelHolder->findModelActor("Normal");
         auto* hammer = al::tryGetSubActor(model, "Hammer");
+
+        hammerParentModel = nullptr;
 
         if (hammer) al::showModelIfHide(hammer);
 

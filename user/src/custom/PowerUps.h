@@ -182,8 +182,8 @@ namespace PowerUps {
                         
                         if (isSuper) projectile->shoot(startPos, al::getQuat(model), offset, true, 0, true);
                         else projectile->shoot(startPos, al::getQuat(model), offset, true, 0, false);
-                        if (isIce) al::tryStartSe(thisPtr, "IceBallShoot");
-                        else al::tryStartSe(thisPtr, "FireBallShoot");
+                        if (isIce) al::tryStartSe(projectile, "IceBallShoot");
+                        else al::tryStartSe(projectile, "FireBallShoot");
 
                         nextThrowLeft = !nextThrowLeft;
                     }
@@ -211,32 +211,31 @@ namespace PowerUps {
             if (isGauge && !isSuper
             ) {
                 static bool wasInAir = false;
-                static bool isFirstGlide = true; // Track first glide
+                static bool wasStartup = false;
+                static bool hadStartup = false;
                 bool inAir = !onGround && !isWater;
                 
+                bool isStartup = al::isActionPlaying(model, "JumpBroad8") 
+                              || al::isActionPlaying(model, "JumpBroad8Alt");
+
                 // Landing
                 if (wasInAir && !inAir && isGauge->isAlive()) {
                     isGauge->refill();
                     isGauge->endMax();
-                    isFirstGlide = true; // Reset: Next takeoff is free
+                    hadStartup = false;
+                    wasStartup = false;
                 }
+
+                // Mark first startup as consumed on its falling edge
+                if (!isStartup && wasStartup) hadStartup = true;
+                wasStartup = isStartup;
 
                 // Gliding
                 if (isGliding && isGauge->canUse()) {
-                    isGauge->start();  // Has internal guard now
+                    isGauge->start();
                     isGauge->drain();
 
-                    bool isStartup = al::isActionPlaying(model, "JumpBroad8") 
-                                  || al::isActionPlaying(model, "JumpBroad8Alt");
-
-                    bool isLooping = al::isActionPlaying(model, "Glide") 
-                                  || al::isActionPlaying(model, "GlideAlt")
-                                  || al::isActionPlaying(model, "GlideFloat")
-                                  || al::isActionPlaying(model, "GlideFloatSuper");
-
-                    if (isLooping) isFirstGlide = false;
-                    if (isStartup && !isFirstGlide) isGauge->setRate(isGauge->getRate() - 0.004f); // Extra penalty
-                    
+                    if (isStartup && hadStartup) isGauge->setRate(isGauge->getRate() - 0.004f);
                     if (isGauge->isEmpty()) isGauge->startTimer();
                 }
 
@@ -397,13 +396,23 @@ namespace PowerUps {
 
             if (!hammerEffect
                 && isHakoniwa->mAnimator->isAnim("HammerAttack")
+                && isHakoniwa->mAnimator->getAnimFrame() >= 8.0f
                 && al::isCollidedGround(isHammer)
             ) {
                 al::tryEmitEffect(isHakoniwa, "HammerLandHit", nullptr);
-                al::tryStartSe(isHakoniwa, "HammerLand");
-                al::tryStartSe(isHakoniwa, "HammerHit");
+                al::tryStartSe(isHammer, "HammerLand");
+                al::tryStartSe(isHammer, "HammerHit");
                 hammerEffect = true;
             }
+        }
+    };
+
+    struct CalcAnimHook : public mallow::hook::Trampoline<CalcAnimHook> {
+        static void Callback(al::LiveActor* actor) {
+            Orig(actor);
+
+            if (hammerParentModel
+                && actor == hammerParentModel) updateHammerMtx();
         }
     };
 
@@ -704,6 +713,7 @@ namespace PowerUps {
 
             // Handles control/movement
             LiveActorMovementHook::InstallAtSymbol("_ZN2al9LiveActor8movementEv");
+            CalcAnimHook::InstallAtSymbol("_ZN2al9LiveActor8calcAnimEv");
 
             // Handles Hammer while Carrying
             PlayerCarryKeeperStartCarry::InstallAtSymbol("_ZN17PlayerCarryKeeper10startCarryEPN2al9HitSensorE");
