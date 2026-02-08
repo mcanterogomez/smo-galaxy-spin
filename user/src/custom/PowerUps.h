@@ -11,7 +11,7 @@ namespace PowerUps {
         static void Callback(exl::hook::InlineCtx* ctx) {
             auto* actor = reinterpret_cast<al::LiveActor*>(ctx->X[0]);
 
-            if (al::isEqualString(actor->getName(), "MarioIceBall")) ctx->X[8] = reinterpret_cast<u64>("PlayerIceBall");
+            if (isIce && al::isEqualString(actor->getName(), "MarioIceBall")) ctx->X[8] = reinterpret_cast<u64>("PlayerIceBall");
         }
     };
 
@@ -41,11 +41,13 @@ namespace PowerUps {
             iceBalls->makeActorDeadAll();
 
             // Create ice cube
-            iceCubes = new al::LiveActorGroup("IceCubes", 32);
-            while (!iceCubes->isFull()) {
-                auto* cube = new PlayerIceCube("IceCube");
-                al::initCreateActorNoPlacementInfo(cube, *actorInfo);
-                iceCubes->registerActor(cube);
+            if (isIce) {
+                iceCubes = new al::LiveActorGroup("IceCubes", 32);
+                while (!iceCubes->isFull()) {
+                    auto* cube = new PlayerIceCube("IceCube");
+                    al::initCreateActorNoPlacementInfo(cube, *actorInfo);
+                    iceCubes->registerActor(cube);
+                }
             }
 
             // Create custom gauge

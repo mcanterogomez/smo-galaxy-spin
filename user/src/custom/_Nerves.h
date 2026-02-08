@@ -260,8 +260,8 @@ public:
         ) {
             anim->endSubAnim();
             
-            if (isFire || isBrawl) anim->startAnim("WearEndBrawl");
-            else if (isSuper) anim->startAnim("WearEndSuper");
+            if (isFire || isIce || isBrawl) anim->startAnim("WearEndBrawl");
+            else if (isMetal || isSuper) anim->startAnim("WearEndSuper");
             else anim->startAnim("WearEnd");
         }
 

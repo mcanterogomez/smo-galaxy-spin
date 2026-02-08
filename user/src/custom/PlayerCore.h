@@ -33,6 +33,8 @@ namespace PlayerCore {
                 && (cap && al::isEqualString(cap, "MarioColorIce"));
             isTanooki = (costume && al::isEqualString(costume, "MarioTanooki"))
                 && (cap && al::isEqualString(cap, "MarioTanooki"));
+            isMetal = (costume && al::isEqualString(costume, "MarioColorMetal"))
+                && (cap && al::isEqualString(cap, "MarioColorMetal"));
             isBrawl = (costume && al::isEqualString(costume, "MarioColorBrawl"))
                 && (cap && al::isEqualString(cap, "MarioColorBrawl"));
             isSuper = (costume && al::isEqualString(costume, "MarioColorSuper"))
@@ -59,7 +61,8 @@ namespace PlayerCore {
                         state->requestAnimName(special);
                 }
                 else {
-                    if (isBrawl) state->requestAnimName("WaitBrawl");
+                    if (isMetal) state->requestAnimName("BattleWait");
+                    else if (isBrawl) state->requestAnimName("WaitBrawl");
                     else if (isSuper) state->requestAnimName("WaitSuper");
                 }
             }
@@ -165,22 +168,26 @@ namespace PlayerCore {
             wasAttackMove = isAttackMove;
 
             // Change animations
+            if (isMetal && face && !al::isActionPlayingSubActor(model, "顔", "AreaWaitFight")) al::startActionSubActor(model, "顔", "AreaWaitFight");
+
             if ((isBrawl || isSuper)
                 && face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry")) al::startActionSubActor(model, "顔", "WaitAngry");
 
             if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
-            if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
+            if ((isMetal || isSuper) && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
 
-            if ((isMario && cape && al::isAlive(cape)) || isFeather || isBrawl || isSuper
+            if ((isMario && cape && al::isAlive(cape)) || isFeather || isMetal || isBrawl || isSuper
             ) {
-                if (anim && anim->isAnim("HipDropStart") && !anim->isAnim("HipDropPunchStart")) anim->startAnim("HipDropPunchStart");
-                if (anim && anim->isAnim("HipDrop") && !anim->isAnim("HipDropPunch")) anim->startAnim("HipDropPunch");
-                if (anim && anim->isAnim("HipDropLand") && !anim->isAnim("HipDropPunchLand")) anim->startAnim("HipDropPunchLand");
-                if (anim && anim->isAnim("HipDropReaction") && !anim->isAnim("HipDropPunchReaction")) anim->startAnim("HipDropPunchReaction");
+                if (!isMetal) {
+                    if (anim && anim->isAnim("HipDropStart") && !anim->isAnim("HipDropPunchStart")) anim->startAnim("HipDropPunchStart");
+                    if (anim && anim->isAnim("HipDrop") && !anim->isAnim("HipDropPunch")) anim->startAnim("HipDropPunch");
+                    if (anim && anim->isAnim("HipDropLand") && !anim->isAnim("HipDropPunchLand")) anim->startAnim("HipDropPunchLand");
+                    if (anim && anim->isAnim("HipDropReaction") && !anim->isAnim("HipDropPunchReaction")) anim->startAnim("HipDropPunchReaction");
 
-                if (anim && anim->isAnim("SwimHipDropStart") && !anim->isAnim("SwimHipDropPunchStart")) anim->startAnim("SwimHipDropPunchStart");
-                if (anim && (anim->isAnim("SwimHipDrop") || anim->isAnim("SwimDive")) && !anim->isAnim("SwimHipDropPunch")) anim->startAnim("SwimHipDropPunch");
-                if (anim && anim->isAnim("SwimHipDropLand") && !anim->isAnim("SwimHipDropPunchLand")) anim->startAnim("SwimHipDropPunchLand");
+                    if (anim && anim->isAnim("SwimHipDropStart") && !anim->isAnim("SwimHipDropPunchStart")) anim->startAnim("SwimHipDropPunchStart");
+                    if (anim && (anim->isAnim("SwimHipDrop") || anim->isAnim("SwimDive")) && !anim->isAnim("SwimHipDropPunch")) anim->startAnim("SwimHipDropPunch");
+                    if (anim && anim->isAnim("SwimHipDropLand") && !anim->isAnim("SwimHipDropPunchLand")) anim->startAnim("SwimHipDropPunchLand");
+                }
 
                 if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
                 if (anim && anim->isAnim("MofumofuDemoOpening2") && !anim->isAnim("MofumofuDemoOpening2Super")) anim->startAnim("MofumofuDemoOpening2Super");

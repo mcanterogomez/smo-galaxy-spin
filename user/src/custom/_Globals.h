@@ -157,6 +157,7 @@ bool isFeather = false;
 bool isFire = false;
 bool isIce = false;
 bool isTanooki = false;
+bool isMetal = false;
 bool isBrawl = false;
 bool isSuper = false;
 
