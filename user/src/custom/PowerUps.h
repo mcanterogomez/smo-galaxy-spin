@@ -284,6 +284,27 @@ namespace PowerUps {
                 }
             }
 
+            // Handle logic for Metal suit
+            if (isMetal) {
+                if (thisPtr->mInfo->mIsMoon) applyMetalMarioMoonConst(thisPtr->mConst);
+                else applyMetalMarioConst(thisPtr->mConst);
+
+                if (thisPtr->mJointControlKeeper) thisPtr->mJointControlKeeper->resetPartsDynamics(); // Stop physics for nose/mustache
+
+                auto* wsf = thisPtr->mWaterSurfaceFinder;
+                bool nearSurface = wsf && wsf->isFoundSurface() && wsf->getDistance() <= 80.0f;
+                bool submerged = isWater && !nearSurface;
+
+                if (submerged) {
+                    if (onGround) al::limitVelocityH(thisPtr, 8.5f); // Running: hard cap, don't gradually decrease
+                    else {
+                        al::scaleVelocityHV(thisPtr, 0.95f, 1.0f); // Jumping: gradually lose horizontal speed
+                        f32 velY = al::getVelocity(thisPtr).y;
+                        if (velY < 0.0f) al::scaleVelocityY(thisPtr, 0.85f); // Floaty descent: drag on downward velocity only
+                    }
+                }
+            }
+            
             // Handle logic for Super suit
             if (isSuper) {
                 applyMoonMarioConst(thisPtr->mConst); // force Moon physics
@@ -642,6 +663,27 @@ namespace PowerUps {
         }
     };
 
+    struct PlayerAnimatorSetAnimRateCommon : public mallow::hook::Trampoline<PlayerAnimatorSetAnimRateCommon> {
+        static void Callback(PlayerAnimator* thisPtr, float rate) {
+            if (isMetal && isHakoniwa && thisPtr == isHakoniwa->mAnimator) {
+                auto* wsf = isHakoniwa->mWaterSurfaceFinder;
+                bool nearSurface = wsf && wsf->isFoundSurface() && wsf->getDistance() <= 80.0f;
+                if (al::isInWater(isHakoniwa) && !nearSurface) {
+                    rate *= 0.50f;
+                    thisPtr->mAnimFrameCtrl->mRate = rate;
+                }
+            }
+            Orig(thisPtr, rate);
+        }
+    };
+
+    struct TryUpdateSeMaterialCodeHook : public mallow::hook::Trampoline<TryUpdateSeMaterialCodeHook> {
+        static void Callback(al::IUseAudioKeeper* keeper, const char* material) {
+            if (isMetal) return Orig(keeper, "Metal");
+            Orig(keeper, material);
+        }
+    };
+
     struct StartWaterSurfaceRunJudge : public mallow::hook::Trampoline<StartWaterSurfaceRunJudge> {
         static bool Callback(const PlayerJudgeStartWaterSurfaceRun* thisPtr) {
             if (isSuper) {
@@ -688,10 +730,10 @@ namespace PowerUps {
         }
     };
 
-    struct RsIsTouchDeadCode : public mallow::hook::Trampoline<RsIsTouchDeadCode> {
-        static bool Callback(const al::LiveActor* actor, const IUsePlayerCollision* coll, const IPlayerModelChanger* changer, const IUseDimension* dim, float f) {
-            if (isSuper) return false;
-            return Orig(actor, coll, changer, dim, f);
+    struct RsIsTouchDamageCode : public mallow::hook::Trampoline<RsIsTouchDamageCode> {
+        static bool Callback(const al::LiveActor* actor, const IUsePlayerCollision* coll, const IPlayerModelChanger* changer) {
+            if (isMetal || isSuper) return false;
+            return Orig(actor, coll, changer);
         }
     };
 
@@ -699,6 +741,27 @@ namespace PowerUps {
         static bool Callback(const al::LiveActor* actor, const IUsePlayerCollision* coll, const IPlayerModelChanger* changer) {
             if (isSuper) return false;
             return Orig(actor, coll, changer);
+        }
+    };
+
+    struct RsIsTouchDeadCode : public mallow::hook::Trampoline<RsIsTouchDeadCode> {
+        static bool Callback(const al::LiveActor* actor, const IUsePlayerCollision* coll, const IPlayerModelChanger* changer, const IUseDimension* dim, float f) {
+            if (isSuper) return false;
+            return Orig(actor, coll, changer, dim, f);
+        }
+    };
+
+    struct JudgeInWater : public mallow::hook::Trampoline<JudgeInWater> {
+        static bool Callback(const PlayerJudgeInWater* thisPtr) {
+            if (isMetal) return false;
+            return Orig(thisPtr);
+        }
+    };
+    
+    struct JudgeReduceOxygen : public mallow::hook::Trampoline<JudgeReduceOxygen> {
+        static bool Callback(void* thisPtr) {
+            if (isSuper) return false;
+            return Orig(thisPtr);
         }
     };
 
@@ -740,12 +803,21 @@ namespace PowerUps {
                 WaterSurfaceRunJudge::InstallAtSymbol("_ZNK26PlayerJudgeWaterSurfaceRun5judgeEv");
                 RunWaterSurfaceDisableSink::InstallAtOffset(0x48023C);
                 WaterSurfaceRunDisableSlowdown::InstallAtOffset(0x4184C0);
-                RsIsTouchDeadCode::InstallAtSymbol("_ZN2rs15isTouchDeadCodeEPKN2al9LiveActorEPK19IUsePlayerCollisionPK19IPlayerModelChangerPK13IUseDimensionf");
+                RsIsTouchDamageCode::InstallAtSymbol("_ZN2rs17isTouchDamageCodeEPKN2al9LiveActorEPK19IUsePlayerCollision");
                 RsIsTouchDamageFireCode::InstallAtSymbol("_ZN2rs21isTouchDamageFireCodeEPKN2al9LiveActorEPK19IUsePlayerCollisionPK19IPlayerModelChanger");
+                RsIsTouchDeadCode::InstallAtSymbol("_ZN2rs15isTouchDeadCodeEPKN2al9LiveActorEPK19IUsePlayerCollisionPK19IPlayerModelChangerPK13IUseDimensionf");
             #endif
 
             // Handles WearEnd
             PlayerSeCtrlUpdateWearEnd::InstallAtOffset(0x463DE0);
+
+            // Handle Metal Mario setup
+            PlayerAnimatorSetAnimRateCommon::InstallAtSymbol("_ZN14PlayerAnimator17setAnimRateCommonEf");
+            TryUpdateSeMaterialCodeHook::InstallAtSymbol("_ZN2al23tryUpdateSeMaterialCodeEPNS_15IUseAudioKeeperEPKc");
+            
+            // Handles Metal Mario walking in water
+            JudgeInWater::InstallAtSymbol("_ZNK18PlayerJudgeInWater5judgeEv");
+            JudgeReduceOxygen::InstallAtSymbol("_ZNK23PlayerJudgeReduceOxygen5judgeEv");
 
             // Disable invincibility music patches
             exl::patch::CodePatcher invincibleStartPatcher(0x4CC6FC);

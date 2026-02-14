@@ -506,3 +506,122 @@ inline void applyMoonMarioConst(PlayerConst* pc) {
   pc->mWallClimbJumpGravity = 0.80000;
   pc->mWallJumpGravity = 0.30000;
 }
+
+inline void applyMetalMarioConst(PlayerConst* pc) {
+    applyNormalMarioConst(pc);
+
+    pc->mCapCatchPopGravity *= 1.5f;
+    pc->mCapHeadSpringJumpGravity *= 1.5f;
+    pc->mCapHeadSpringJumpGravityHigh *= 1.5f;
+    pc->mCapLeapFrogJumpGravity *= 1.5f;
+    pc->mDamageFireGravity *= 1.5f;
+    pc->mDamageSwimGravity *= 1.5f;
+    pc->mDamageSwimSurfaceGravity *= 1.5f;
+    pc->mFallSpeedMax *= 1.5f;
+    pc->mFallWallScaleVelocity *= 1.5f;
+    pc->mGrabCeilJumpGravity *= 1.5f;
+    pc->mGrabCeilLeavePopGravity *= 1.5f;
+    pc->mGravity *= 1.5f;
+    pc->mGravityAir *= 1.5f;
+    pc->mGravityDamage *= 1.5f;
+    pc->mGravityMove *= 1.5f;
+    pc->mGravitySpinAir *= 1.5f;
+    pc->mGravityWallSlide *= 1.5f;
+    pc->mHeadSlidingGravityAir *= 1.5f;
+    pc->mHipDropGravity *= 1.5f;
+    pc->mHipDropSpeed *= 1.5f;
+    pc->mHipDropSpeedMax *= 1.5f;
+    pc->mJumpGravity *= 1.5f;
+    pc->mJumpGravity2nd *= 1.5f;
+    pc->mJumpGravity3rd *= 1.5f;
+    pc->mJumpGravityCapCatch *= 1.5f;
+    pc->mJumpGravityForceRun *= 1.5f;
+    pc->mLongFallDistance *= 1.5f;
+    pc->mLongJumpGravity *= 1.5f;
+    pc->mSlerpQuatGrav *= 1.5f;
+    pc->mSlopeRollingAccel *= 1.5f;
+    pc->mSlopeRollingAccelOnSkate *= 1.5f;
+    pc->mSlopeRollingMaxSpeed *= 1.5f;
+    pc->mSlopeRollingSideAccel *= 1.5f;
+    pc->mSlopeRollingSideAccelOnSkate *= 1.5f;
+    pc->mSlopeSlideAccel *= 1.5f;
+    pc->mSlopeSlideMaxSpeed *= 1.5f;
+    pc->mSlopeSlideSideAccel *= 1.5f;
+    pc->mSpinFlowerJumpDownFallInitSpeed *= 1.5f;
+    pc->mSpinFlowerJumpDownFallPower *= 1.5f;
+    pc->mSpinFlowerJumpDownFallSpeedMax *= 1.5f;
+    pc->mSpinFlowerJumpFallSpeedMax *= 1.5f;
+    pc->mSpinFlowerJumpGravity *= 1.5f;
+    pc->mSpinJumpDownFallInitSpeed *= 1.5f;
+    pc->mSpinJumpDownFallPower *= 1.5f;
+    pc->mSpinJumpDownFallSpeedMax *= 1.5f;
+    pc->mSpinJumpGravity *= 1.5f;
+    pc->mSquatJumpGravity *= 1.5f;
+    pc->mSwimFallInBrakeH *= 1.5f;
+    pc->mSwimFallInBrakeV *= 1.5f;
+    pc->mSwimFallInSpeed *= 1.5f;
+    pc->mSwimFallSpeedMax *= 1.5f;
+    pc->mSwimGravity *= 1.5f;
+    pc->mSwimGravityWalk *= 1.5f;
+    pc->mSwimJumpHipDropGravity *= 1.5f;
+    pc->mSwimSurfaceGravity *= 1.5f;
+    pc->mTrampleGravity *= 1.5f;
+    pc->mTrampleGravity2D *= 1.5f;
+    pc->mTrampleHighGravity *= 1.5f;
+    pc->mTrampleHighGravity2D *= 1.5f;
+    pc->mTrampleHipDropGravity *= 1.5f;
+    pc->mTurnJumpGravity *= 1.5f;
+    pc->mWallClimbGravity *= 1.5f;
+    pc->mWallClimbJumpGravity *= 1.5f;
+    pc->mWallFallJumpSpeed *= 1.5f;
+    pc->mWallJumpGravity *= 1.5f;
+
+    // Freeze nose and mustache
+    pc->mNoseStability = 1.0f;
+    pc->mNoseFriction = 1.0f;
+    pc->mNoseLimitDegree = 0.0f;
+    pc->mMustacheStability = 1.0f;
+    pc->mMustacheFriction = 1.0f;
+    pc->mMustacheLimitDegree = 0.0f;
+}
+
+inline void applyMetalMarioMoonConst(PlayerConst* pc) {
+    applyMoonMarioConst(pc);
+
+    pc->mCapCatchPopGravity *= 1.5f;
+    pc->mCapHeadSpringJumpGravity *= 1.5f;
+    pc->mCapHeadSpringJumpGravityHigh *= 1.5f;
+    pc->mCapLeapFrogJumpGravity *= 1.5f;
+    pc->mGrabCeilLeavePopGravity *= 1.5f;
+    pc->mGravityAir *= 1.5f;
+    pc->mGravityDamage *= 1.5f;
+    pc->mGravityWallSlide *= 1.5f;
+    pc->mHeadSlidingGravityAir *= 1.5f;
+    pc->mHipDropGravity *= 1.5f;
+    pc->mJumpGravity *= 1.5f;
+    pc->mJumpGravity2nd *= 1.5f;
+    pc->mJumpGravity3rd *= 1.5f;
+    pc->mJumpGravityCapCatch *= 1.5f;
+    pc->mJumpGravityForceRun *= 1.5f;
+    pc->mLongJumpGravity *= 1.5f;
+    pc->mSpinFlowerJumpDownFallPower *= 1.5f;
+    pc->mSpinFlowerJumpGravity *= 1.5f;
+    pc->mSpinJumpGravity *= 1.5f;
+    pc->mSquatJumpGravity *= 1.5f;
+    pc->mTrampleGravity *= 1.5f;
+    pc->mTrampleGravity2D *= 1.5f;
+    pc->mTrampleHighGravity *= 1.5f;
+    pc->mTrampleHighGravity2D *= 1.5f;
+    pc->mTrampleHipDropGravity *= 1.5f;
+    pc->mTurnJumpGravity *= 1.5f;
+    pc->mWallClimbJumpGravity *= 1.5f;
+    pc->mWallJumpGravity *= 1.5f;
+
+    // Freeze nose and mustache
+    pc->mNoseStability = 1.0f;
+    pc->mNoseFriction = 1.0f;
+    pc->mNoseLimitDegree = 0.0f;
+    pc->mMustacheStability = 1.0f;
+    pc->mMustacheFriction = 1.0f;
+    pc->mMustacheLimitDegree = 0.0f;
+}

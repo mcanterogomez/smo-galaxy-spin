@@ -14,8 +14,6 @@ namespace PlayerCore {
             // Set Hakoniwa pointer
             isHakoniwa = thisPtr;
 
-            PowerUps::executeInitPlayer(thisPtr, actorInfo, playerInfo);
-
             // Check for Super suit costume and cap
             const char* costume = GameDataFunction::getCurrentCostumeTypeName(thisPtr);
             const char* cap = GameDataFunction::getCurrentCapTypeName(thisPtr);
@@ -39,6 +37,11 @@ namespace PlayerCore {
                 && (cap && al::isEqualString(cap, "MarioColorBrawl"));
             isSuper = (costume && al::isEqualString(costume, "MarioColorSuper"))
                 && (cap && al::isEqualString(cap, "MarioColorSuper"));
+
+            // Set Cap sounds
+            if (isMetal && thisPtr->mHackCap) al::setSeKeeperPlayNamePrefix(thisPtr->mHackCap, "Iron");
+
+            PowerUps::executeInitPlayer(thisPtr, actorInfo, playerInfo);
         }
     };
 
@@ -174,7 +177,7 @@ namespace PlayerCore {
                 && face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry")) al::startActionSubActor(model, "顔", "WaitAngry");
 
             if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
-            if ((isMetal || isSuper) && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
+            if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
 
             if ((isMario && cape && al::isAlive(cape)) || isFeather || isMetal || isBrawl || isSuper
             ) {
@@ -236,8 +239,8 @@ namespace PlayerCore {
 
             if (thisPtr && rs::isMsgPlayerDamage(msg)
             ) {
-                if (isSuper) {
-                    if (source && target) al::sendMsgPush(source, target);
+                if (isMetal || isSuper) {
+                    if (source && target) rs::sendMsgPushToPlayer(target, source);
                     return true;
                 }
                 auto* anim = thisPtr->mAnimator;
