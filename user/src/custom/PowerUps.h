@@ -677,6 +677,13 @@ namespace PowerUps {
         }
     };
 
+    struct ActorActionKeeperUpdatePostHook : public mallow::hook::Trampoline<ActorActionKeeperUpdatePostHook> {
+        static void Callback(al::ActorActionKeeper* thisPtr) {
+            if (isMetal) ::al::stopAllSeFromUser(isHakoniwa, 0, "Mouth");
+            Orig(thisPtr);
+        }
+    };
+
     struct TryUpdateSeMaterialCodeHook : public mallow::hook::Trampoline<TryUpdateSeMaterialCodeHook> {
         static void Callback(al::IUseAudioKeeper* keeper, const char* material) {
             if (isMetal) return Orig(keeper, "Metal");
@@ -813,6 +820,7 @@ namespace PowerUps {
 
             // Handle Metal Mario setup
             PlayerAnimatorSetAnimRateCommon::InstallAtSymbol("_ZN14PlayerAnimator17setAnimRateCommonEf");
+            ActorActionKeeperUpdatePostHook::InstallAtSymbol("_ZN2al17ActorActionKeeper10updatePostEv");
             TryUpdateSeMaterialCodeHook::InstallAtSymbol("_ZN2al23tryUpdateSeMaterialCodeEPNS_15IUseAudioKeeperEPKc");
             
             // Handles Metal Mario walking in water

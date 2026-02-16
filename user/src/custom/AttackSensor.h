@@ -531,7 +531,10 @@ namespace AttackSensor {
                 }
                 if(!isInHitBuffer
                 ) {
-                    if (isIceball && al::isSensorEnemyBody(target) && al::getHitSensor(targetHost, "Attack")
+                    if (isIceball && al::isSensorEnemyBody(target)
+                        && !al::isHideModel(targetHost) && al::getHitSensor(targetHost, "Attack")
+                        && !al::isEqualSubString(typeid(*targetHost).name(), "Boss")
+                        && !al::isEqualSubString(typeid(*targetHost).name(), "Koopa")
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
                         PlayerFreeze::freezeActor(targetHost, 1800);
