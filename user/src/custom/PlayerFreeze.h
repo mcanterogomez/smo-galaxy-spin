@@ -3,6 +3,9 @@
 #include "ModConfig.h"
 #include "custom/_Globals.h"
 #include "headers/PlayerIceCube.h"
+#include "Library/Collision/CollisionParts.h"
+#include "Library/Collision/CollisionPartsTriangle.h"
+#include "Library/Collision/CollisionPartsKeeperUtil.h"
 
 namespace PlayerFreeze {
 
@@ -11,51 +14,44 @@ namespace PlayerFreeze {
         PlayerIceCube* cube = nullptr;
         const char* prevAction = nullptr;
         s32 timer = 0;
+        const al::CollisionParts* floorParts = nullptr;
+        sead::Vector3f lastFloorPos = {0.0f, 0.0f, 0.0f};
     };
 
     inline constexpr s32 kMaxFrozen = 32;
     inline FrozenEntry sFrozenList[kMaxFrozen];
     inline s32 sFrozenCount = 0;
 
-    inline void clearAllFrozen() {
-        sFrozenCount = 0;
-    }
+    inline void clearAllFrozen() { sFrozenCount = 0; }
 
     inline FrozenEntry* findEntry(al::LiveActor* actor) {
-        for (s32 i = 0; i < sFrozenCount; i++) {
-            if (sFrozenList[i].actor == actor)
-                return &sFrozenList[i];
-        }
+        for (s32 i = 0; i < sFrozenCount; i++)
+            if (sFrozenList[i].actor == actor) return &sFrozenList[i];
         return nullptr;
     }
 
     inline bool isFrozen(al::LiveActor* actor) {
-        return actor && findEntry(actor) != nullptr;
+        return actor && findEntry(actor);
     }
 
-    inline void freezeActor(al::LiveActor* actor, s32 duration) {
-        if (!actor || isFrozen(actor) || sFrozenCount >= kMaxFrozen)
-            return;
+    // Raycast down from actor to find what platform it's standing on
+    inline const al::CollisionParts* findFloorParts(al::LiveActor* actor, sead::Vector3f* outFloorPos) {
+        sead::Vector3f rayDir = al::getGravity(actor) * 500.0f;
+        sead::Vector3f rayStart = al::getTrans(actor);
+        sead::Vector3f hitPos;
+        al::Triangle tri;
 
-        const char* prevAction = al::getActionName(actor);
-        bool usedBlowDown = al::tryStartAction(actor, "BlowDown");
-
-        PlayerIceCube* cube = nullptr;
-        if (iceCubes) {
-            cube = static_cast<PlayerIceCube*>(iceCubes->getDeadActor());
-            if (cube)
-                cube->freeze(actor);
+        if (alCollisionUtil::getFirstPolyOnArrow(actor, &hitPos, &tri, rayStart, rayDir, nullptr, nullptr) && tri.mCollisionParts) {
+            if (outFloorPos)
+                *outFloorPos = tri.mCollisionParts->getBaseMtx().getTranslation();
+            return tri.mCollisionParts;
         }
+        return nullptr;
+    }
 
-        sFrozenList[sFrozenCount++] = {
-            actor,
-            cube,
-            usedBlowDown ? prevAction : nullptr,
-            duration
-        };
-
-        al::setActionFrameRate(actor, 0.0f);
-        al::invalidateHitSensors(actor);
+    // Remove entry by swapping with last
+    inline void removeEntry(FrozenEntry* entry) {
+        *entry = sFrozenList[--sFrozenCount];
     }
 
     inline void unfreezeActor(al::LiveActor* actor, bool restoreAction = false) {
@@ -68,12 +64,11 @@ namespace PlayerFreeze {
         if (actor && al::isAlive(actor)) {
             al::setActionFrameRate(actor, 1.0f);
             al::validateHitSensors(actor);
-
             if (restoreAction && entry->prevAction)
                 al::tryStartAction(actor, entry->prevAction);
         }
 
-        *entry = sFrozenList[--sFrozenCount];
+        removeEntry(entry);
     }
 
     inline bool sendAttackToEnemy(al::LiveActor* enemy, al::HitSensor* attacker) {
@@ -83,9 +78,6 @@ namespace PlayerFreeze {
         if (!target && enemy->getHitSensorKeeper())
             target = enemy->getHitSensorKeeper()->getSensor(0);
         if (!target) return false;
-
-        sead::Vector3f effectPos = (al::getSensorPos(attacker) + al::getTrans(enemy)) * 0.5f;
-        effectPos.y += 20.0f;
 
         al::LiveActor* attackerActor = al::getSensorHost(attacker);
 
@@ -97,46 +89,81 @@ namespace PlayerFreeze {
 
             if (rs::sendMsgHackAttack(target, attacker) ||
                 al::sendMsgExplosion(target, attacker, nullptr)) {
+                sead::Vector3f effectPos = (al::getSensorPos(attacker) + al::getTrans(enemy)) * 0.5f;
+                effectPos.y += 20.0f;
                 if (!al::isEffectEmitting(attackerActor, "Hit"))
                     al::tryEmitEffect(isHakoniwa, "Hit", &effectPos);
                 return true;
             }
-        }
-        // Standard attacks
-        else {
-            return rs::sendMsgHackAttack(target, attacker) ||
-                   rs::sendMsgCapReflect(target, attacker) ||
-                   rs::sendMsgCapAttack(target, attacker) ||
-                   al::sendMsgPlayerObjHipDropReflect(target, attacker, nullptr);
+            return false;
         }
 
-        return false;
+        // Standard attacks
+        return rs::sendMsgHackAttack(target, attacker) ||
+            rs::sendMsgCapReflect(target, attacker) ||
+            rs::sendMsgCapAttack(target, attacker) ||
+            al::sendMsgPlayerObjHipDropReflect(target, attacker, nullptr);
+    }
+
+    inline void freezeActor(al::LiveActor* actor, s32 duration) {
+        if (!actor || isFrozen(actor) || sFrozenCount >= kMaxFrozen) return;
+
+        const char* prevAction = al::getActionName(actor);
+        bool usedBlowDown = al::tryStartAction(actor, "BlowDown");
+
+        PlayerIceCube* cube = nullptr;
+        if (iceCubes) {
+            cube = static_cast<PlayerIceCube*>(iceCubes->getDeadActor());
+            if (cube) cube->freeze(actor);
+        }
+
+        sead::Vector3f floorPos = {0.0f, 0.0f, 0.0f};
+        const al::CollisionParts* floor = findFloorParts(actor, &floorPos);
+
+        sFrozenList[sFrozenCount++] = {
+            actor, cube,
+            usedBlowDown ? prevAction : nullptr,
+            duration, floor, floorPos
+        };
+
+        al::setActionFrameRate(actor, 0.0f);
+        al::invalidateHitSensors(actor);
     }
 
     inline bool updateFrozenActor(al::LiveActor* actor) {
         FrozenEntry* entry = findEntry(actor);
         if (!entry) return false;
 
+        // Actor died externally
         if (!actor || !al::isAlive(actor)) {
             if (entry->cube && al::isAlive(entry->cube))
                 entry->cube->makeActorDead();
-            *entry = sFrozenList[--sFrozenCount];
+            removeEntry(entry);
             return false;
         }
 
-        // Guard: cube gone (died or scene change) -> unfreeze actor
+        // Cube gone (scene change, etc) -> unfreeze
         if (entry->cube && !al::isAlive(entry->cube)) {
             entry->cube = nullptr;
             unfreezeActor(actor, true);
             return false;
         }
 
-        // Cube hit -> damage enemy
+        // Cube was hit -> damage enemy
         if (entry->cube && entry->cube->wasHit()) {
             al::HitSensor* attacker = entry->cube->getAttacker();
             unfreezeActor(actor);
             sendAttackToEnemy(actor, attacker);
             return false;
+        }
+
+        // Follow moving platform
+        if (entry->floorParts) {
+            sead::Vector3f curPos = entry->floorParts->getBaseMtx().getTranslation();
+            sead::Vector3f delta = curPos - entry->lastFloorPos;
+            if (delta.squaredLength() > 0.0f)
+                al::setTrans(actor, al::getTrans(actor) + delta);
+            entry->lastFloorPos = curPos;
         }
 
         al::setActionFrameRate(actor, 0.0f);
@@ -145,7 +172,6 @@ namespace PlayerFreeze {
             unfreezeActor(actor, true);
             return false;
         }
-
         return true;
     }
 
