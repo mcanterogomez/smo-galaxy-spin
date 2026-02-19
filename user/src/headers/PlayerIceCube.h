@@ -83,7 +83,7 @@ public:
     }
 
 private:
-    static constexpr f32 kScalePadding = 1.5f;
+    static constexpr f32 kScalePadding = 1.25f;
     static constexpr f32 kMinScale = 0.5f;
     static constexpr f32 kEffectScaleMult = 0.5f;
     static constexpr f32 kGroundRayLength = 500.0f;
@@ -92,30 +92,31 @@ private:
     void syncToTarget() {
         if (!mTarget) return;
 
-        // Calculate scale from bounding boxes
-        sead::BoundBox3f cubeBox, targetBox;
-        al::calcModelBoundingBox(&cubeBox, this);
-        al::calcModelBoundingBox(&targetBox, mTarget);
+        // Calculate scale from target's sensor radius
+        al::HitSensor* sensor = al::getHitSensor(mTarget, "Body");
+        if (!sensor && mTarget->getHitSensorKeeper())
+            sensor = mTarget->getHitSensorKeeper()->getSensor(0);
 
-        auto safeDivide = [](f32 a, f32 b) { return b > 0.001f ? a / b : 0.0f; };
-
-        f32 ratioX = safeDivide(targetBox.getSizeX(), cubeBox.getSizeX());
-        f32 ratioY = safeDivide(targetBox.getSizeY(), cubeBox.getSizeY());
-        f32 ratioZ = safeDivide(targetBox.getSizeZ(), cubeBox.getSizeZ());
-
-        f32 maxRatio = sead::Mathf::max(ratioX, sead::Mathf::max(ratioY, ratioZ));
-        mScale = sead::Mathf::max(maxRatio * kScalePadding, kMinScale);
+        if (sensor) {
+            f32 enemyDiameter = al::getSensorRadius(sensor) * 2.0f;
+            sead::BoundBox3f cubeBox;
+            al::calcModelBoundingBox(&cubeBox, this);
+            f32 cubeSize = sead::Mathf::max(cubeBox.getSizeX(),
+                            sead::Mathf::max(cubeBox.getSizeY(), cubeBox.getSizeZ()));
+            if (cubeSize > 0.001f)
+                mScale = sead::Mathf::max((enemyDiameter * kScalePadding) / cubeSize, kMinScale);
+        }
 
         al::setScaleAll(this, mScale);
 
         // Scale sensor radius to match cube
-        f32 maxDim = sead::Mathf::max(cubeBox.getSizeX(),
-                      sead::Mathf::max(cubeBox.getSizeY(), cubeBox.getSizeZ()));
-        al::setSensorRadius(this, "Body", maxDim * mScale * 0.5f);
+        if (sensor) al::setSensorRadius(this, "Body", al::getSensorRadius(sensor) * mScale);
 
         // Position cube
         sead::Vector3f pos = al::getTrans(mTarget);
         sead::Vector3f gravity = al::getGravity(mTarget);
+        sead::BoundBox3f cubeBox;
+        al::calcModelBoundingBox(&cubeBox, this);
         f32 halfHeight = cubeBox.getSizeY() * mScale * 0.5f;
 
         // Raycast slightly above enemy position
@@ -124,9 +125,8 @@ private:
         sead::Vector3f groundPos;
 
         if (alCollisionUtil::getHitPosOnArrow(mTarget, &groundPos, rayStart, rayDelta, nullptr, nullptr)) {
-            if ((groundPos - pos).dot(gravity) < halfHeight) {
+            if ((groundPos - pos).dot(gravity) < halfHeight)
                 pos = groundPos - (gravity * halfHeight);
-            }
         }
 
         al::setTrans(this, pos);

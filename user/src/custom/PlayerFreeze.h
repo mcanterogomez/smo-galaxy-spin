@@ -12,7 +12,6 @@ namespace PlayerFreeze {
     struct FrozenEntry {
         al::LiveActor* actor = nullptr;
         PlayerIceCube* cube = nullptr;
-        const char* prevAction = nullptr;
         s32 timer = 0;
         const al::CollisionParts* floorParts = nullptr;
         sead::Vector3f lastFloorPos = {0.0f, 0.0f, 0.0f};
@@ -54,7 +53,7 @@ namespace PlayerFreeze {
         *entry = sFrozenList[--sFrozenCount];
     }
 
-    inline void unfreezeActor(al::LiveActor* actor, bool restoreAction = false) {
+    inline void unfreezeActor(al::LiveActor* actor) {
         FrozenEntry* entry = findEntry(actor);
         if (!entry) return;
 
@@ -64,8 +63,6 @@ namespace PlayerFreeze {
         if (actor && al::isAlive(actor)) {
             al::setActionFrameRate(actor, 1.0f);
             al::validateHitSensors(actor);
-            if (restoreAction && entry->prevAction)
-                al::tryStartAction(actor, entry->prevAction);
         }
 
         removeEntry(entry);
@@ -108,9 +105,6 @@ namespace PlayerFreeze {
     inline void freezeActor(al::LiveActor* actor, s32 duration) {
         if (!actor || isFrozen(actor) || sFrozenCount >= kMaxFrozen) return;
 
-        const char* prevAction = al::getActionName(actor);
-        bool usedBlowDown = al::tryStartAction(actor, "BlowDown");
-
         PlayerIceCube* cube = nullptr;
         if (iceCubes) {
             cube = static_cast<PlayerIceCube*>(iceCubes->getDeadActor());
@@ -121,9 +115,7 @@ namespace PlayerFreeze {
         const al::CollisionParts* floor = findFloorParts(actor, &floorPos);
 
         sFrozenList[sFrozenCount++] = {
-            actor, cube,
-            usedBlowDown ? prevAction : nullptr,
-            duration, floor, floorPos
+            actor, cube, duration, floor, floorPos
         };
 
         al::setActionFrameRate(actor, 0.0f);
@@ -145,7 +137,7 @@ namespace PlayerFreeze {
         // Cube gone (scene change, etc) -> unfreeze
         if (entry->cube && !al::isAlive(entry->cube)) {
             entry->cube = nullptr;
-            unfreezeActor(actor, true);
+            unfreezeActor(actor);
             return false;
         }
 
@@ -169,7 +161,7 @@ namespace PlayerFreeze {
         al::setActionFrameRate(actor, 0.0f);
 
         if (--entry->timer <= 0) {
-            unfreezeActor(actor, true);
+            unfreezeActor(actor);
             return false;
         }
         return true;
