@@ -765,10 +765,10 @@ namespace PowerUps {
         }
     };
     
-    struct JudgeReduceOxygen : public mallow::hook::Trampoline<JudgeReduceOxygen> {
-        static bool Callback(void* thisPtr) {
-            if (isSuper) return false;
-            return Orig(thisPtr);
+    struct ReduceOxygen : public mallow::hook::Trampoline<ReduceOxygen> {
+        static void Callback(void* thisPtr) {
+            if (isSuper) return;
+            Orig(thisPtr);
         }
     };
 
@@ -825,7 +825,9 @@ namespace PowerUps {
             
             // Handles Metal Mario walking in water
             JudgeInWater::InstallAtSymbol("_ZNK18PlayerJudgeInWater5judgeEv");
-            JudgeReduceOxygen::InstallAtSymbol("_ZNK23PlayerJudgeReduceOxygen5judgeEv");
+
+            // Handles Super Mario breathing in water
+            ReduceOxygen ::InstallAtSymbol("_ZN12PlayerOxygen6reduceEv");
 
             // Disable invincibility music patches
             exl::patch::CodePatcher invincibleStartPatcher(0x4CC6FC);
