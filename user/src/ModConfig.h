@@ -16,7 +16,11 @@
     // Enable dashing with power-ups.
     #define ALLOW_DASH
 
-    // [ OPTION 2.2: CAPPY ONLY ]
+    // [ OPTION 2.2: ENABLE KART ]
+    // Enable kart related mechanics.
+    #define ALLOW_KART
+
+    // [ OPTION 2.3: CAPPY ONLY ]
     // Enable Cappy throw only with power-ups.
     //#define ALLOW_CAPPY_ONLY
 

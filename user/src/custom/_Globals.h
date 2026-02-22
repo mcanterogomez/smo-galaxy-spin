@@ -75,6 +75,7 @@
 #include "headers/CustomPlayerConst.h"
 #include "headers/FireBall.h"
 #include "headers/HammerBrosHammer.h"
+#include "headers/Motorcycle.h"
 #include "headers/PlayerAnimator.h"
 #include "headers/PlayerDamageKeeper.h"
 #include "headers/PlayerIceCube.h"
@@ -166,11 +167,12 @@ bool isSuper = false;
 // Actor Pointers
 inline PlayerActorHakoniwa* isHakoniwa = nullptr;
 inline HammerBrosHammer* isHammer = nullptr;
+inline CustomGauge* isGauge = nullptr;
+inline Motorcycle* isKart = nullptr;
 inline al::LiveActor* isKoopa = nullptr;
 inline al::LiveActorGroup* fireBalls = nullptr;
 inline al::LiveActorGroup* iceBalls = nullptr;
 inline al::LiveActorGroup* iceCubes = nullptr;
-inline CustomGauge* isGauge = nullptr;
 
 // Powerup Specifics
 bool nextThrowLeft = true;

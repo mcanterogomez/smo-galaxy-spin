@@ -15,6 +15,16 @@ namespace PowerUps {
         }
     };
 
+    struct InitActorSuffixHook : public mallow::hook::Trampoline<InitActorSuffixHook> {
+        static void Callback(al::LiveActor* actor, const al::ActorInitInfo& info, const char* suffix) {
+            if (actor == (al::LiveActor*)isKart) {
+                al::initActorWithArchiveName(actor, info, "Motorcycle", suffix);
+                return;
+            }
+            Orig(actor, info, suffix);
+        }
+    };
+
     inline void executeInitPlayer(PlayerActorHakoniwa* thisPtr, const al::ActorInitInfo* actorInfo, const PlayerInitInfo* playerInfo) {
         #ifdef ALLOW_POWERUPS
             auto* model = thisPtr->mModelHolder->findModelActor("Normal");
@@ -52,6 +62,13 @@ namespace PowerUps {
 
             // Create custom gauge
             isGauge = new CustomGauge(*actorInfo->layoutInitInfo);
+
+            #ifdef ALLOW_KART
+                // Create custom kart
+                isKart = new Motorcycle("Motorcycle");
+                al::initCreateActorNoPlacementInfo(isKart, *actorInfo);
+                isKart->makeActorDead();
+            #endif
         #endif
     }
 
@@ -64,6 +81,7 @@ namespace PowerUps {
             if (isHammer) isHammer->makeActorDead();
             if (fireBalls) fireBalls->makeActorDeadAll();
             if (iceBalls) iceBalls->makeActorDeadAll();
+            if (isKart) isKart->makeActorDead();
         }
     };
 
@@ -390,6 +408,19 @@ namespace PowerUps {
                 }
                 wasDash = isDashNow;
             #endif
+
+            // Handle kart spawning
+            if (al::isPadTriggerL(-1)
+                && isKart && al::isDead(isKart)
+            ) {
+                sead::Vector3f front;
+                al::calcFrontDir(&front, thisPtr);
+                al::setTrans(isKart, al::getTrans(thisPtr) + front * 500.0f);
+
+                isKart->appear();
+                al::tryEmitEffect(isKart, "Appear", nullptr);
+                al::tryStartSe(isKart, "Appear");
+            }
         #endif
     }
 
@@ -432,10 +463,19 @@ namespace PowerUps {
 
     struct CalcAnimHook : public mallow::hook::Trampoline<CalcAnimHook> {
         static void Callback(al::LiveActor* actor) {
+            float savedLean = 0.0f;
+            bool isKartAnim = isKart && actor == (al::LiveActor*)isKart && al::isAlive(isKart);
+
+            if (isKartAnim) {
+                float* lean = reinterpret_cast<float*>((char*)isKart + 312);
+                savedLean = *lean;
+                *lean = 0.0f;
+            }
+
             Orig(actor);
 
-            if (hammerParentModel
-                && actor == hammerParentModel) updateHammerMtx();
+            if (isKartAnim) *reinterpret_cast<float*>((char*)isKart + 312) = savedLean;
+            if (hammerParentModel && actor == hammerParentModel) updateHammerMtx();
         }
     };
 
@@ -775,6 +815,7 @@ namespace PowerUps {
     inline void Install() {
         #ifdef ALLOW_POWERUPS
             FireBrosFireBallInitArchive::InstallAtOffset(0x10082C);
+            InitActorSuffixHook::InstallAtSymbol("_ZN2al15initActorSuffixEPNS_9LiveActorERKNS_13ActorInitInfoEPKc");
             PlayerActorHakoniwaInitAfterPlacement::InstallAtSymbol("_ZN19PlayerActorHakoniwa18initAfterPlacementEv");
             
             #ifdef ALLOW_CAPPY_ONLY // Handles Fireball logic
