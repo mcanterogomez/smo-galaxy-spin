@@ -15,11 +15,13 @@
 
 // Engine / “Library” headers
 #include "Library/Base/StringUtil.h"
+#include "Library/Camera/CameraUtil.h"
 #include "Library/Controller/InputFunction.h"
 #include "Library/Controller/SpinInputAnalyzer.h"
 #include "Library/Effect/EffectKeeper.h"
 #include "Library/Effect/EffectSystemInfo.h"
 #include "Library/HitSensor/HitSensorKeeper.h"
+#include "Library/Joint/JointControllerKeeper.h"
 #include "Library/LiveActor/ActorActionFunction.h"
 #include "Library/LiveActor/ActorCollisionFunction.h"
 #include "Library/LiveActor/ActorClippingFunction.h"
@@ -45,6 +47,7 @@
 
 // Game‑specific utilities
 #include "Project/HitSensor/HitSensor.h"
+#include "Util/DemoUtil.h"
 #include "Util/PlayerCollisionUtil.h"
 #include "Util/PlayerUtil.h"
 #include "Util/SensorMsgFunction.h"
@@ -182,6 +185,8 @@ static inline bool isFireThrowing() { return fireStep >= 0; }
 bool tauntRightAlt = false;
 bool isDoubleJump = false;
 bool isDoubleJumpConsume = false;
+inline float glideLean = 0.0f;
+inline float glidePitch = 0.0f;
 int isCapeActive = -1;
 bool isSuperRunningOnSurface = false;
 const f32 MIN_SPEED_RUN_ON_WATER = 15.0f;

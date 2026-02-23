@@ -29,6 +29,10 @@ namespace PowerUps {
         #ifdef ALLOW_POWERUPS
             auto* model = thisPtr->mModelHolder->findModelActor("Normal");
 
+            al::initJointControllerKeeper(model, 2);
+            al::initJointLocalYRotator(model, &glideLean, "JointRoot");
+            al::initJointLocalZRotator(model, &glidePitch, "Spine1");
+
             isHammer = new HammerBrosHammer("HammerBrosHammer", model, "PlayerHammer", true);
             al::initCreateActorNoPlacementInfo(isHammer, *actorInfo);
 
@@ -410,13 +414,38 @@ namespace PowerUps {
             #endif
 
             // Handle kart spawning
-            if (al::isPadTriggerL(-1)
-                && isKart && al::isDead(isKart)
+            static int holdLeftFrames = 0;
+            if (al::isPadHoldLeft(-1)) holdLeftFrames++;
+            else holdLeftFrames = 0;
+
+            if (holdLeftFrames == 30
+                && isKart
+                && !thisPtr->mInput->isMove()
+                && !rs::isActiveDemo(thisPtr)
             ) {
+                if (al::isAlive(isKart)
+                ) {
+                    al::tryEmitEffect(isKart, "Disappear", nullptr);
+                    al::tryStartSe(isKart, "CommonVanishS");
+                    isKart->kill();
+                    return;
+                }
+
                 sead::Vector3f front;
                 al::calcFrontDir(&front, thisPtr);
-                al::setTrans(isKart, al::getTrans(thisPtr) + front * 500.0f);
+                sead::Vector3f gravity = al::getGravity(thisPtr);
+                sead::Vector3f marioPos = al::getTrans(thisPtr);
+                sead::Vector3f target = marioPos + front * 500.0f;
 
+                bool hasWall = alCollisionUtil::getHitPosOnArrow(thisPtr, nullptr, marioPos, front * 500.0f, nullptr, nullptr);
+
+                sead::Vector3f groundPos;
+                bool hasGround = alCollisionUtil::getHitPosOnArrow(thisPtr, &groundPos, target - gravity * 1000.0f, gravity * 2000.0f, nullptr, nullptr);
+
+                if (hasWall && !hasGround) { al::tryStartSe(thisPtr, "InvalidCapAction"); return; }
+                if (hasGround) target = groundPos - gravity * 50.0f;
+
+                al::setTrans(isKart, target);
                 isKart->appear();
                 al::tryEmitEffect(isKart, "Appear", nullptr);
                 al::tryStartSe(isKart, "Appear");
@@ -430,6 +459,12 @@ namespace PowerUps {
             if (PlayerFreeze::updateFrozenActor(actor)) return; // Skip normal movement
             
             Orig(actor);
+
+            if (isKart && actor == (al::LiveActor*)isKart
+                && al::isAlive(isKart)
+            ) {
+                if (al::isNoCollide(isKart)) al::onCollide(isKart);
+            }
 
             static bool hammerEffect = false;
 
@@ -564,6 +599,21 @@ namespace PowerUps {
             const char* glideAnim = isTanooki ? "GlideAlt" : "Glide";
             const char* glideFloatAnim = isSuper ? "GlideFloatSuper" : "GlideFloat";
 
+            if (anim->isAnim(glideAnim)
+            ) {
+                sead::Vector3f camSide, marioSide;
+                al::calcCameraSideDir(&camSide, thisPtr, 0);
+                al::calcSideDir(&marioSide, thisPtr);
+
+                float localLean = camSide.dot(marioSide) * al::getLeftStick(-1).x;
+
+                glideLean = al::lerpValue(glideLean, localLean * -50.0f, 0.025f);
+                glidePitch = al::lerpValue(glidePitch, fabsf(localLean) * -25.0f, 0.025f);
+            } else {
+                glideLean = al::lerpValue(glideLean, 0.0f, 0.2f);
+                glidePitch = al::lerpValue(glidePitch, 0.0f, 0.2f);
+            }
+
             if (al::isFirstStep(thisPtr)
             ) {
                 if ((isMario || isBrawl) 
@@ -625,7 +675,10 @@ namespace PowerUps {
 
     struct PlayerHeadSlidingKill : public mallow::hook::Trampoline<PlayerHeadSlidingKill> {
         static void Callback(PlayerStateHeadSliding * state) {
+            glideLean = 0.0f;
+            glidePitch = 0.0f;
             isCapeActive = 1200;
+
             if (state->mAnimator) state->mAnimator->clearUpperBodyAnim();
             Orig(state);
         }
