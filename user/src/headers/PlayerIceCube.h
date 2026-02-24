@@ -84,7 +84,9 @@ public:
 
 private:
     static constexpr f32 kScalePadding = 1.25f;
+    static constexpr f32 kSensorPadding = 1.1f;
     static constexpr f32 kMinScale = 0.5f;
+    static constexpr f32 kMaxScale = 6.0f;
     static constexpr f32 kEffectScaleMult = 0.5f;
     static constexpr f32 kGroundRayLength = 500.0f;
     static constexpr f32 kAOERadius = 500.0f;
@@ -92,34 +94,61 @@ private:
     void syncToTarget() {
         if (!mTarget) return;
 
-        // Calculate scale from target's sensor radius
-        al::HitSensor* sensor = al::getHitSensor(mTarget, "Body");
-        if (!sensor && mTarget->getHitSensorKeeper())
-            sensor = mTarget->getHitSensorKeeper()->getSensor(0);
-
-        if (sensor) {
-            f32 enemyDiameter = al::getSensorRadius(sensor) * 2.0f;
-            sead::BoundBox3f cubeBox;
-            al::calcModelBoundingBox(&cubeBox, this);
-            f32 cubeSize = sead::Mathf::max(cubeBox.getSizeX(),
-                            sead::Mathf::max(cubeBox.getSizeY(), cubeBox.getSizeZ()));
-            if (cubeSize > 0.001f)
-                mScale = sead::Mathf::max((enemyDiameter * kScalePadding) / cubeSize, kMinScale);
-        }
-
-        al::setScaleAll(this, mScale);
-
-        // Scale sensor radius to match cube
-        if (sensor) al::setSensorRadius(this, "Body", al::getSensorRadius(sensor) * mScale);
-
-        // Position cube
-        sead::Vector3f pos = al::getTrans(mTarget);
-        sead::Vector3f gravity = al::getGravity(mTarget);
+        // Get cube's base bounding box (used for scaling, sensor, and positioning)
         sead::BoundBox3f cubeBox;
         al::calcModelBoundingBox(&cubeBox, this);
+        f32 cubeMaxDim = sead::Mathf::max(cubeBox.getSizeX(),
+                          sead::Mathf::max(cubeBox.getSizeY(), cubeBox.getSizeZ()));
+
+        // Build bounding box from enemy body sensors
+        al::HitSensorKeeper* keeper = mTarget->getHitSensorKeeper();
+        if (keeper && cubeMaxDim > 0.001f) {
+            sead::Vector3f bmin(FLT_MAX, FLT_MAX, FLT_MAX);
+            sead::Vector3f bmax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+            const sead::Vector3f& actorPos = al::getTrans(mTarget);
+            bool found = false;
+
+            for (s32 i = 0; i < keeper->getSensorNum(); i++) {
+                al::HitSensor* s = keeper->getSensor(i);
+                if (!s || !al::isSensorEnemyBody(s))
+                    continue;
+
+                const sead::Vector3f& sPos = al::getSensorPos(s);
+                if (sPos.x == 0.0f && sPos.y == 0.0f && sPos.z == 0.0f)
+                    continue;
+
+                sead::Vector3f offset = sPos - actorPos;
+                f32 r = al::getSensorRadius(s);
+                bmin.x = sead::Mathf::min(bmin.x, offset.x - r);
+                bmin.y = sead::Mathf::min(bmin.y, offset.y - r);
+                bmin.z = sead::Mathf::min(bmin.z, offset.z - r);
+                bmax.x = sead::Mathf::max(bmax.x, offset.x + r);
+                bmax.y = sead::Mathf::max(bmax.y, offset.y + r);
+                bmax.z = sead::Mathf::max(bmax.z, offset.z + r);
+                found = true;
+            }
+
+            sead::BoundBox3f enemyBox;
+            if (found)
+                enemyBox = sead::BoundBox3f(bmin, bmax);
+            else
+                al::calcModelBoundingBox(&enemyBox, mTarget);
+
+            f32 enemyAvgDim = (enemyBox.getSizeX() + enemyBox.getSizeY() + enemyBox.getSizeZ()) / 3.0f;
+            mScale = sead::Mathf::clamp((enemyAvgDim * kScalePadding) / cubeMaxDim, kMinScale, kMaxScale);
+        }
+
+        // Apply visual scale
+        al::setScaleAll(this, mScale);
+
+        // Sensor matches cube visual
+        al::setSensorRadius(this, "Body", cubeMaxDim * mScale * kSensorPadding * 0.5f);
+
+        // Position cube on ground
+        sead::Vector3f pos = al::getTrans(mTarget);
+        sead::Vector3f gravity = al::getGravity(mTarget);
         f32 halfHeight = cubeBox.getSizeY() * mScale * 0.5f;
 
-        // Raycast slightly above enemy position
         sead::Vector3f rayStart = pos - gravity;
         sead::Vector3f rayDelta = gravity * kGroundRayLength;
         sead::Vector3f groundPos;

@@ -425,6 +425,8 @@ namespace PowerUps {
             ) {
                 if (al::isAlive(isKart)
                 ) {
+                    if (rs::isPlayerBinding(thisPtr)) return;
+
                     al::tryEmitEffect(isKart, "Disappear", nullptr);
                     al::tryStartSe(isKart, "CommonVanishS");
                     isKart->kill();
@@ -437,13 +439,11 @@ namespace PowerUps {
                 sead::Vector3f marioPos = al::getTrans(thisPtr);
                 sead::Vector3f target = marioPos + front * 500.0f;
 
-                bool hasWall = alCollisionUtil::getHitPosOnArrow(thisPtr, nullptr, marioPos, front * 500.0f, nullptr, nullptr);
-
                 sead::Vector3f groundPos;
                 bool hasGround = alCollisionUtil::getHitPosOnArrow(thisPtr, &groundPos, target - gravity * 1000.0f, gravity * 2000.0f, nullptr, nullptr);
 
-                if (hasWall && !hasGround) { al::tryStartSe(thisPtr, "InvalidCapAction"); return; }
-                if (hasGround) target = groundPos - gravity * 50.0f;
+                if (!hasGround) { al::tryStartSe(thisPtr, "InvalidCapAction"); return; }
+                target = groundPos - gravity;
 
                 al::setTrans(isKart, target);
                 isKart->appear();
@@ -459,12 +459,6 @@ namespace PowerUps {
             if (PlayerFreeze::updateFrozenActor(actor)) return; // Skip normal movement
             
             Orig(actor);
-
-            if (isKart && actor == (al::LiveActor*)isKart
-                && al::isAlive(isKart)
-            ) {
-                if (al::isNoCollide(isKart)) al::onCollide(isKart);
-            }
 
             static bool hammerEffect = false;
 
