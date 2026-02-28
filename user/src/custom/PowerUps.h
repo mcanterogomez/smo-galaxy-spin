@@ -29,7 +29,6 @@ namespace PowerUps {
         #ifdef ALLOW_POWERUPS
             auto* model = thisPtr->mModelHolder->findModelActor("Normal");
 
-            al::initJointControllerKeeper(model, 2);
             al::initJointLocalYRotator(model, &glideLean, "JointRoot");
             al::initJointLocalZRotator(model, &glidePitch, "Spine1");
 
@@ -390,8 +389,9 @@ namespace PowerUps {
                 if (anim && anim->isAnim("JumpDashFast")
                 ) {
                     if (isBrawl) anim->startAnim("Jump");
+                    else if (isSuper) anim->startAnim("JumpDashFastSuper");
                     else {
-                        bool isFlyingSuit = isFeather || isTanooki || isSuper || (isMario && cape && al::isAlive(cape));
+                        bool isFlyingSuit = isFeather || isTanooki || (isMario && cape && al::isAlive(cape));
                         if (!isFlyingSuit) anim->startAnim("JumpDashFastClassic");
                     }
                 }
@@ -601,7 +601,9 @@ namespace PowerUps {
 
                 float localLean = camSide.dot(marioSide) * al::getLeftStick(-1).x;
 
-                glideLean = al::lerpValue(glideLean, localLean * -50.0f, 0.025f);
+                if (isTanooki) glideLean = al::lerpValue(glideLean, localLean * 25.0f, 0.025f);
+                else glideLean = al::lerpValue(glideLean, localLean * -50.0f, 0.025f);
+                
                 glidePitch = al::lerpValue(glidePitch, fabsf(localLean) * -25.0f, 0.025f);
             } else {
                 glideLean = al::lerpValue(glideLean, 0.0f, 0.2f);
@@ -916,6 +918,10 @@ namespace PowerUps {
 
             // Handles Super Mario breathing in water
             ReduceOxygen ::InstallAtSymbol("_ZN12PlayerOxygen6reduceEv");
+
+            // Patch PlayerJointControlKeeper capacity from 7 to 9
+            exl::patch::CodePatcher jointCapPatcher(0x454F20);
+            jointCapPatcher.WriteInst(0x52800121); // MOV W1, #9
 
             // Disable invincibility music patches
             exl::patch::CodePatcher invincibleStartPatcher(0x4CC6FC);
