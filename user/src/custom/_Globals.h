@@ -20,6 +20,7 @@
 #include "Library/Controller/SpinInputAnalyzer.h"
 #include "Library/Effect/EffectKeeper.h"
 #include "Library/Effect/EffectSystemInfo.h"
+#include "Library/File/FileUtil.h"
 #include "Library/HitSensor/HitSensorKeeper.h"
 #include "Library/Joint/JointControllerKeeper.h"
 #include "Library/LiveActor/ActorActionFunction.h"

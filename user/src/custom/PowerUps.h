@@ -24,16 +24,19 @@ namespace PowerUps {
             Orig(actor, info, suffix);
         }
     };
-
+    
     inline void executeInitPlayer(PlayerActorHakoniwa* thisPtr, const al::ActorInitInfo* actorInfo, const PlayerInitInfo* playerInfo) {
         #ifdef ALLOW_POWERUPS
             auto* model = thisPtr->mModelHolder->findModelActor("Normal");
-
+            
             al::initJointLocalYRotator(model, &glideLean, "JointRoot");
             al::initJointLocalZRotator(model, &glidePitch, "Spine1");
 
-            isHammer = new HammerBrosHammer("HammerBrosHammer", model, "PlayerHammer", true);
-            al::initCreateActorNoPlacementInfo(isHammer, *actorInfo);
+            if (al::isExistArchive("ObjectData/PlayerHammer")
+            ) {
+                isHammer = new HammerBrosHammer("HammerBrosHammer", model, "PlayerHammer", true);
+                al::initCreateActorNoPlacementInfo(isHammer, *actorInfo);
+            }
 
             // Create and hide fireballs
             fireBalls = new al::LiveActorGroup("FireBrosFireBall", 4);
@@ -45,16 +48,20 @@ namespace PowerUps {
             fireBalls->makeActorDeadAll();
 
             // Create and hide iceballs
-            iceBalls = new al::LiveActorGroup("PlayerIceBall", 4);
-            while (!iceBalls->isFull()) {
-                auto* ib = new FireBrosFireBall("MarioIceBall", model);
-                al::initCreateActorNoPlacementInfo(ib, *actorInfo);
-                iceBalls->registerActor(ib);
+            if (al::isExistArchive("ObjectData/PlayerIceBall")
+            ) {
+                iceBalls = new al::LiveActorGroup("PlayerIceBall", 4);
+                while (!iceBalls->isFull()) {
+                    auto* ib = new FireBrosFireBall("MarioIceBall", model);
+                    al::initCreateActorNoPlacementInfo(ib, *actorInfo);
+                    iceBalls->registerActor(ib);
+                }
+                iceBalls->makeActorDeadAll();
             }
-            iceBalls->makeActorDeadAll();
 
             // Create ice cube
-            if (isIce) {
+            if (al::isExistArchive("ObjectData/PlayerIceCube")
+            ) {
                 iceCubes = new al::LiveActorGroup("IceCubes", 32);
                 while (!iceCubes->isFull()) {
                     auto* cube = new PlayerIceCube("IceCube");
@@ -168,6 +175,7 @@ namespace PowerUps {
             const char* fireAnim  = nextThrowLeft ? "FireL" : "FireR";
 
             al::LiveActorGroup* currentPool = isIce ? iceBalls : fireBalls;
+            if (!currentPool) return;
             auto* projectile = (FireBrosFireBall*) currentPool->getDeadActor();
 
             bool isFullBody = (!isMove && onGround && (!isWater || isSurface));
