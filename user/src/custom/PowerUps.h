@@ -156,7 +156,7 @@ namespace PowerUps {
             bool isWater = al::isInWater(thisPtr);
             bool isSurface = thisPtr->mWaterSurfaceFinder->isFoundSurface();
             bool isVisible = !al::isHideModel(model);
-            bool isHack = thisPtr->mHackKeeper && thisPtr->mHackKeeper->mCurrentHackActor;
+            bool isHack = thisPtr->mHackKeeper && thisPtr->mHackKeeper->mHackActor;
 
             f32 speedH = al::calcSpeedH(thisPtr);
             f32 dashBorder = thisPtr->mConst->getDashFastBorderSpeed();
@@ -692,7 +692,7 @@ namespace PowerUps {
         static float Callback(const PlayerConst* thisPtr) {
             float speed = Orig(thisPtr);
 
-            if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor) return speed;
+            if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mHackActor) return speed;
             if (isSuper) speed *= 1.5f;
             return speed;
         }
@@ -710,7 +710,7 @@ namespace PowerUps {
         static float Callback(PlayerActionGroundMoveControl* thisPtr) {
             float update = Orig(thisPtr);
 
-            if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor) return update;
+            if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mHackActor) return update;
             PlayerConst* playerConst = const_cast<PlayerConst*>(thisPtr->mConst);
 
             bool isDash = al::isPadHoldR(-1) && !isFireThrowing();
@@ -735,7 +735,7 @@ namespace PowerUps {
 
     struct PlayerAnimControlRunUpdate : public mallow::hook::Inline<PlayerAnimControlRunUpdate> {
         static void Callback(exl::hook::InlineCtx* ctx) {
-            if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor) return;
+            if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mHackActor) return;
             if (isSuper) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveSuper"); //mMoveAnimName in PlayerAnimControlRun
             else if (isBrawl) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveBrawl");
             else if (isFeather || isTanooki) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("Move");
@@ -745,7 +745,7 @@ namespace PowerUps {
 
     struct PlayerSeCtrlUpdateMove : public mallow::hook::Inline<PlayerSeCtrlUpdateMove> {
         static void Callback(exl::hook::InlineCtx* ctx) {
-            if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mCurrentHackActor) return;
+            if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mHackActor) return;
             if (isSuper) ctx->X[8] = reinterpret_cast<u64>("MoveSuper");
             else if (isBrawl) ctx->X[8] = reinterpret_cast<u64>("MoveBrawl");
             else if (isFeather || isTanooki) ctx->X[8] = reinterpret_cast<u64>("Move");

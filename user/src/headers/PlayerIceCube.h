@@ -52,7 +52,7 @@ public:
         f32 effectScale = mScale * kEffectScaleMult;
         al::setEffectAllScale(this, "Appear", sead::Vector3f(effectScale, effectScale, effectScale));
 
-        sendAOEExplosion();
+        sendKnockdown();
     }
 
     void unfreeze() {
@@ -83,10 +83,7 @@ public:
     }
 
 private:
-    static constexpr f32 kScalePadding = 1.25f;
-    static constexpr f32 kSensorPadding = 1.1f;
     static constexpr f32 kMinScale = 0.5f;
-    static constexpr f32 kMaxScale = 6.0f;
     static constexpr f32 kEffectScaleMult = 0.5f;
     static constexpr f32 kGroundRayLength = 500.0f;
     static constexpr f32 kAOERadius = 500.0f;
@@ -110,7 +107,7 @@ private:
 
             for (s32 i = 0; i < keeper->getSensorNum(); i++) {
                 al::HitSensor* s = keeper->getSensor(i);
-                if (!s || !al::isSensorEnemyBody(s))
+                if (!s || !al::isSensorEnemyBody(s) || !al::isEqualSubString(s->mName, "Body"))
                     continue;
 
                 const sead::Vector3f& sPos = al::getSensorPos(s);
@@ -135,14 +132,14 @@ private:
                 al::calcModelBoundingBox(&enemyBox, mTarget);
 
             f32 enemyAvgDim = (enemyBox.getSizeX() + enemyBox.getSizeY() + enemyBox.getSizeZ()) / 3.0f;
-            mScale = sead::Mathf::clamp((enemyAvgDim * kScalePadding) / cubeMaxDim, kMinScale, kMaxScale);
+            mScale = sead::Mathf::max(enemyAvgDim / cubeMaxDim, kMinScale);
         }
 
         // Apply visual scale
         al::setScaleAll(this, mScale);
 
         // Sensor matches cube visual
-        al::setSensorRadius(this, "Body", cubeMaxDim * mScale * kSensorPadding * 0.5f);
+        al::setSensorRadius(this, "Body", cubeMaxDim * mScale * 0.5f);
 
         // Position cube on ground
         sead::Vector3f pos = al::getTrans(mTarget);
@@ -153,37 +150,32 @@ private:
         sead::Vector3f rayDelta = gravity * kGroundRayLength;
         sead::Vector3f groundPos;
 
-        if (alCollisionUtil::getHitPosOnArrow(mTarget, &groundPos, rayStart, rayDelta, nullptr, nullptr)) {
+        if (alCollisionUtil::getHitPosOnArrow(mTarget, &groundPos, rayStart, rayDelta, nullptr, nullptr)
+        ) {
             if ((groundPos - pos).dot(gravity) < halfHeight)
                 pos = groundPos - (gravity * halfHeight);
-        }
+        } else pos = pos - (gravity * halfHeight);
 
         al::setTrans(this, pos);
     }
 
-    void sendAOEExplosion() {
+    void sendKnockdown() {
         if (!mTarget) return;
 
-        al::HitSensor* selfSensor = al::getHitSensor(mTarget, "Body");
-        if (!selfSensor && mTarget->getHitSensorKeeper())
-            selfSensor = mTarget->getHitSensorKeeper()->getSensor(0);
-        if (!selfSensor) return;
+        al::HitSensor* self = al::getHitSensor(mTarget, "Body");
+        if (!self && mTarget->getHitSensorKeeper())
+            self = mTarget->getHitSensorKeeper()->getSensor(0);
+        if (!self) return;
 
         sead::Vector3f center = al::getTrans(this);
 
-        for (u16 i = 0; i < selfSensor->mSensorCount; i++) {
-            al::HitSensor* other = selfSensor->mSensors[i];
+        for (u16 i = 0; i < self->mSensorCount; i++) {
+            al::HitSensor* other = self->mSensors[i];
             if (!other) continue;
 
-            al::LiveActor* otherActor = other->getParentActor();
-            if (!otherActor || otherActor == mTarget || !al::isAlive(otherActor))
-                continue;
-
-            if (al::isSensorPlayerAll(other))
-                continue;
-
-            if (al::isNear(otherActor, center, kAOERadius))
-                al::sendMsgExplosion(other, selfSensor, nullptr);
+            al::LiveActor* actor = other->getParentActor();
+            if (!actor || actor == mTarget || !al::isAlive(actor) || al::isSensorPlayerAll(other)) continue;
+            if (al::isNear(actor, center, kAOERadius)) rs::sendMsgKuriboFlick(other, self);
         }
     }
 

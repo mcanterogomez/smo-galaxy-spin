@@ -12,7 +12,7 @@ class PlayerConst;
 class IPlayerModelChanger;
 class IUseDimension;
 class PlayerInput;
-class PlayerJumpMessageRequest;
+struct PlayerJumpMessageRequest;
 class IJudge;
 class PlayerCounterForceRun;
 class PlayerJointControlKeeper;

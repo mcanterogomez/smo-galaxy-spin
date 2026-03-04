@@ -531,8 +531,7 @@ namespace AttackSensor {
                 }
                 if(!isInHitBuffer
                 ) {
-                    if (isIceball && al::isSensorEnemyBody(target)
-                        && !al::isHideModel(targetHost) && al::getHitSensor(targetHost, "Attack")
+                    if (isIceball && al::isSensorEnemyBody(target) && !al::isHideModel(targetHost)
                         && !al::isEqualSubString(typeid(*targetHost).name(), "Boss") && !al::isEqualSubString(typeid(*targetHost).name(), "Koopa")
                         && !(al::isEqualSubString(typeid(*targetHost).name(), "Stacker") && al::isNoCollide(targetHost))
                     ) {

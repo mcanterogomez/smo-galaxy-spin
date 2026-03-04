@@ -43,6 +43,7 @@ include_directories(${PROJECT_SOURCE_DIR}/libs/smo/NintendoSDK)
 include_directories(${PROJECT_SOURCE_DIR}/libs/smo/sead)
 
 add_executable(subsdk9)
+target_compile_options(subsdk9 PRIVATE -Wno-invalid-offsetof -Wno-macro-redefined)
 add_subdirectory(user)
 
 target_link_libraries(subsdk9 PUBLIC marshmallow
