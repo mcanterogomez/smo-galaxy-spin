@@ -98,8 +98,7 @@ namespace PlayerFreeze {
         // Standard attacks
         return rs::sendMsgHackAttack(target, attacker) ||
             rs::sendMsgCapReflect(target, attacker) ||
-            rs::sendMsgCapAttack(target, attacker) ||
-            al::sendMsgPlayerObjHipDropReflect(target, attacker, nullptr);
+            rs::sendMsgCapAttack(target, attacker) ;
     }
 
     inline void freezeActor(al::LiveActor* actor, s32 duration) {
@@ -120,6 +119,8 @@ namespace PlayerFreeze {
 
         al::setActionFrameRate(actor, 0.0f);
         al::invalidateHitSensors(actor);
+        al::deleteEffectAll(actor);
+        al::tryStopAllSeFromUser(actor, 0, nullptr);
     }
 
     inline bool updateFrozenActor(al::LiveActor* actor) {

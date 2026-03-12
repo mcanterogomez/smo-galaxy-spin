@@ -44,9 +44,8 @@ public:
         mAttacker = nullptr;
         mIsBreaking = false;
 
-        makeActorAlive();
         syncToTarget();
-
+        makeActorAlive();
         al::tryStartAction(this, "Appear");
 
         f32 effectScale = mScale * kEffectScaleMult;
@@ -56,8 +55,7 @@ public:
     }
 
     void unfreeze() {
-        if (mTarget && al::isAlive(mTarget))
-            syncToTarget();
+        if (mTarget && al::isAlive(mTarget)) syncToTarget();
 
         mTarget = nullptr;
         mWasHit = false;
@@ -68,9 +66,8 @@ public:
         if (mIsBreaking) {
             f32 effectScale = mScale * kEffectScaleMult;
             al::setEffectAllScale(this, "Break", sead::Vector3f(effectScale, effectScale, effectScale));
-        } else {
+        } else 
             makeActorDead();
-        }
     }
 
     al::LiveActor* getTarget() const { return mTarget; }
@@ -107,12 +104,10 @@ private:
 
             for (s32 i = 0; i < keeper->getSensorNum(); i++) {
                 al::HitSensor* s = keeper->getSensor(i);
-                if (!s || !al::isSensorEnemyBody(s) || !al::isEqualSubString(s->mName, "Body"))
-                    continue;
+                if (!s || !al::isSensorEnemyBody(s) || !al::isEqualSubString(s->mName, "Body")) continue;
 
                 const sead::Vector3f& sPos = al::getSensorPos(s);
-                if (sPos.x == 0.0f && sPos.y == 0.0f && sPos.z == 0.0f)
-                    continue;
+                if (sPos.x == 0.0f && sPos.y == 0.0f && sPos.z == 0.0f) continue;
 
                 sead::Vector3f offset = sPos - actorPos;
                 f32 r = al::getSensorRadius(s);
@@ -126,10 +121,8 @@ private:
             }
 
             sead::BoundBox3f enemyBox;
-            if (found)
-                enemyBox = sead::BoundBox3f(bmin, bmax);
-            else
-                al::calcModelBoundingBox(&enemyBox, mTarget);
+            if (found) enemyBox = sead::BoundBox3f(bmin, bmax);
+            else al::calcModelBoundingBox(&enemyBox, mTarget);
 
             f32 enemyAvgDim = (enemyBox.getSizeX() + enemyBox.getSizeY() + enemyBox.getSizeZ()) / 3.0f;
             mScale = sead::Mathf::max(enemyAvgDim / cubeMaxDim, kMinScale);
@@ -152,9 +145,9 @@ private:
 
         if (alCollisionUtil::getHitPosOnArrow(mTarget, &groundPos, rayStart, rayDelta, nullptr, nullptr)
         ) {
-            if ((groundPos - pos).dot(gravity) < halfHeight)
-                pos = groundPos - (gravity * halfHeight);
-        } else pos = pos - (gravity * halfHeight);
+            if ((groundPos - pos).dot(gravity) < halfHeight) pos = groundPos - (gravity * halfHeight);
+        } else
+            pos = pos - (gravity * halfHeight);
 
         al::setTrans(this, pos);
     }
@@ -163,8 +156,7 @@ private:
         if (!mTarget) return;
 
         al::HitSensor* self = al::getHitSensor(mTarget, "Body");
-        if (!self && mTarget->getHitSensorKeeper())
-            self = mTarget->getHitSensorKeeper()->getSensor(0);
+        if (!self && mTarget->getHitSensorKeeper()) self = mTarget->getHitSensorKeeper()->getSensor(0);
         if (!self) return;
 
         sead::Vector3f center = al::getTrans(this);

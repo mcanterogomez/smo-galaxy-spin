@@ -382,8 +382,8 @@ namespace PowerUps {
             static int stillFrames = 0;
             static int healFrames = 0;
 
-            bool isStill = onGround && isVisible && !isMove;
-            bool canHeal = (isMario || isNoCap) && isStill && !GameDataFunction::isPlayerHitPointMax(thisPtr);
+            bool isWait = al::isNerve(thisPtr, getNerveAt(nrvHakoniwaWait)) && isVisible;
+            bool canHeal = (isMario || isNoCap) && isWait && !GameDataFunction::isPlayerHitPointMax(thisPtr);
 
             if (canHeal) {
                 if (stillFrames < 120) stillFrames++;
@@ -468,15 +468,10 @@ namespace PowerUps {
             
             Orig(actor);
 
-            static bool hammerEffect = false;
-
+            static bool hammerHit = false;
+            
             if (actor != isHammer) return;
-
-            if (!al::isAlive(isHammer)
-            ) { 
-                hammerEffect = false;
-                return;
-            }
+            if (!al::isAlive(isHammer)) { hammerHit = false; return; }
 
             al::HitSensor* sensorHammer = al::getHitSensor(isHammer, "AttackHack");
             if (!sensorHammer || !sensorHammer->mIsValid) return;
@@ -485,15 +480,16 @@ namespace PowerUps {
             if (auto* sensorCeiling = al::tryGetCollidedCeilingSensor(isHammer)) isHammer->attackSensor(sensorHammer, sensorCeiling);
             if (auto* sensorGround = al::tryGetCollidedGroundSensor(isHammer)) isHammer->attackSensor(sensorHammer, sensorGround);
 
-            if (!hammerEffect
-                && isHakoniwa->mAnimator->isAnim("HammerAttack")
-                && isHakoniwa->mAnimator->getAnimFrame() >= 8.0f
-                && al::isCollidedGround(isHammer)
+            if (isHakoniwa->mAnimator->isAnim("HammerAttack")
             ) {
-                al::tryEmitEffect(isHakoniwa, "HammerLandHit", nullptr);
-                al::tryStartSe(isHammer, "HammerLand");
-                al::tryStartSe(isHammer, "HammerHit");
-                hammerEffect = true;
+                if (!hammerHit && isHakoniwa->mAnimator->getAnimFrame() >= 8.0f
+                    && al::isCollidedGround(isHammer)
+                ) {
+                    al::tryEmitEffect(isHakoniwa, "HammerLandHit", nullptr);
+                    al::tryStartSe(isHammer, "HammerLand");
+                    al::tryStartSe(isHammer, "HammerHit");
+                    hammerHit = true;
+                }
             }
         }
     };
@@ -664,13 +660,16 @@ namespace PowerUps {
                 ) {
                     if (!al::isNerve(thisPtr, getNerveAt(spinCapNrvOffset))
                     ) {
-                        canGalaxySpin = true;
-                        canStandardSpin = true;
-                        isGalaxyAfterStandardSpin = false;
-                        isStandardAfterGalaxySpin = false;
+                        if (!thisPtr->mHackCap || !thisPtr->mHackCap->isEnableThrow()) al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
+                        else {
+                            canGalaxySpin = true;
+                            canStandardSpin = true;
+                            isGalaxyAfterStandardSpin = false;
+                            isStandardAfterGalaxySpin = false;
 
-                        triggerGalaxySpin = false;
-                        al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
+                            triggerGalaxySpin = false;
+                            al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
+                        }
                     }
                 }
             }
