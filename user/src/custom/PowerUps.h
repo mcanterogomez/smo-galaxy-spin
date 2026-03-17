@@ -497,17 +497,17 @@ namespace PowerUps {
     struct CalcAnimHook : public mallow::hook::Trampoline<CalcAnimHook> {
         static void Callback(al::LiveActor* actor) {
             float savedLean = 0.0f;
-            bool isKartAnim = isKart && actor == (al::LiveActor*)isKart && al::isAlive(isKart);
+            bool isKartAnim = typeid(*actor) == typeid(Motorcycle) && al::isAlive(actor);
 
             if (isKartAnim) {
-                float* lean = reinterpret_cast<float*>((char*)isKart + 312);
+                float* lean = reinterpret_cast<float*>((char*)actor + 312);
                 savedLean = *lean;
                 *lean = 0.0f;
             }
 
             Orig(actor);
 
-            if (isKartAnim) *reinterpret_cast<float*>((char*)isKart + 312) = savedLean;
+            if (isKartAnim) *reinterpret_cast<float*>((char*)actor + 312) = savedLean;
             if (hammerParentModel && actor == hammerParentModel) updateHammerMtx();
         }
     };

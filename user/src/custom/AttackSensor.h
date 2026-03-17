@@ -4,6 +4,25 @@
 #include "custom/PlayerFreeze.h"
 #include "headers/PlayerIceCube.h"
 
+inline sead::Vector3f getHitSpawnPos(al::HitSensor* a, al::HitSensor* b) {
+    sead::Vector3f pos = (al::getSensorPos(a) + al::getSensorPos(b)) * 0.5f;
+    pos.y += 20.0f;
+    return pos;
+}
+
+inline sead::Vector3f getFireDir(al::LiveActor* from, al::LiveActor* to) {
+    sead::Vector3f dir = al::getTrans(to) - al::getTrans(from);
+    dir.normalize();
+    return dir;
+}
+
+inline bool isInHitBuffer(al::LiveActor* actor) {
+    for (int i = 0; i < hitBufferCount; i++) {
+        if (hitBuffer[i] == actor) return true;
+    }
+    return false;
+}
+
 namespace AttackSensor {
 
     struct HackCapAttackSensorHook : public mallow::hook::Trampoline<HackCapAttackSensorHook> {
@@ -45,13 +64,8 @@ namespace AttackSensor {
                 return;
             }
 
-            sead::Vector3f sourcePos = al::getSensorPos(source);
-            sead::Vector3f targetPos = al::getSensorPos(target);
-            sead::Vector3f spawnPos = (sourcePos + targetPos) * 0.5f;
-            spawnPos.y += 20.0f;
-
-            sead::Vector3 fireDir = al::getTrans(targetHost) - al::getTrans(sourceHost);
-            fireDir.normalize();
+            sead::Vector3f spawnPos = getHitSpawnPos(source, target);
+            sead::Vector3f fireDir = getFireDir(sourceHost, targetHost);
     
             if (!isGalaxySpin && al::isEqualSubString(typeid(*targetHost).name(), "FireBall")) return;
 
@@ -100,13 +114,8 @@ namespace AttackSensor {
                 || isPunchAttack || isHipDropAttack
                 || isSpinFallback
             ) {
-                bool isInHitBuffer = false;
-                for(int i = 0; i < hitBufferCount; i++) {
-                    if(hitBuffer[i] == targetHost) {
-                        isInHitBuffer = true;
-                        break;
-                    }
-                }
+                bool inBuffer = isInHitBuffer(targetHost);
+
                 // Handle ice cubes
                 if (al::isEqualSubString(typeid(*targetHost).name(), "PlayerIceCube")
                 ) {
@@ -118,9 +127,9 @@ namespace AttackSensor {
                 if(targetHost && targetHost->getNerveKeeper()
                 ) {
                     const al::Nerve* sourceNrv = targetHost->getNerveKeeper()->getCurrentNerve();
-                    isInHitBuffer |= sourceNrv == getNerveAt(0x1D03268); // GrowPlantSeedNrvHold
-                    isInHitBuffer |= sourceNrv == getNerveAt(0x1D00EC8); // GrowFlowerSeedNrvHold
-                    isInHitBuffer |= sourceNrv == getNerveAt(0x1D22B78); // RadishNrvHold
+                    inBuffer |= sourceNrv == getNerveAt(0x1D03268); // GrowPlantSeedNrvHold
+                    inBuffer |= sourceNrv == getNerveAt(0x1D00EC8); // GrowFlowerSeedNrvHold
+                    inBuffer |= sourceNrv == getNerveAt(0x1D22B78); // RadishNrvHold
 
                     if (isPunchAttack && !isPunching
                     ) {
@@ -203,7 +212,7 @@ namespace AttackSensor {
                         guardCount = 0;
                         return;
                     }
-                    if (!isInHitBuffer) {
+                    if (!inBuffer) {
                         bool isKnockback = rs::sendMsgKoopaCapPunchKnockBackL(target, source);
                         if (isKnockback || rs::sendMsgKoopaCapPunchL(target, source)
                         ) {
@@ -214,7 +223,7 @@ namespace AttackSensor {
                         }
                     }
                 }
-                if(!isInHitBuffer
+                if(!inBuffer
                 ) {
                     if (al::isEqualSubString(typeid(*targetHost).name(), "BlockHard")
                         || al::isEqualSubString(typeid(*targetHost).name(), "BossForestBlock")
@@ -369,24 +378,14 @@ namespace AttackSensor {
             if (!sourceHost || !targetHost) return;
             if (targetHost == isHakoniwa) return;
 
-            sead::Vector3f sourcePos = al::getSensorPos(source);
-            sead::Vector3f targetPos = al::getSensorPos(target);
-            sead::Vector3f spawnPos = (sourcePos + targetPos) * 0.5f;
-            spawnPos.y += 20.0f;
-            
-            sead::Vector3 fireDir = al::getTrans(targetHost) - al::getTrans(sourceHost);
-            fireDir.normalize();
+            sead::Vector3f spawnPos = getHitSpawnPos(source, target);
+            sead::Vector3f fireDir = getFireDir(sourceHost, targetHost);
 
             if(al::isSensorName(source, "AttackHack")
             ) {
-                bool isInHitBuffer = false;
-                for(int i = 0; i < hitBufferCount; i++) {
-                    if(hitBuffer[i] == targetHost) {
-                        isInHitBuffer = true;
-                        break;
-                    }
-                }
-                if(!isInHitBuffer
+                bool inBuffer = isInHitBuffer(targetHost);
+
+                if(!inBuffer
                 ) {
                     if (al::isEqualSubString(typeid(*targetHost).name(), "BlockHard")
                         || al::isEqualSubString(typeid(*targetHost).name(), "BossForestBlock")
@@ -500,19 +499,12 @@ namespace AttackSensor {
             if (al::isEqualString(targetHost->getName(), "MarioIceBall")) return;
 
             sead::Vector3f sourcePos = al::getSensorPos(source);
-            sead::Vector3f targetPos = al::getSensorPos(target);
-            sead::Vector3f spawnPos = (sourcePos + targetPos) * 0.5f;
-            spawnPos.y += 20.0f;
+            sead::Vector3f spawnPos = getHitSpawnPos(source, target);
 
             if (al::isSensorName(source, "AttackHack")
             ) {
-                bool isInHitBuffer = false;
-                for(int i = 0; i < hitBufferCount; i++) {
-                    if(hitBuffer[i] == targetHost) {
-                        isInHitBuffer = true;
-                        break;
-                    }
-                }
+                bool inBuffer = isInHitBuffer(targetHost);
+
                 // Handle ice cubes
                 if (al::isEqualSubString(typeid(*targetHost).name(), "PlayerIceCube")
                 ) {
@@ -521,7 +513,7 @@ namespace AttackSensor {
                     thisPtr->kill();
                     return;
                 }
-                if(!isInHitBuffer
+                if(!inBuffer
                 ) {
                     if (isIceball) {
                         if (al::isEqualSubString(typeid(*targetHost).name(), "FireSwitch")
@@ -559,6 +551,17 @@ namespace AttackSensor {
         }
     };
 
+    struct MotorcycleAttackSensorHook : public mallow::hook::Inline<MotorcycleAttackSensorHook> {
+        static void Callback(exl::hook::InlineCtx* ctx) {
+            auto* source = reinterpret_cast<al::HitSensor*>(ctx->X[19]);
+            auto* target = reinterpret_cast<al::HitSensor*>(ctx->X[20]);
+
+            rs::sendMsgSphinxRideAttack(target, source)
+            || rs::sendMsgSphinxRideAttackReflect(target, source)
+            || rs::sendMsgHackAttack(target, source);
+        }
+    };
+
     inline void Install() {
         #ifndef ALLOW_CAPPY_ONLY
             HackCapAttackSensorHook::InstallAtSymbol("_ZN7HackCap12attackSensorEPN2al9HitSensorES2_");
@@ -567,5 +570,6 @@ namespace AttackSensor {
         
         HammerAttackSensorHook::InstallAtSymbol("_ZN16HammerBrosHammer12attackSensorEPN2al9HitSensorES2_");
         FireballAttackSensorHook::InstallAtSymbol("_ZN16FireBrosFireBall12attackSensorEPN2al9HitSensorES2_");
+        MotorcycleAttackSensorHook::InstallAtOffset(0x2C77EC);
     }
 }
