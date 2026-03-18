@@ -32,6 +32,10 @@
 // Enable definitive Mario.
 #define ALLOW_MARIO
 
+// [ OPTION 5: HOMING ]
+// Enable home-in on punch and fireball.
+#define ALLOW_HOMING
+
 // [ EXTRA: CAPPY EYES ]
 // Disable Cappy eyes.
 #define REMOVE_CAPPY_EYES

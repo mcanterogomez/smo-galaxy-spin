@@ -28,8 +28,11 @@ public:
 
         if (al::isFirstStep(state)
         ) {
-
-            isNearTarget = findNearestTarget(player, 250.0f);
+            #ifdef ALLOW_HOMING
+                isNearTarget = findNearestTarget(player, 250.0f);
+            #else
+                isNearTarget = nullptr;
+            #endif
 
             state->mAnimator->endSubAnim();
             isPunchRight = !isPunchRight;
