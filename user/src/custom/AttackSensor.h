@@ -4,25 +4,6 @@
 #include "custom/PlayerFreeze.h"
 #include "headers/PlayerIceCube.h"
 
-inline sead::Vector3f getHitSpawnPos(al::HitSensor* a, al::HitSensor* b) {
-    sead::Vector3f pos = (al::getSensorPos(a) + al::getSensorPos(b)) * 0.5f;
-    pos.y += 20.0f;
-    return pos;
-}
-
-inline sead::Vector3f getFireDir(al::LiveActor* from, al::LiveActor* to) {
-    sead::Vector3f dir = al::getTrans(to) - al::getTrans(from);
-    dir.normalize();
-    return dir;
-}
-
-inline bool isInHitBuffer(al::LiveActor* actor) {
-    for (int i = 0; i < hitBufferCount; i++) {
-        if (hitBuffer[i] == actor) return true;
-    }
-    return false;
-}
-
 namespace AttackSensor {
 
     struct HackCapAttackSensorHook : public mallow::hook::Trampoline<HackCapAttackSensorHook> {

@@ -170,7 +170,7 @@ namespace PowerUps {
                 al::invalidateHitSensor(isHammer, "AttackHack");
             }
 
-            // Handle fireball attack
+            // Handle fireball/iceball attack
             const char* jointName = nextThrowLeft ? "HandL" : "HandR";
             const char* fireAnim  = nextThrowLeft ? "FireL" : "FireR";
 
@@ -205,6 +205,18 @@ namespace PowerUps {
                     if (!isShooting) { fireStep = -1; return; }
                     if (fireStep == 2
                     ) {
+                        // Home in on nearest target
+                        al::LiveActor* nearest = findNearestTarget(thisPtr, 800.0f);
+                        if (nearest) {
+                            sead::Vector3f dir = al::getTrans(nearest) - al::getTrans(thisPtr);
+                            dir.normalize();
+                            sead::Vector3f fwd;
+                            al::calcQuatFront(&fwd, model);
+
+                            if (fwd.dot(dir) > 0.5f)
+                                al::faceToDirection(model, al::getTrans(nearest) - al::getTrans(thisPtr));
+                        }
+
                         hitBufferCount = 0;
 
                         sead::Vector3f startPos;

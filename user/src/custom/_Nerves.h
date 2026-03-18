@@ -28,6 +28,9 @@ public:
 
         if (al::isFirstStep(state)
         ) {
+
+            isNearTarget = findNearestTarget(player, 250.0f);
+
             state->mAnimator->endSubAnim();
             isPunchRight = !isPunchRight;
 
@@ -110,6 +113,21 @@ public:
             }
         }
         
+        // Home in on nearest target
+        if (isNearTarget && al::isAlive(isNearTarget) && !isInHitBuffer(isNearTarget)
+        ) {
+            al::faceToDirection(player, al::getTrans(isNearTarget) - al::getTrans(player));
+
+            sead::Vector3f grav = al::getGravity(player);
+            sead::Vector3f* vel = al::getVelocityPtr(player);
+            sead::Vector3f fwd;
+            al::calcQuatFront(&fwd, player);
+
+            f32 gravComp = vel->dot(grav);
+            f32 hSpeed = (*vel - grav * gravComp).length();
+            *vel = fwd * hSpeed + grav * gravComp;
+        }
+
         if (!isSpinning && !isCarrying
             && !isNearCollectible && !isNearTreasure && !isNearSwoonedEnemy
             && !isRotatingL && !isRotatingR
@@ -139,7 +157,20 @@ public:
         }
         
         if (isFinish) al::setVelocity(player, sead::Vector3f::zero);
-        else state->updateSpinGroundNerve();
+        else {
+            state->updateSpinGroundNerve();
+
+            // Edge guard — block cliffs, allow slopes
+            sead::Vector3f front;
+            al::calcFrontDir(&front, player);
+
+            sead::Vector3f grav = al::getGravity(player);
+            sead::Vector3f probeStart = al::getTrans(player) + front * 25.0f - grav * 50.0f;
+            sead::Vector3f hitPos;
+
+            if (!alCollisionUtil::getHitPosOnArrow(player, &hitPos, probeStart, grav * 75.0f, nullptr, nullptr))
+                { sead::Vector3f* vel = al::getVelocityPtr(player); *vel = grav * vel->dot(grav); }
+        }
 
         if (al::isGreaterStep(state, 41)) al::invalidateHitSensor(state->mActor, "DoubleSpin");
         if (al::isGreaterStep(state, 21)) al::invalidateHitSensor(state->mActor, "GalaxySpin");

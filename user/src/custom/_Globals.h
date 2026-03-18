@@ -191,3 +191,44 @@ inline float glidePitch = 0.0f;
 int isCapeActive = -1;
 bool isSuperRunningOnSurface = false;
 const f32 MIN_SPEED_RUN_ON_WATER = 15.0f;
+
+inline sead::Vector3f getHitSpawnPos(al::HitSensor* a, al::HitSensor* b) {
+    sead::Vector3f pos = (al::getSensorPos(a) + al::getSensorPos(b)) * 0.5f;
+    pos.y += 20.0f;
+    return pos;
+}
+
+inline sead::Vector3f getFireDir(al::LiveActor* from, al::LiveActor* to) {
+    sead::Vector3f dir = al::getTrans(to) - al::getTrans(from);
+    dir.normalize();
+    return dir;
+}
+
+inline bool isInHitBuffer(al::LiveActor* actor) {
+    for (int i = 0; i < hitBufferCount; i++) {
+        if (hitBuffer[i] == actor) return true;
+    }
+    return false;
+}
+
+// Home in on nearest target
+inline al::LiveActor* findNearestTarget(al::LiveActor* player, f32 maxDist) {
+    al::HitSensor* eye = al::getHitSensor(player, "Eye");
+    if (!eye) return nullptr;
+
+    al::LiveActor* nearest = nullptr;
+    f32 best = maxDist;
+
+    for (int i = 0; i < eye->mSensorCount; i++) {
+        al::LiveActor* actor = al::getSensorHost(eye->mSensors[i]);
+        if (!actor || actor == player || !al::isAlive(actor)) continue;
+        if (!al::isSensorEnemyBody(eye->mSensors[i]) && !al::isSensorNpc(eye->mSensors[i])) continue;
+        if (isInHitBuffer(actor)) continue; // Skip actors already hit this attack
+
+        f32 d = al::calcDistance(player, actor);
+        if (d < best) { best = d; nearest = actor; }
+    }
+    return nearest;
+}
+
+inline al::LiveActor* isNearTarget = nullptr;
