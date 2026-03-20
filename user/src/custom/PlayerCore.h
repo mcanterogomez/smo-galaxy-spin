@@ -239,6 +239,8 @@ namespace PlayerCore {
 
             if (thisPtr && rs::isMsgPlayerDamage(msg)
             ) {
+                if (source && al::isEqualString(al::getSensorHost(source)->getName(), "MarioTankBullet")) return false;
+
                 if (isMetal || isSuper) {
                     if (source && target) rs::sendMsgPushToPlayer(target, source);
                     return true;

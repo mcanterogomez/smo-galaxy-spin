@@ -79,6 +79,11 @@ public:
                         state->mAnimator->startAnim("TailAttack");
                         al::validateHitSensor(state->mActor, "GalaxySpin");
                         galaxySensorRemaining = 21;
+                    } else if (isBlaster && al::isAlive(isBlaster)) {
+                        state->mAnimator->startSubAnim("BlastAttack");
+                        state->mAnimator->startAnim("BlastAttack");
+                        al::validateHitSensor(state->mActor, "GalaxySpin");
+                        galaxySensorRemaining = 21;
                     } else {
                     #ifdef ALLOW_SPIN_ATTACK // Only spin attack
                         state->mAnimator->startSubAnim("SpinSeparate");

@@ -543,6 +543,20 @@ namespace AttackSensor {
         }
     };
 
+    struct TankBulletAttackSensorHook : public mallow::hook::Inline<TankBulletAttackSensorHook> {
+        static void Callback(exl::hook::InlineCtx* ctx) {
+            auto* bullet = reinterpret_cast<TankBullet*>(ctx->X[19]);
+            if (!al::isEqualString(bullet->getName(), "MarioTankBullet")) return;
+
+            auto* source = reinterpret_cast<al::HitSensor*>(ctx->X[22]);
+            auto* target = reinterpret_cast<al::HitSensor*>(ctx->X[21]);
+
+            ctx->W[0] = ctx->W[0]
+                || rs::sendMsgCapReflect(target, source)
+                || rs::sendMsgCapAttack(target, source);
+        }
+    };
+
     inline void Install() {
         #ifndef ALLOW_CAPPY_ONLY
             HackCapAttackSensorHook::InstallAtSymbol("_ZN7HackCap12attackSensorEPN2al9HitSensorES2_");
@@ -552,5 +566,6 @@ namespace AttackSensor {
         HammerAttackSensorHook::InstallAtSymbol("_ZN16HammerBrosHammer12attackSensorEPN2al9HitSensorES2_");
         FireballAttackSensorHook::InstallAtSymbol("_ZN16FireBrosFireBall12attackSensorEPN2al9HitSensorES2_");
         MotorcycleAttackSensorHook::InstallAtOffset(0x2C77EC);
+        TankBulletAttackSensorHook::InstallAtOffset(0x189C7C);
     }
 }

@@ -14,6 +14,13 @@ struct TriggerCameraReset : public mallow::hook::Trampoline<TriggerCameraReset> 
     }
 };
 
+struct TriggerAmiibo : public mallow::hook::Trampoline<TriggerAmiibo> {
+    static bool Callback(const al::IUseSceneObjHolder* holder) {
+        if (isBlaster) return false;
+        return Orig(holder);
+    }
+};
+
 extern "C" void userMain() {
     exl::hook::Initialize();
     mallow::init::installHooks();
@@ -25,6 +32,7 @@ extern "C" void userMain() {
     //PlayerFreeze::Install();
 
     TriggerCameraReset::InstallAtSymbol("_ZN19PlayerInputFunction20isTriggerCameraResetEPKN2al9LiveActorEi");
+    TriggerAmiibo::InstallAtSymbol("_ZN2rs19isTriggerAmiiboModeEPKN2al18IUseSceneObjHolderE");
 
     #ifdef REMOVE_CAPPY_EYES // Remove Cappy eyes while ide
         exl::patch::CodePatcher eyePatcher(0x41F7E4);

@@ -72,7 +72,8 @@ namespace PlayerSpinAttack {
             || player->mAnimator->isAnim("RabbitGet")
             || player->mAnimator->isAnim("Kick")
             || player->mAnimator->isAnim("CapeAttack")
-            || player->mAnimator->isAnim("TailAttack")) return -1;
+            || player->mAnimator->isAnim("TailAttack")
+            || player->mAnimator->isAnim("BlastAttack")) return -1;
 
             if (canGalaxySpin) triggerGalaxySpin = true;
             else { triggerGalaxySpin = true; galaxyFakethrowRemainder = -2; }

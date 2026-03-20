@@ -24,7 +24,18 @@ namespace PowerUps {
             Orig(actor, info, suffix);
         }
     };
-    
+
+    struct InitActorArchiveHook : public mallow::hook::Trampoline<InitActorArchiveHook> {
+        static void Callback(al::LiveActor* actor, const al::ActorInitInfo& info, const sead::SafeString& archive, const char* suffix) {
+            if (al::isEqualString(actor->getName(), "MarioTankBullet")) {
+                sead::SafeString custom("PlayerBullet");
+                Orig(actor, info, custom, suffix);
+                return;
+            }
+            Orig(actor, info, archive, suffix);
+        }
+    };
+
     inline void executeInitPlayer(PlayerActorHakoniwa* thisPtr, const al::ActorInitInfo* actorInfo, const PlayerInitInfo* playerInfo) {
         #ifdef ALLOW_POWERUPS
             auto* model = thisPtr->mModelHolder->findModelActor("Normal");
@@ -70,6 +81,18 @@ namespace PowerUps {
                 }
             }
 
+            // Create and hide tank bullets
+            if (al::isExistArchive("ObjectData/PlayerBullet")
+            ) {
+                tankBullets = new al::LiveActorGroup("TankBullet", 4);
+                while (!tankBullets->isFull()) {
+                    auto* tb = new TankBullet("MarioTankBullet");
+                    al::initCreateActorNoPlacementInfo(tb, *actorInfo);
+                    tankBullets->registerActor(tb);
+                }
+                tankBullets->makeActorDeadAll();
+            }
+
             // Create custom gauge
             isGauge = new CustomGauge(*actorInfo->layoutInitInfo);
 
@@ -91,6 +114,7 @@ namespace PowerUps {
             if (isHammer) isHammer->makeActorDead();
             if (fireBalls) fireBalls->makeActorDeadAll();
             if (iceBalls) iceBalls->makeActorDeadAll();
+            if (tankBullets) tankBullets->makeActorDeadAll();
             if (isKart) isKart->makeActorDead();
         }
     };
@@ -170,23 +194,60 @@ namespace PowerUps {
                 al::invalidateHitSensor(isHammer, "AttackHack");
             }
 
-            // Handle fireball/iceball attack
-            const char* jointName = nextThrowLeft ? "HandL" : "HandR";
-            const char* fireAnim  = nextThrowLeft ? "FireL" : "FireR";
+            // Handle blaster spawning
+            isBlaster = al::tryGetSubActor(model, "Blaster");
+            auto* hand = al::tryGetSubActor(model, "右手");
 
-            al::LiveActorGroup* currentPool = isIce ? iceBalls : fireBalls;
+            static int holdRightFrames = 0;
+            if (al::isPadHoldRight(-1)) holdRightFrames++;
+            else holdRightFrames = 0;
+
+            if (holdRightFrames == 30
+                && isBlaster
+                && !thisPtr->mInput->isMove()
+                && !rs::isActiveDemo(thisPtr)
+            ) {
+                if (al::isAlive(isBlaster)
+                ) {
+                    al::tryEmitEffect(model, "BlasterDisappear", nullptr);
+                    al::tryStartSe(thisPtr, "BlasterOpen");
+                    isBlaster->kill();
+                } else {
+                    isBlaster->appear();
+                    al::tryEmitEffect(model, "BlasterAppear", nullptr);
+                    al::tryStartSe(thisPtr, "BlasterOpen");
+                }
+            }
+
+            bool blasterOn = isBlaster && al::isAlive(isBlaster);
+            if (blasterOn && hand && !al::isActionPlayingSubActor(model, "右手", "AreaWaitDance03"))
+                al::startActionSubActor(model, "右手", "AreaWaitDance03");
+                
+            // Handle fireball/iceball/blaster attack
+            const char* jointName;
+            const char* fireAnim;
+            al::LiveActorGroup* currentPool;
+
+            if (blasterOn) {
+                jointName = "HandR";
+                fireAnim = "BlastShoot";
+                currentPool = tankBullets;
+            } else {
+                jointName = nextThrowLeft ? "HandL" : "HandR";
+                fireAnim = nextThrowLeft ? "FireL" : "FireR";
+                currentPool = isIce ? iceBalls : fireBalls;
+            }
+
             if (!currentPool) return;
-            auto* projectile = (FireBrosFireBall*) currentPool->getDeadActor();
+            auto* projectile = currentPool->getDeadActor();
 
             bool isFullBody = (!isMove && onGround && (!isWater || isSurface));
             bool isFloating = al::isActionPlaying(model, "GlideFloat")
                 || al::isActionPlaying(model, "GlideFloatSuper");
 
-            if (isMario || isFire || isIce || isBrawl || isSuper
+            if (blasterOn || isMario || isFire || isIce || isBrawl || isSuper
             ) {
-                if (fireStep < 0
-                    && (canFireball || isFloating)
-                    && al::isPadTriggerR(-1)
+                if (fireStep < 0 && (canFireball || isFloating) && al::isPadTriggerR(-1)
                 ) {
                     if (projectile && al::isDead(projectile)
                     ) {
@@ -195,15 +256,16 @@ namespace PowerUps {
 
                         anim->startUpperBodyAnim(fireAnim);
                         if (isFullBody) anim->startAnim(fireAnim);
+                        if (blasterOn) al::tryStartSe(thisPtr, "BlasterShoot");
                     }
                 }
                 if (fireStep >= 0
                 ) {
-                    bool isShooting = anim->isUpperBodyAnim("FireL") || anim->isUpperBodyAnim("FireR")
-                        || anim->isAnim("FireL") || anim->isAnim("FireR");
+                    bool isShooting = anim->isUpperBodyAnim("FireL") || anim->isUpperBodyAnim("FireR") || anim->isUpperBodyAnim("BlastShoot")
+                        || anim->isAnim("FireL") || anim->isAnim("FireR") || anim->isAnim("BlastShoot");
 
                     if (!isShooting) { fireStep = -1; return; }
-                    if (fireStep == 2
+                    if ((fireStep == 2 && !blasterOn) || (fireStep == 37 && blasterOn)
                     ) {
                         #ifdef ALLOW_HOMING
                             // Home in on nearest target
@@ -214,8 +276,7 @@ namespace PowerUps {
                                 sead::Vector3f fwd;
                                 al::calcQuatFront(&fwd, model);
 
-                                if (fwd.dot(dir) > 0.5f)
-                                    al::faceToDirection(model, al::getTrans(nearest) - al::getTrans(thisPtr));
+                                if (fwd.dot(dir) > 0.5f) al::faceToDirection(model, al::getTrans(nearest) - al::getTrans(thisPtr));
                             }
                         #endif
                         
@@ -223,14 +284,26 @@ namespace PowerUps {
 
                         sead::Vector3f startPos;
                         al::calcJointPos(&startPos, model, jointName);
-                        sead::Vector3f offset(0.0f, 0.0f, 0.0f);
-                        
-                        if (isSuper) projectile->shoot(startPos, al::getQuat(model), offset, true, 0, true);
-                        else projectile->shoot(startPos, al::getQuat(model), offset, true, 0, false);
-                        if (isIce) al::tryStartSe(projectile, "IceBallShoot");
-                        else al::tryStartSe(projectile, "FireBallShoot");
 
-                        nextThrowLeft = !nextThrowLeft;
+                        if (blasterOn) {
+                            sead::Vector3f fwd;
+                            al::calcQuatFront(&fwd, model);
+                            fwd.normalize();
+
+                            ((TankBullet*)projectile)->shoot(startPos, fwd * 85.0f, 200, false, false);
+                            al::tryEmitEffect(model, "Shoot", nullptr);
+                            al::tryStartSe(projectile, "Shoot");
+                        } else {
+                            sead::Vector3f offset(0.0f, 0.0f, 0.0f);
+
+                            if (isSuper) ((FireBrosFireBall*)projectile)->shoot(startPos, al::getQuat(model), offset, true, 0, true);
+                            else ((FireBrosFireBall*)projectile)->shoot(startPos, al::getQuat(model), offset, true, 0, false);
+
+                            if (isIce) al::tryStartSe(projectile, "IceBallShoot");
+                            else al::tryStartSe(projectile, "FireBallShoot");
+                        }
+
+                        if (!blasterOn) nextThrowLeft = !nextThrowLeft;
                     }
                     if (isFullBody ? anim->isAnimEnd() : anim->isUpperBodyAnimEnd()
                     ) {
@@ -453,24 +526,24 @@ namespace PowerUps {
                     al::tryStartSe(isKart, "CommonVanishS");
                     isKart->kill();
                     return;
+                } else {
+                    sead::Vector3f front;
+                    al::calcFrontDir(&front, thisPtr);
+                    sead::Vector3f gravity = al::getGravity(thisPtr);
+                    sead::Vector3f marioPos = al::getTrans(thisPtr);
+                    sead::Vector3f target = marioPos + front * 500.0f;
+
+                    sead::Vector3f groundPos;
+                    bool hasGround = alCollisionUtil::getHitPosOnArrow(thisPtr, &groundPos, target - gravity * 1000.0f, gravity * 2000.0f, nullptr, nullptr);
+
+                    if (!hasGround) { al::tryStartSe(thisPtr, "InvalidCapAction"); return; }
+                    target = groundPos - gravity;
+
+                    al::setTrans(isKart, target);
+                    isKart->appear();
+                    al::tryEmitEffect(isKart, "Appear", nullptr);
+                    al::tryStartSe(isKart, "Appear");
                 }
-
-                sead::Vector3f front;
-                al::calcFrontDir(&front, thisPtr);
-                sead::Vector3f gravity = al::getGravity(thisPtr);
-                sead::Vector3f marioPos = al::getTrans(thisPtr);
-                sead::Vector3f target = marioPos + front * 500.0f;
-
-                sead::Vector3f groundPos;
-                bool hasGround = alCollisionUtil::getHitPosOnArrow(thisPtr, &groundPos, target - gravity * 1000.0f, gravity * 2000.0f, nullptr, nullptr);
-
-                if (!hasGround) { al::tryStartSe(thisPtr, "InvalidCapAction"); return; }
-                target = groundPos - gravity;
-
-                al::setTrans(isKart, target);
-                isKart->appear();
-                al::tryEmitEffect(isKart, "Appear", nullptr);
-                al::tryStartSe(isKart, "Appear");
             }
         #endif
     }
@@ -886,6 +959,7 @@ namespace PowerUps {
         #ifdef ALLOW_POWERUPS
             FireBrosFireBallInitArchive::InstallAtOffset(0x10082C);
             InitActorSuffixHook::InstallAtSymbol("_ZN2al15initActorSuffixEPNS_9LiveActorERKNS_13ActorInitInfoEPKc");
+            InitActorArchiveHook::InstallAtSymbol("_ZN2al24initActorWithArchiveNameEPNS_9LiveActorERKNS_13ActorInitInfoERKN4sead14SafeStringBaseIcEEPKc");
             PlayerActorHakoniwaInitAfterPlacement::InstallAtSymbol("_ZN19PlayerActorHakoniwa18initAfterPlacementEv");
             
             #ifdef ALLOW_CAPPY_ONLY // Handles Fireball logic

@@ -87,6 +87,7 @@
 #include "headers/PlayerStateJump.h"
 #include "headers/PlayerStateWait.h"
 #include "headers/PlayerStainControl.h"
+#include "headers/TankBullet.h"
 #include "ModOptions.h"
 #include "math/seadVectorFwd.h"
 
@@ -173,10 +174,12 @@ inline PlayerActorHakoniwa* isHakoniwa = nullptr;
 inline HammerBrosHammer* isHammer = nullptr;
 inline CustomGauge* isGauge = nullptr;
 inline Motorcycle* isKart = nullptr;
+inline al::LiveActor* isBlaster = nullptr;
 inline al::LiveActor* isKoopa = nullptr;
 inline al::LiveActorGroup* fireBalls = nullptr;
 inline al::LiveActorGroup* iceBalls = nullptr;
 inline al::LiveActorGroup* iceCubes = nullptr;
+inline al::LiveActorGroup* tankBullets = nullptr;
 
 // Powerup Specifics
 bool nextThrowLeft = true;
