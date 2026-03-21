@@ -137,21 +137,12 @@ const uintptr_t nrvHakoniwaFall = 0x01d78910;
 const uintptr_t nrvHakoniwaHipDrop = 0x1D78978;
 const uintptr_t nrvHakoniwaJump = 0x1D78948;
 
-// Spin Flags
-bool isGalaxySpin = false;
-bool canGalaxySpin = true;
-bool canStandardSpin = true;
-bool isGalaxyAfterStandardSpin = false;
-bool isStandardAfterGalaxySpin = false;
-int galaxyFakethrowRemainder = -1;
-bool triggerGalaxySpin = false;
-bool prevIsCarry = false;
-bool isSpinRethrow = false;
-int galaxySensorRemaining = -1;
-bool isSpinActive = false;
-
 // Action Flags
-bool isPunching = false;
+int galaxySensorRemaining = -1;
+bool prevIsCarry = false;
+bool isSpinActive = false;
+bool isSpinRethrow = false;
+bool isPunchActive = false;
 bool isPunchRight = false;
 bool isFinalPunch = false;
 bool isNearCollectible = false;
@@ -235,3 +226,78 @@ inline al::LiveActor* findNearestTarget(al::LiveActor* player, f32 maxDist) {
 }
 
 inline al::LiveActor* isNearTarget = nullptr;
+
+// Spin logic
+struct SpinState {
+    bool isGalaxy = false;
+    bool canGalaxy = true;
+    bool canStandard = true;
+    bool galaxyAfterStandard = false;
+    bool standardAfterGalaxy = false;
+    bool trigger = false;
+    int fakethrowRemainder = -1;
+
+    void reset() {
+        isGalaxy = false;
+        canGalaxy = true;
+        canStandard = true;
+        galaxyAfterStandard = false;
+        standardAfterGalaxy = false;
+        trigger = false;
+        fakethrowRemainder = -1;
+    }
+
+    void resetForNewSpin() {
+        canGalaxy = true;
+        canStandard = true;
+        galaxyAfterStandard = false;
+        standardAfterGalaxy = false;
+    }
+};
+
+inline SpinState spin;
+enum class SpinPre { Fallthrough, Accept, Reject };
+
+// Attack animations list
+inline bool isBaseSpinAnim(PlayerAnimator* anim) {
+    return al::isEqualString(anim->mCurAnim, "SpinSeparate")
+        || al::isEqualString(anim->mCurAnim, "SpinSeparateSwim")
+        || al::isEqualString(anim->mCurAnim, "CapeAttack")
+        || al::isEqualString(anim->mCurAnim, "TailAttack")
+        || al::isEqualString(anim->mCurAnim, "BlastAttack");
+}
+
+inline bool isDoubleSpinAnim(PlayerAnimator* anim) {
+    return al::isEqualString(anim->mCurAnim, "SpinAttackLeft")
+        || al::isEqualString(anim->mCurAnim, "SpinAttackRight")
+        || al::isEqualString(anim->mCurAnim, "SpinAttackAirLeft")
+        || al::isEqualString(anim->mCurAnim, "SpinAttackAirRight");
+}
+
+inline bool isSpinAnim(PlayerAnimator* anim) {
+    if (!anim) return false;
+    return isBaseSpinAnim(anim) || isDoubleSpinAnim(anim);
+}
+
+inline bool isPunchAnim(PlayerAnimator* anim) {
+    if (!anim) return false;
+    return al::isEqualString(anim->mCurAnim, "KoopaCapPunchL")
+        || al::isEqualString(anim->mCurAnim, "KoopaCapPunchR")
+        || al::isEqualString(anim->mCurAnim, "KoopaCapPunchFinishL")
+        || al::isEqualString(anim->mCurAnim, "KoopaCapPunchFinishR")
+        || al::isEqualString(anim->mCurAnim, "RabbitGet")
+        || al::isEqualString(anim->mCurAnim, "Kick");
+}
+
+inline bool isHipDropAnim(PlayerAnimator* anim) {
+    if (!anim) return false;
+    return al::isEqualString(anim->mCurAnim, "HipDrop")
+        || al::isEqualString(anim->mCurAnim, "HipDropPunch")
+        || al::isEqualString(anim->mCurAnim, "HipDropReaction")
+        || al::isEqualString(anim->mCurAnim, "HipDropPunchReaction")
+        || al::isEqualString(anim->mCurAnim, "SpinJumpDownFallL")
+        || al::isEqualString(anim->mCurAnim, "SpinJumpDownFallR")
+        || al::isEqualString(anim->mCurAnim, "SwimHipDrop")
+        || al::isEqualString(anim->mCurAnim, "SwimHipDropPunch")
+        || al::isEqualString(anim->mCurAnim, "SwimDive");
+}

@@ -120,41 +120,43 @@ namespace PowerUps {
     };
 
     // shared pre-logic for TryActionCapSpinAttack hooks
-    static inline int TryCapSpinPre(PlayerActorHakoniwa* player) {
+    static SpinPre TryCapFireballPre(PlayerActorHakoniwa* player) {
         bool newIsCarry = player->mCarryKeeper->isCarry();
-        if (newIsCarry && !prevIsCarry) { prevIsCarry = newIsCarry; return -1; }
+        if (newIsCarry && !prevIsCarry) { prevIsCarry = newIsCarry; return SpinPre::Reject; }
         prevIsCarry = newIsCarry;
 
-        if (isFireThrowing()) return -1;
+        if (isFireThrowing()) return SpinPre::Reject;
 
         if (al::isPadTriggerR(-1)
             && !rs::is2D(player)
             && !player->mCarryKeeper->isCarry()
             && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)) canFireball = true;
 
-        return 0; // fallthrough to Orig
+        return SpinPre::Fallthrough;
     }
 
     struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttack> {
         static bool Callback(PlayerActorHakoniwa* player, bool a2) {
-            switch (TryCapSpinPre(player)
+            switch (TryCapFireballPre(player)
             ) {
-                case 1:  return true;
-                case -1: return false;
+                case SpinPre::Accept: return true;
+                case SpinPre::Reject: return false;
+                default: break;
             }
-            if(Orig(player, a2)) { triggerGalaxySpin = false; return true; }
+            if(Orig(player, a2)) { spin.trigger = false; return true; }
             return false;
         }
     };
 
     struct PlayerTryActionCapSpinAttackBindEnd : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttackBindEnd> {
         static bool Callback(PlayerActorHakoniwa* player, bool a2) {
-            switch (TryCapSpinPre(player)
+            switch (TryCapFireballPre(player)
             ) {
-                case 1:  return true;
-                case -1: return false;
+                case SpinPre::Accept: return true;
+                case SpinPre::Reject: return false;
+                default: break;
             }
-            if(Orig(player, a2)) { triggerGalaxySpin = false; return true; }
+            if(Orig(player, a2)) { spin.trigger = false; return true; }
             return false;
         }
     };
@@ -734,12 +736,9 @@ namespace PowerUps {
                 ) {
                     if (!al::isNerve(thisPtr, getNerveAt(spinCapNrvOffset))
                     ) {
-                        canGalaxySpin = true;
-                        canStandardSpin = true;
-                        isGalaxyAfterStandardSpin = false;
-                        isStandardAfterGalaxySpin = false;
+                        spin.resetForNewSpin();
 
-                        triggerGalaxySpin = true;
+                        spin.trigger = true;
                         al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
                     }
                 }
@@ -749,12 +748,9 @@ namespace PowerUps {
                     ) {
                         if (!thisPtr->mHackCap || !thisPtr->mHackCap->isEnableThrow()) al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
                         else {
-                            canGalaxySpin = true;
-                            canStandardSpin = true;
-                            isGalaxyAfterStandardSpin = false;
-                            isStandardAfterGalaxySpin = false;
+                            spin.resetForNewSpin();
 
-                            triggerGalaxySpin = false;
+                            spin.trigger = false;
                             al::setNerve(thisPtr, getNerveAt(spinCapNrvOffset));
                         }
                     }
@@ -822,6 +818,7 @@ namespace PowerUps {
     struct PlayerAnimControlRunUpdate : public mallow::hook::Inline<PlayerAnimControlRunUpdate> {
         static void Callback(exl::hook::InlineCtx* ctx) {
             if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mHackActor) return;
+
             if (isSuper) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveSuper"); //mMoveAnimName in PlayerAnimControlRun
             else if (isBrawl) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveBrawl");
             else if (isFeather || isTanooki) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("Move");
@@ -832,6 +829,7 @@ namespace PowerUps {
     struct PlayerSeCtrlUpdateMove : public mallow::hook::Inline<PlayerSeCtrlUpdateMove> {
         static void Callback(exl::hook::InlineCtx* ctx) {
             if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mHackActor) return;
+            
             if (isSuper) ctx->X[8] = reinterpret_cast<u64>("MoveSuper");
             else if (isBrawl) ctx->X[8] = reinterpret_cast<u64>("MoveBrawl");
             else if (isFeather || isTanooki) ctx->X[8] = reinterpret_cast<u64>("Move");
@@ -848,10 +846,13 @@ namespace PowerUps {
 
     struct PlayerAnimatorSetAnimRateCommon : public mallow::hook::Trampoline<PlayerAnimatorSetAnimRateCommon> {
         static void Callback(PlayerAnimator* thisPtr, float rate) {
-            if (isMetal && isHakoniwa && thisPtr == isHakoniwa->mAnimator) {
+            if (isMetal && isHakoniwa
+                && thisPtr == isHakoniwa->mAnimator
+            ) {
                 auto* wsf = isHakoniwa->mWaterSurfaceFinder;
                 bool nearSurface = wsf && wsf->isFoundSurface() && wsf->getDistance() <= 80.0f;
-                if (al::isInWater(isHakoniwa) && !nearSurface) {
+                if (al::isInWater(isHakoniwa) && !nearSurface
+                ) {
                     rate *= 0.50f;
                     thisPtr->mAnimFrameCtrl->mRate = rate;
                 }

@@ -17,7 +17,7 @@ public:
         bool isRotatingR = state->mAnimator->isAnim("SpinGroundR");
         bool isCarrying = player->mCarryKeeper->isCarry();
         bool isFinish = state->mAnimator->isAnim("KoopaCapPunchFinishL")
-                        || state->mAnimator->isAnim("KoopaCapPunchFinishR");
+            || state->mAnimator->isAnim("KoopaCapPunchFinishR");
         bool didSpin = player->mInput->isSpinInput();
         int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
 
@@ -109,7 +109,7 @@ public:
                         al::invalidateHitSensor(state->mActor, "Body");
                         al::invalidateHitSensor(state->mActor, "Head");
 
-                        isPunching = true;
+                        isPunchActive = true;
                     #endif
                     }
                 }
@@ -118,6 +118,7 @@ public:
 
         // Home in on nearest target
         if (isNearTarget && al::isAlive(isNearTarget) && !isInHitBuffer(isNearTarget)
+            && (isPunchActive || isNearCollectible || isNearTreasure || isNearSwoonedEnemy)
         ) {
             al::faceToDirection(player, al::getTrans(isNearTarget) - al::getTrans(player));
 
@@ -135,7 +136,8 @@ public:
             || state->mAnimator->isAnim("KoopaCapPunchR") || state->mAnimator->isAnim("KoopaCapPunchL")
             || state->mAnimator->isAnim("BlastAttack")
         ) {
-            if (al::isStep(state, 3)) {
+            if (al::isStep(state, 3)
+            ) {
                 // Reduce Mario's existing momentum by 50%
                 sead::Vector3 currentVelocity = al::getVelocity(player);
                 currentVelocity *= 0.5f;
@@ -148,12 +150,14 @@ public:
                 forward *= 5.0f;
                 al::addVelocity(player, forward);
             }
-            if (al::isStep(state, 6)) {
+            if (!state->mAnimator->isAnim("BlastAttack")
+                && al::isStep(state, 7)
+            ) {
+                al::validateHitSensor(state->mActor, "Punch");
                 // Make Mario vulnerable again
                 al::validateHitSensor(state->mActor, "Foot");
                 al::validateHitSensor(state->mActor, "Body");
                 al::validateHitSensor(state->mActor, "Head");
-                al::validateHitSensor(state->mActor, "Punch");
             }
         }
 

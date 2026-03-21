@@ -48,44 +48,24 @@ namespace AttackSensor {
             sead::Vector3f spawnPos = getHitSpawnPos(source, target);
             sead::Vector3f fireDir = getFireDir(sourceHost, targetHost);
     
-            if (!isGalaxySpin && al::isEqualSubString(typeid(*targetHost).name(), "FireBall")) return;
+            if (!spin.isGalaxy && al::isEqualSubString(typeid(*targetHost).name(), "FireBall")) return;
 
-            bool isSpinAttack = al::isSensorName(source, "GalaxySpin") && thisPtr->mAnimator
-                    && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinSeparate")
-                        || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinSeparateSwim")
-                        || al::isActionPlaying(thisPtr->mModelHolder->findModelActor("Normal"), "MoveSuper")
-                        || al::isEqualString(thisPtr->mAnimator->mCurAnim, "JumpBroad8")
-                        || al::isEqualString(thisPtr->mAnimator->mCurAnim, "Glide")
-                        || al::isEqualString(thisPtr->mAnimator->mCurAnim, "CapeAttack")
-                        || al::isEqualString(thisPtr->mAnimator->mCurAnim, "TailAttack"));
+            bool isSpinAttack = al::isSensorName(source, "GalaxySpin")
+                && (isBaseSpinAnim(thisPtr->mAnimator)
+                    || al::isActionPlaying(thisPtr->mModelHolder->findModelActor("Normal"), "MoveSuper")
+                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "JumpBroad8") || al::isEqualString(thisPtr->mAnimator->mCurAnim, "Glide"));
 
-            bool isDoubleSpinAttack = al::isSensorName(source, "DoubleSpin") && thisPtr->mAnimator
-                    && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackLeft")
-                        || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackRight")
-                        || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackAirLeft")
-                        || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinAttackAirRight"));
+            bool isDoubleSpinAttack = al::isSensorName(source, "DoubleSpin")
+                && isDoubleSpinAnim(thisPtr->mAnimator);
 
-            bool isSpinFallback = isGalaxySpin
+            bool isSpinFallback = spin.isGalaxy
                 && (al::isSensorName(source, "GalaxySpin") || al::isSensorName(source, "DoubleSpin"));
 
-            bool isPunchAttack = al::isSensorName(source, "Punch") && thisPtr->mAnimator
-                && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "KoopaCapPunchL")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "KoopaCapPunchR")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "KoopaCapPunchFinishL")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "KoopaCapPunchFinishR")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "RabbitGet")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "Kick"));
+            bool isPunchAttack = al::isSensorName(source, "Punch")
+                && isPunchAnim(thisPtr->mAnimator);
 
-            bool isHipDrop = al::isSensorName(source, "HipDropKnockDown") && thisPtr->mAnimator
-                && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDrop")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunch")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropReaction")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunchReaction")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallL")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallR")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDrop")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDropPunch")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimDive"));
+            bool isHipDrop = al::isSensorName(source, "HipDropKnockDown")
+                && isHipDropAnim(thisPtr->mAnimator);
 
             al::HitSensor* foot = al::getHitSensor(thisPtr, "Foot");
             bool canTrample = rs::isEnableSendTrampleMsg(thisPtr, foot, target);
@@ -112,7 +92,7 @@ namespace AttackSensor {
                     inBuffer |= sourceNrv == getNerveAt(0x1D00EC8); // GrowFlowerSeedNrvHold
                     inBuffer |= sourceNrv == getNerveAt(0x1D22B78); // RadishNrvHold
 
-                    if (isPunchAttack && !isPunching
+                    if (isPunchAttack && !isPunchActive
                     ) {
                         if (al::isEqualSubString(typeid(*targetHost).name(),"Stake")
                             && sourceNrv == getNerveAt(0x1D36D20)

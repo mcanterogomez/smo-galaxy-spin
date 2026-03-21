@@ -106,7 +106,7 @@ namespace PlayerCore {
                 if(galaxySensorRemaining == 0) {
                     al::invalidateHitSensor(thisPtr, "GalaxySpin");
                     al::invalidateHitSensor(thisPtr, "DoubleSpin");
-                    isGalaxySpin = false;
+                    spin.isGalaxy = false;
                     galaxySensorRemaining = -1;
                 }
             }
@@ -154,16 +154,7 @@ namespace PlayerCore {
 
             // Add attack to moves
             static bool wasAttackMove = false;
-            const bool isAttackMove = thisPtr->mAnimator
-                && (al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDrop")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunch")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropReaction")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "HipDropPunchReaction")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallL")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SpinJumpDownFallR")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDrop")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimHipDropPunch")
-                    || al::isEqualString(thisPtr->mAnimator->mCurAnim, "SwimDive"));
+            const bool isAttackMove = isHipDropAnim(thisPtr->mAnimator);
 
             if (isAttackMove && !wasAttackMove) { al::validateHitSensor(thisPtr, "HipDropKnockDown"); hitBufferCount = 0;}
             else if (!isAttackMove && wasAttackMove) al::invalidateHitSensor(thisPtr, "HipDropKnockDown");
@@ -245,17 +236,7 @@ namespace PlayerCore {
                     if (source && target) rs::sendMsgPushToPlayer(target, source);
                     return true;
                 }
-                auto* anim = thisPtr->mAnimator;
-                if (anim && (al::isEqualString(anim->mCurAnim, "HipDrop")
-                    || al::isEqualString(anim->mCurAnim, "HipDropPunch")
-                    || al::isEqualString(anim->mCurAnim, "HipDropReaction")
-                    || al::isEqualString(anim->mCurAnim, "HipDropPunchReaction")
-                    || al::isEqualString(anim->mCurAnim, "SpinJumpDownFallL")
-                    || al::isEqualString(anim->mCurAnim, "SpinJumpDownFallR")
-                    || al::isEqualString(anim->mCurAnim, "SwimHipDrop")
-                    || al::isEqualString(anim->mCurAnim, "SwimHipDropPunch")
-                    || al::isEqualString(anim->mCurAnim, "SwimDive"))
-                ) return true;
+                if (isHipDropAnim(thisPtr->mAnimator)) return true;
             }
             return Orig(thisPtr, msg, source, target);
         }
