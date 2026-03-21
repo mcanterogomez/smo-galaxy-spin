@@ -265,18 +265,18 @@ namespace PowerUps {
                         || anim->isAnim("FireL") || anim->isAnim("FireR") || anim->isAnim("BlastShoot");
 
                     if (!isShooting) { fireStep = -1; return; }
-                    if ((fireStep == 2 && !blasterOn) || (fireStep == 37 && blasterOn)
+                    if ((fireStep == 2 && !blasterOn) || (fireStep == 40 && blasterOn)
                     ) {
                         #ifdef ALLOW_HOMING
                             // Home in on nearest target
-                            al::LiveActor* nearest = findNearestTarget(thisPtr, 800.0f);
+                            al::LiveActor* nearest = findNearestTarget(thisPtr, 1000.0f);
                             if (nearest) {
                                 sead::Vector3f dir = al::getTrans(nearest) - al::getTrans(thisPtr);
                                 dir.normalize();
                                 sead::Vector3f fwd;
                                 al::calcQuatFront(&fwd, model);
 
-                                if (fwd.dot(dir) > 0.5f) al::faceToDirection(model, al::getTrans(nearest) - al::getTrans(thisPtr));
+                                if (fwd.dot(dir) > 0.85f) al::faceToDirection(model, al::getTrans(nearest) - al::getTrans(thisPtr));
                             }
                         #endif
                         
@@ -305,7 +305,7 @@ namespace PowerUps {
 
                         if (!blasterOn) nextThrowLeft = !nextThrowLeft;
                     }
-                    if (isFullBody ? anim->isAnimEnd() : anim->isUpperBodyAnimEnd()
+                    if (anim->isUpperBodyAnimEnd()
                     ) {
                         if (isFullBody) al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
                         anim->clearUpperBodyAnim();

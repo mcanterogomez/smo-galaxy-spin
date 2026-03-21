@@ -141,10 +141,10 @@ namespace AttackSensor {
                         if (al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
                             && !al::isModelName(targetHost, "TreasureBoxWood")
                         ) {
-                            if (al::sendMsgExplosion(target, source, nullptr)
+                            if (rs::sendMsgCapAttack(target, source)
                             ) {
                                 hitBuffer[hitBufferCount++] = targetHost;
-                                al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
+                                if (!al::isEffectEmitting(sourceHost, "Hit")) al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
                                 return;
                             }
                         }
@@ -389,6 +389,7 @@ namespace AttackSensor {
                             || rs::sendMsgKoopaCapPunchL(target, source)
                             || rs::sendMsgKoopaHackPunch(target, source)
                             || rs::sendMsgKoopaHackPunchCollide(target, source)
+                            || rs::sendMsgCapAttack(target, source)
                         ) {
                             hitBuffer[hitBufferCount++] = targetHost;
                             if (!al::isEqualSubString(typeid(*targetHost).name(), "BossForestBlock")) al::tryEmitEffect(sourceHost, "HammerHit", &spawnPos);
@@ -551,9 +552,13 @@ namespace AttackSensor {
             auto* source = reinterpret_cast<al::HitSensor*>(ctx->X[22]);
             auto* target = reinterpret_cast<al::HitSensor*>(ctx->X[21]);
 
+            rs::sendMsgSeedAttackBig(target, source);
+
             ctx->W[0] = ctx->W[0]
                 || rs::sendMsgCapReflect(target, source)
                 || rs::sendMsgCapAttack(target, source);
+
+            rs::sendMsgWeaponItemGet(target, source);
         }
     };
 

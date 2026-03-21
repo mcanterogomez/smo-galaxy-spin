@@ -11,23 +11,19 @@ public:
     void execute(al::NerveKeeper* keeper) const override {
         PlayerStateSpinCap* state = keeper->getParent<PlayerStateSpinCap>();
         PlayerActorHakoniwa* player = static_cast<PlayerActorHakoniwa*>(state->mActor);
-        auto* model = player->mModelHolder->findModelActor("Normal");
-        auto* cape = al::tryGetSubActor(model, "ケープ");
-        bool isCape = (isMario && cape && al::isAlive(cape)) || isFeather;
 
         bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
         bool isRotatingL = state->mAnimator->isAnim("SpinGroundL");
         bool isRotatingR = state->mAnimator->isAnim("SpinGroundR");
         bool isCarrying = player->mCarryKeeper->isCarry();
         bool isFinish = state->mAnimator->isAnim("KoopaCapPunchFinishL")
-            || state->mAnimator->isAnim("KoopaCapPunchFinishR");
+                        || state->mAnimator->isAnim("KoopaCapPunchFinishR");
         bool didSpin = player->mInput->isSpinInput();
         int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
 
         isSpinActive = true;
 
-        if (al::isFirstStep(state)
-        ) {
+        if (al::isFirstStep(state)) {
             #ifdef ALLOW_HOMING
                 isNearTarget = findNearestTarget(player, 250.0f);
             #else
@@ -41,11 +37,10 @@ public:
                 if (didSpin) {
                     if (spinDir > 0) {
                         state->mAnimator->startSubAnim("SpinAttackLeft");
-                        state->mAnimator->startAnim ("SpinAttackLeft");
-                    }
-                    else {
+                        state->mAnimator->startAnim("SpinAttackLeft");
+                    } else {
                         state->mAnimator->startSubAnim("SpinAttackRight");
-                        state->mAnimator->startAnim ("SpinAttackRight");
+                        state->mAnimator->startAnim("SpinAttackRight");
                     }
                     al::validateHitSensor(state->mActor, "DoubleSpin");
                     galaxySensorRemaining = 41;
@@ -71,7 +66,7 @@ public:
                     state->mAnimator->startAnim("Kick");
                     al::validateHitSensor(state->mActor, "Punch");
                 } else {
-                    if (isCape) {
+                    if (isFeather) {
                         al::setNerve(state, reinterpret_cast<al::Nerve*>(&GalaxySpinAir));
                         return;
                     } else if (isTanooki) {
@@ -114,13 +109,13 @@ public:
                         al::invalidateHitSensor(state->mActor, "Body");
                         al::invalidateHitSensor(state->mActor, "Head");
 
-                        isPunching = true; // Validate punch animations*/
+                        isPunching = true;
                     #endif
                     }
                 }
             }
         }
-        
+
         // Home in on nearest target
         if (isNearTarget && al::isAlive(isNearTarget) && !isInHitBuffer(isNearTarget)
         ) {
@@ -136,10 +131,9 @@ public:
             *vel = fwd * hSpeed + grav * gravComp;
         }
 
-        if (!isSpinning && !isCarrying
-            && !isNearCollectible && !isNearTreasure && !isNearSwoonedEnemy
-            && !isRotatingL && !isRotatingR
-            && !isTanooki
+        if (isFinish
+            || state->mAnimator->isAnim("KoopaCapPunchR") || state->mAnimator->isAnim("KoopaCapPunchL")
+            || state->mAnimator->isAnim("BlastAttack")
         ) {
             if (al::isStep(state, 3)) {
                 // Reduce Mario's existing momentum by 50%
@@ -160,10 +154,9 @@ public:
                 al::validateHitSensor(state->mActor, "Body");
                 al::validateHitSensor(state->mActor, "Head");
                 al::validateHitSensor(state->mActor, "Punch");
-                //galaxySensorRemaining = 15;
             }
         }
-        
+
         if (isFinish) al::setVelocity(player, sead::Vector3f::zero);
         else {
             state->updateSpinGroundNerve();
@@ -196,9 +189,6 @@ public:
     void execute(al::NerveKeeper* keeper) const override {
         PlayerStateSpinCap* state = keeper->getParent<PlayerStateSpinCap>();
         PlayerActorHakoniwa* player = static_cast<PlayerActorHakoniwa*>(state->mActor);
-        auto* model = player->mModelHolder->findModelActor("Normal");
-        auto* cape = al::tryGetSubActor(model, "ケープ");
-        bool isCape = (isMario && cape && al::isAlive(cape)) || isFeather;
 
         bool isRotatingAirL  = state->mAnimator->isAnim("StartSpinJumpL")
             || state->mAnimator->isAnim("RestartSpinJumpL");
@@ -210,14 +200,6 @@ public:
         bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
 
         isSpinActive = true;
-
-        if (state->mAnimator->isAnim("CapeAttack")
-            && cape && al::isDead(cape)
-        ) {
-            state->mAnimator->startAnim("SpinSeparate");
-            al::validateHitSensor(state->mActor, "GalaxySpin"); 
-            galaxySensorRemaining = 21; 
-        }
         
         if(al::isFirstStep(state)
         ) {
@@ -242,7 +224,7 @@ public:
                     state->mAnimator->startAnim("SpinSeparate");
                     al::validateHitSensor(state->mActor, "GalaxySpin");
                     galaxySensorRemaining = 21;
-                } else if (isCape) {
+                } else if (isFeather) {
                     state->mAnimator->startAnim("CapeAttack");
                     al::validateHitSensor(state->mActor, "GalaxySpin");
                     galaxySensorRemaining = 21;
@@ -260,7 +242,7 @@ public:
         
         state->updateSpinAirNerve();
 
-        if ((isCape || isTanooki)
+        if ((isFeather || isTanooki)
             && state->mAnimator->isAnimEnd()
         ) {
             al::invalidateHitSensor(state->mActor, "GalaxySpin");
