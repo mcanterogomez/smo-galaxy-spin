@@ -39,6 +39,8 @@ namespace PowerUps {
     inline void executeInitPlayer(PlayerActorHakoniwa* thisPtr, const al::ActorInitInfo* actorInfo, const PlayerInitInfo* playerInfo) {
         #ifdef ALLOW_POWERUPS
             auto* model = thisPtr->mModelHolder->findModelActor("Normal");
+            glideLean = 0.0f;
+            glidePitch = 0.0f;
             
             al::initJointLocalYRotator(model, &glideLean, "JointRoot");
             al::initJointLocalZRotator(model, &glidePitch, "Spine1");

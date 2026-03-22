@@ -176,15 +176,16 @@ inline al::LiveActorGroup* tankBullets = nullptr;
 bool nextThrowLeft = true;
 bool canFireball = false;
 int fireStep = -1;
-static inline bool isFireThrowing() { return fireStep >= 0; }
+bool isFireThrowing() { return fireStep >= 0; }
 bool tauntRightAlt = false;
 bool isDoubleJump = false;
 bool isDoubleJumpConsume = false;
-inline float glideLean = 0.0f;
-inline float glidePitch = 0.0f;
+float glideLean = 0.0f;
+float glidePitch = 0.0f;
 int isCapeActive = -1;
 bool isSuperRunningOnSurface = false;
 const f32 MIN_SPEED_RUN_ON_WATER = 15.0f;
+const sead::Color4u8 paintClear(0, 0, 0, 0);
 
 inline sead::Vector3f getHitSpawnPos(al::HitSensor* a, al::HitSensor* b) {
     sead::Vector3f pos = (al::getSensorPos(a) + al::getSensorPos(b)) * 0.5f;

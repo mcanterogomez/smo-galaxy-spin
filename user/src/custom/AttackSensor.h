@@ -71,6 +71,8 @@ namespace AttackSensor {
             bool canTrample = rs::isEnableSendTrampleMsg(thisPtr, foot, target);
             bool isHipDropAttack = isHipDrop && !canTrample;
 
+            if (isSpinAttack || isDoubleSpinAttack) rs::sendMsgPaint(target, source, paintClear, 150, 0);
+
             if(isSpinAttack || isDoubleSpinAttack 
                 || isPunchAttack || isHipDropAttack
                 || isSpinFallback
@@ -347,6 +349,8 @@ namespace AttackSensor {
             if(al::isSensorName(source, "AttackHack")
             ) {
                 bool inBuffer = isInHitBuffer(targetHost);
+
+                rs::sendMsgPaint(target, source, paintClear, 300, 0);
 
                 if(!inBuffer
                 ) {
