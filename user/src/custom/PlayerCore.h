@@ -67,6 +67,7 @@ namespace PlayerCore {
                     if (isMetal) state->requestAnimName("BattleWait");
                     else if (isBrawl) state->requestAnimName("WaitBrawl");
                     else if (isSuper) state->requestAnimName("WaitSuper");
+                    else if (isBlaster && al::isAlive(isBlaster)) state->requestAnimName("BattleWait");
                 }
             }
         }

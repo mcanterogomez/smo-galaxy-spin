@@ -216,7 +216,8 @@ inline al::LiveActor* findNearestTarget(al::LiveActor* player, f32 maxDist) {
     for (int i = 0; i < eye->mSensorCount; i++) {
         al::LiveActor* actor = al::getSensorHost(eye->mSensors[i]);
         if (!actor || actor == player || !al::isAlive(actor)) continue;
-        if (!al::isSensorEnemyBody(eye->mSensors[i]) && !al::isSensorNpc(eye->mSensors[i])) continue;
+        if (!al::isSensorNpc(eye->mSensors[i])
+            && !(al::isSensorEnemyBody(eye->mSensors[i]) && al::isEqualSubString(eye->mSensors[i]->mName, "Body"))) continue;
         if (isInHitBuffer(actor)) continue; // Skip actors already hit this attack
 
         f32 d = al::calcDistance(player, actor);

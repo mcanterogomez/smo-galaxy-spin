@@ -110,7 +110,8 @@ namespace PowerUps {
             Orig(thisPtr);
 
             PlayerFreeze::clearAllFrozen();
-            
+
+            isBlaster = nullptr;
             if (isHammer) isHammer->makeActorDead();
             if (fireBalls) fireBalls->makeActorDeadAll();
             if (iceBalls) iceBalls->makeActorDeadAll();
@@ -256,6 +257,9 @@ namespace PowerUps {
                         fireStep = 0;
                         canFireball = false;
 
+                        // Increase Eye sensor range for blaster homing
+                        if (blasterOn) al::setSensorRadius(thisPtr, "Eye", 1600.0f);
+
                         anim->startUpperBodyAnim(fireAnim);
                         if (isFullBody) anim->startAnim(fireAnim);
                         if (blasterOn) al::tryStartSe(thisPtr, "BlasterShoot");
@@ -266,12 +270,16 @@ namespace PowerUps {
                     bool isShooting = anim->isUpperBodyAnim("FireL") || anim->isUpperBodyAnim("FireR") || anim->isUpperBodyAnim("BlastShoot")
                         || anim->isAnim("FireL") || anim->isAnim("FireR") || anim->isAnim("BlastShoot");
 
-                    if (!isShooting) { fireStep = -1; return; }
+                    if (!isShooting) {
+                        fireStep = -1;
+                        al::setSensorRadius(thisPtr, "Eye", 800.0f); // Restore default
+                        return;
+                    }
                     if ((fireStep == 2 && !blasterOn) || (fireStep == 40 && blasterOn)
                     ) {
                         #ifdef ALLOW_HOMING
                             // Home in on nearest target
-                            al::LiveActor* nearest = findNearestTarget(thisPtr, 1000.0f);
+                            al::LiveActor* nearest = findNearestTarget(thisPtr, blasterOn ? 1600.0f : 800.0f);
                             if (nearest) {
                                 sead::Vector3f dir = al::getTrans(nearest) - al::getTrans(thisPtr);
                                 dir.normalize();
@@ -312,6 +320,7 @@ namespace PowerUps {
                         if (isFullBody) al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
                         anim->clearUpperBodyAnim();
                         fireStep = -1;
+                        al::setSensorRadius(thisPtr, "Eye", 800.0f); // Restore default
                     }
                     else fireStep++;
                 }
@@ -956,6 +965,15 @@ namespace PowerUps {
         }
     };
 
+    // Prevent crash when Motorcycle enters water (null OceanWave in fluid system)
+    struct CalcFindWaterSurfaceFlatFix : public mallow::hook::Trampoline<CalcFindWaterSurfaceFlatFix> {
+        static bool Callback(sead::Vector3f* outPos, sead::Vector3f* outNormal, const al::LiveActor* actor,
+            const sead::Vector3f& pos, const sead::Vector3f& up, float range) {
+            if (actor == isKart) return false;
+            return Orig(outPos, outNormal, actor, pos, up, range);
+        }
+    };
+
     inline void Install() {
         #ifdef ALLOW_POWERUPS
             FireBrosFireBallInitArchive::InstallAtOffset(0x10082C);
@@ -1015,6 +1033,9 @@ namespace PowerUps {
             // Handles Super Mario breathing in water
             ReduceOxygen ::InstallAtSymbol("_ZN12PlayerOxygen6reduceEv");
 
+            // Prevent crash with water surface calculations
+            CalcFindWaterSurfaceFlatFix::InstallAtSymbol("_ZN2al24calcFindWaterSurfaceFlatEPN4sead7Vector3IfEES3_PKNS_9LiveActorERKS2_S8_f");
+            
             // Patch PlayerJointControlKeeper capacity from 7 to 9
             exl::patch::CodePatcher jointCapPatcher(0x454F20);
             jointCapPatcher.WriteInst(0x52800121); // MOV W1, #9

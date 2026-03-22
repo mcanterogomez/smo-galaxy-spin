@@ -114,6 +114,8 @@ namespace AttackSensor {
                             && sourceNrv == getNerveAt(0x1C5F330)
                         ) {
                             hitBuffer[hitBufferCount++] = targetHost;
+                            al::invalidateCollisionParts(targetHost);
+                            al::setVelocity(targetHost, al::getGravity(targetHost) * -44.0f);
                             al::setNerve(targetHost, getNerveAt(0x1C5F338));
                             al::tryEmitEffect(sourceHost, "Hit", &spawnPos);
                             return;
@@ -418,6 +420,14 @@ namespace AttackSensor {
                         ) {
                             hitBuffer[hitBufferCount++] = targetHost;
                             al::tryEmitEffect(sourceHost, "HammerHit", &spawnPos);
+                            return;
+                        }
+                    }
+                    if (al::isEqualSubString(typeid(*targetHost).name(), "Wanwan")
+                    ) {
+                        if (rs::sendMsgWanwanReboundAttack(target, source)
+                        ) {
+                            hitBuffer[hitBufferCount++] = targetHost;
                             return;
                         }
                     }
