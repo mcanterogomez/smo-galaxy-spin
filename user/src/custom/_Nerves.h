@@ -86,7 +86,7 @@ public:
                         al::validateHitSensor(state->mActor, "GalaxySpin");
                         galaxySensorRemaining = 21;
                     #else
-                        if (isFinalPunch) {
+                        if (KoopaBattle::isKillReady(isKoopa)) {
                             if (isPunchRight) {
                                 state->mAnimator->startSubAnim("KoopaCapPunchFinishRStart");
                                 state->mAnimator->startAnim("KoopaCapPunchFinishR");
@@ -94,7 +94,6 @@ public:
                                 state->mAnimator->startSubAnim("KoopaCapPunchFinishLStart");
                                 state->mAnimator->startAnim("KoopaCapPunchFinishL");
                             }
-                            isFinalPunch = false;
                         } else {
                             if (isPunchRight) {
                                 state->mAnimator->startSubAnim("KoopaCapPunchRStart");

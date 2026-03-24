@@ -150,9 +150,6 @@ namespace PlayerCore {
                 }
             }
 
-            // Handle Koopa punch logic
-            if (isKoopa && al::isAlive(isKoopa) && !al::isNear(thisPtr, isKoopa, 500.0f)) isFinalPunch = false;
-
             // Add attack to moves
             static bool wasAttackMove = false;
             const bool isAttackMove = isHipDropAnim(thisPtr->mAnimator);

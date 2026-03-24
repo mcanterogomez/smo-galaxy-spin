@@ -144,7 +144,6 @@ bool isSpinActive = false;
 bool isSpinRethrow = false;
 bool isPunchActive = false;
 bool isPunchRight = false;
-bool isFinalPunch = false;
 bool isNearCollectible = false;
 bool isNearTreasure = false;
 bool isNearSwoonedEnemy = false;

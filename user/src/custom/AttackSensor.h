@@ -144,52 +144,14 @@ namespace AttackSensor {
                         return;
                     }
                 }
-                if (al::isEqualSubString(typeid(*targetHost).name(), "Koopa")
-                    && al::isModelName(targetHost, "KoopaBig")
-                ) {
-                    const char* koopaAct = al::getActionName(targetHost);
-
-                    if (koopaAct && ((al::isEqualSubString(koopaAct, "AttackTail")
-                        && !al::isEqualSubString(koopaAct, "After") && !al::isEqualSubString(koopaAct, "End"))
-                        || al::isEqualSubString(koopaAct, "DownLand") || al::isEqualSubString(koopaAct, "Jump"))) return;
-
-                    isKoopa = targetHost;
-
-                    static int guardCount = 0;
-                    static bool wasGuard = false;
-                    bool startGuard = al::isActionPlaying(targetHost, "Guard1");
-                    bool isGuard = al::isActionPlaying(targetHost, "Guard5");
-
-                    if (isGuard && !wasGuard) guardCount++;
-                    wasGuard = isGuard;
-
-                    if (startGuard) {
-                        wasGuard = false;
-                        guardCount = 0;
-                        return;
-                    }
-                    if (isGuard && guardCount == 4) {
-                        isFinalPunch = true;
-                        return;
-                    }
-                    if (isGuard && guardCount >= 5) {
-                        rs::sendMsgKoopaCapPunchFinishL(target, source);
-                        guardCount = 0;
-                        return;
-                    }
-                    if (!inBuffer) {
-                        bool isKnockback = rs::sendMsgKoopaCapPunchKnockBackL(target, source);
-                        if (isKnockback || rs::sendMsgKoopaCapPunchL(target, source)
-                        ) {
-                            hitBuffer[hitBufferCount++] = targetHost;
-                            if (isKnockback) al::tryStartSe(thisPtr, "DamageHit");
-                            if (!al::isEffectEmitting(targetHost, "Guard")) al::tryEmitEffect(sourceHost, "KoopaHit", &spawnPos);
-                            return;
-                        }
-                    }
-                }
                 if(!inBuffer
                 ) {
+                    if (al::isEqualSubString(typeid(*targetHost).name(), "Koopa")
+                        && al::isModelName(targetHost, "KoopaBig")
+                    ) {
+                        KoopaBattle::attack(thisPtr, source, target);
+                        return;
+                    }
                     if (al::isEqualSubString(typeid(*targetHost).name(), "BlockHard")
                         || al::isEqualSubString(typeid(*targetHost).name(), "BossForestBlock")
                         || al::isEqualSubString(typeid(*targetHost).name(), "GolemClimb")
@@ -546,11 +508,19 @@ namespace AttackSensor {
             auto* source = reinterpret_cast<al::HitSensor*>(ctx->X[22]);
             auto* target = reinterpret_cast<al::HitSensor*>(ctx->X[21]);
 
+            #ifndef ALLOW_CAPPY_ONLY
+                al::LiveActor* targetHost = al::getSensorHost(target);
+                if (al::isEqualSubString(typeid(*targetHost).name(), "KoopaCap")
+                    && al::isModelName(targetHost, "KoopaCap")) return;
+            #endif
+            
             rs::sendMsgSeedAttackBig(target, source);
 
             ctx->W[0] = ctx->W[0]
                 || rs::sendMsgCapReflect(target, source)
-                || rs::sendMsgCapAttack(target, source);
+                || al::sendMsgPlayerHipDrop(target, source, nullptr)
+                || rs::sendMsgCapAttack(target, source)
+                || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr);
 
             rs::sendMsgWeaponItemGet(target, source);
         }

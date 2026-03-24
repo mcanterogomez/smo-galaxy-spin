@@ -1,4 +1,5 @@
 #include "custom/_Globals.h"
+#include "custom/KoopaBattle.h"
 #include "custom/_Nerves.h"
 #include "custom/AttackSensor.h"
 #include "custom/PlayerCore.h"
@@ -25,11 +26,12 @@ extern "C" void userMain() {
     exl::hook::Initialize();
     mallow::init::installHooks();
 
+    KoopaBattle::Install();
+
     PlayerCore::Install();
     PlayerSpinAttack::Install();
     AttackSensor::Install();
     PowerUps::Install();
-    //PlayerFreeze::Install();
 
     TriggerCameraReset::InstallAtSymbol("_ZN19PlayerInputFunction20isTriggerCameraResetEPKN2al9LiveActorEi");
     TriggerAmiibo::InstallAtSymbol("_ZN2rs19isTriggerAmiiboModeEPKN2al18IUseSceneObjHolderE");
