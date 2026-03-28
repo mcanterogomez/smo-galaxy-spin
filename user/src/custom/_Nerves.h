@@ -192,6 +192,9 @@ public:
     void execute(al::NerveKeeper* keeper) const override {
         PlayerStateSpinCap* state = keeper->getParent<PlayerStateSpinCap>();
         PlayerActorHakoniwa* player = static_cast<PlayerActorHakoniwa*>(state->mActor);
+        auto* model = player->mModelHolder->findModelActor("Normal");
+        auto* cape = al::tryGetSubActor(model, "ケープ");
+        bool isCape = (isMario && cape && al::isAlive(cape)) || isFeather;
 
         bool isRotatingAirL  = state->mAnimator->isAnim("StartSpinJumpL")
             || state->mAnimator->isAnim("RestartSpinJumpL");
@@ -227,7 +230,7 @@ public:
                     state->mAnimator->startAnim("SpinSeparate");
                     al::validateHitSensor(state->mActor, "GalaxySpin");
                     galaxySensorRemaining = 21;
-                } else if (isFeather) {
+                } else if (isCape) {
                     state->mAnimator->startAnim("CapeAttack");
                     al::validateHitSensor(state->mActor, "GalaxySpin");
                     galaxySensorRemaining = 21;
@@ -245,7 +248,7 @@ public:
         
         state->updateSpinAirNerve();
 
-        if ((isFeather || isTanooki)
+        if ((isCape || isTanooki)
             && state->mAnimator->isAnimEnd()
         ) {
             al::invalidateHitSensor(state->mActor, "GalaxySpin");
@@ -414,8 +417,6 @@ public:
         auto* hammer = al::tryGetSubActor(model, "Hammer");
 
         bool isGround = rs::isOnGround(player, player->mCollider);
-        bool isWater = al::isInWater(player);
-        bool isSurface = player->mWaterSurfaceFinder->isFoundSurface();
 
         if (al::isFirstStep(player)
         ) {
@@ -484,21 +485,7 @@ public:
             al::setNerve(player, getNerveAt(nrvHakoniwaFall));
             return;
         }
-        
-        if (isWater && !isSurface
-        ) {
-            hammerParentModel = nullptr;
-            if (hammer) al::showModelIfHide(hammer);
-            if (isHammer) {
-                al::offCollide(isHammer);
-                al::invalidateHitSensor(isHammer, "AttackHack");
-                isHammer->makeActorDead();
-            }
-            al::setNerve(player, getNerveAt(nrvHakoniwaFall));
-            al::tryEmitEffect(isHammer, "Break", nullptr);
-            return;
-        }
-        
+
         if (hammer && al::isDead(isHammer)) al::showModelIfHide(hammer);
     }
 

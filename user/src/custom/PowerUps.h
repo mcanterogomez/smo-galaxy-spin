@@ -281,14 +281,14 @@ namespace PowerUps {
                     ) {
                         #ifdef ALLOW_HOMING
                             // Home in on nearest target
-                            al::LiveActor* nearest = findNearestTarget(thisPtr, blasterOn ? 1600.0f : 800.0f);
-                            if (nearest) {
-                                sead::Vector3f dir = al::getTrans(nearest) - al::getTrans(thisPtr);
+                            isNearTarget = findNearestTarget(thisPtr, blasterOn ? 1600.0f : 800.0f);
+                            if (isNearTarget) {
+                                sead::Vector3f dir = al::getTrans(isNearTarget) - al::getTrans(thisPtr);
                                 dir.normalize();
                                 sead::Vector3f fwd;
                                 al::calcQuatFront(&fwd, model);
 
-                                if (fwd.dot(dir) > 0.85f) al::faceToDirection(model, al::getTrans(nearest) - al::getTrans(thisPtr));
+                                if (fwd.dot(dir) > 0.85f) al::faceToDirection(model, al::getTrans(isNearTarget) - al::getTrans(thisPtr));
                             }
                         #endif
                         
