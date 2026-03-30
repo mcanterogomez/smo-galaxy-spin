@@ -281,7 +281,14 @@ namespace PlayerSpinAttack {
         else if (isNearTreasure || isNearSwoonedEnemy) animator->startAnim("Kick");
         else if (isFeather) animator->startAnim("CapeAttack");
         else if (isTanooki) animator->startAnim("TailAttack");
-        else animator->startAnim("SpinSeparateSwim");
+        else {
+            animator->startAnim("SpinSeparateSwim");
+
+            #ifdef ALLOW_GALAXY_SFX
+                al::tryEmitEffect(isHakoniwa->mModelHolder->findModelActor("Normal"), "SpinAttack", nullptr);
+                al::tryStartSe(isHakoniwa->mModelHolder->findModelActor("Normal"), "SpinAttack");
+            #endif
+        }
     }
 
     struct PlayerSpinCapAttackStartSpinSeparateSwimSurface : public mallow::hook::Trampoline<PlayerSpinCapAttackStartSpinSeparateSwimSurface> {

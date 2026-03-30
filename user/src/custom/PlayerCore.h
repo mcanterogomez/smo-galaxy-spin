@@ -240,6 +240,16 @@ namespace PlayerCore {
         }
     };
 
+    struct TryEmitEffectHook : public mallow::hook::Trampoline<TryEmitEffectHook> {
+        static bool Callback(al::EffectKeeper* keeper, const char* name, const sead::Vector3f* pos) {
+
+            if (isHakoniwa && al::isEqualString(name, "SpinCapStart2Right")
+                && al::isEqualSubString(isHakoniwa->mAnimator->mCurAnim, "SpinSeparate")) return false;
+
+            return Orig(keeper, name, pos);
+        }
+    };
+
     inline void Install() {
         // Initialize player actor
         PlayerActorHakoniwaInitPlayer::InstallAtSymbol("_ZN19PlayerActorHakoniwa10initPlayerERKN2al13ActorInitInfoERK14PlayerInitInfo");
@@ -251,5 +261,9 @@ namespace PlayerCore {
         //PlayerControlHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa7controlEv");
         PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
         PlayerActorHakoniwaReceiveMsgHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa10receiveMsgEPKN2al9SensorMsgEPNS0_9HitSensorES5_");
+        
+        #ifdef ALLOW_GALAXY_SFX
+            TryEmitEffectHook::InstallAtSymbol("_ZN2al12EffectKeeper13tryEmitEffectEPKcPKN4sead7Vector3IfEE");
+        #endif
     }
 }

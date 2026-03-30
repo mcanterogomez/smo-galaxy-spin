@@ -8,6 +8,10 @@
 // Enable spin attack only.
 //#define ALLOW_SPIN_ATTACK
 
+    // [ OPTION 1.1: GALAXY SFX ]
+    // Enable Galaxy sfx.
+    //#define ALLOW_GALAXY_SFX
+
 // [ OPTION 2: POWER-UPS ]
 // Enable power-ups.
 #define ALLOW_POWERUPS
