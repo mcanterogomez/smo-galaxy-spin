@@ -45,42 +45,12 @@ namespace PlayerCore {
         }
     };
 
-    struct PlayerStateWaitExeWait : public mallow::hook::Trampoline<PlayerStateWaitExeWait> {
-        static void Callback(PlayerStateWait* state) {
-            Orig(state);
-
-            if (al::isFirstStep(state)
-            ) {
-                const char* special = nullptr;
-                if (state->tryGetSpecialStatusAnimName(&special)
-                ) {
-                    if (al::isEqualString(special, "BattleWait")
-                    ) {
-                        state->requestAnimName("WaitBrawl");
-                        if (isBrawl) state->requestAnimName("WaitBrawlFight");
-                        else if (isSuper) state->requestAnimName("WaitSuperFight");
-                    }
-                    else
-                        state->requestAnimName(special);
-                }
-                else {
-                    if (isMetal) state->requestAnimName("BattleWait");
-                    else if (isBrawl) state->requestAnimName("WaitBrawl");
-                    else if (isSuper) state->requestAnimName("WaitSuper");
-                    else if (isBlaster && al::isAlive(isBlaster)) state->requestAnimName("BattleWait");
-                }
-            }
-        }
-    };
-
     struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> {
         static void Callback(PlayerActorHakoniwa* thisPtr) {
             Orig(thisPtr);
 
-            auto* anim   = thisPtr->mAnimator;
             auto* holder = thisPtr->mModelHolder;
             auto* model  = holder->findModelActor("Normal");
-            auto* cape = al::tryGetSubActor(model, "ケープ");
             al::LiveActor* face = al::tryGetSubActor(model, "顔");
 
             PowerUps::executeMovement(thisPtr);
@@ -159,31 +129,11 @@ namespace PlayerCore {
 
             wasAttackMove = isAttackMove;
 
-            // Change animations
+            // Change face animations
             if (isMetal && face && !al::isActionPlayingSubActor(model, "顔", "AreaWaitFight")) al::startActionSubActor(model, "顔", "AreaWaitFight");
 
             if ((isBrawl || isSuper)
                 && face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry")) al::startActionSubActor(model, "顔", "WaitAngry");
-
-            if (isBrawl && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndBrawl")) anim->startAnim("WearEndBrawl");
-            if (isSuper && anim && anim->isAnim("WearEnd") && !anim->isAnim("WearEndSuper")) anim->startAnim("WearEndSuper");
-
-            if ((isMario && cape && al::isAlive(cape)) || isFeather || isMetal || isBrawl || isSuper
-            ) {
-                if (!isMetal) {
-                    if (anim && anim->isAnim("HipDropStart") && !anim->isAnim("HipDropPunchStart")) anim->startAnim("HipDropPunchStart");
-                    if (anim && anim->isAnim("HipDrop") && !anim->isAnim("HipDropPunch")) anim->startAnim("HipDropPunch");
-                    if (anim && anim->isAnim("HipDropLand") && !anim->isAnim("HipDropPunchLand")) anim->startAnim("HipDropPunchLand");
-                    if (anim && anim->isAnim("HipDropReaction") && !anim->isAnim("HipDropPunchReaction")) anim->startAnim("HipDropPunchReaction");
-
-                    if (anim && anim->isAnim("SwimHipDropStart") && !anim->isAnim("SwimHipDropPunchStart")) anim->startAnim("SwimHipDropPunchStart");
-                    if (anim && (anim->isAnim("SwimHipDrop") || anim->isAnim("SwimDive")) && !anim->isAnim("SwimHipDropPunch")) anim->startAnim("SwimHipDropPunch");
-                    if (anim && anim->isAnim("SwimHipDropLand") && !anim->isAnim("SwimHipDropPunchLand")) anim->startAnim("SwimHipDropPunchLand");
-                }
-
-                if (anim && anim->isAnim("LandStiffen") && !anim->isAnim("LandSuper")) anim->startAnim("LandSuper");
-                if (anim && anim->isAnim("MofumofuDemoOpening2") && !anim->isAnim("MofumofuDemoOpening2Super")) anim->startAnim("MofumofuDemoOpening2Super");
-            }
 
             #ifdef ALLOW_TAUNT // Handle Taunt actions
                 if (!thisPtr->mInput->isMove()
@@ -207,9 +157,7 @@ namespace PlayerCore {
                 }
                 if (al::isNerve(thisPtr, &TauntLeftNrv)
                 ) {
-                    if (anim->isAnim("WearEnd")
-                        || anim->isAnim("WearEndBrawl")
-                        || anim->isAnim("WearEndSuper")
+                    if (thisPtr->mAnimator->isAnim("WearEnd")
                     ) {
                         al::tryStopSe(thisPtr, "WearEnd", -1, nullptr);
                         al::tryStopSe(thisPtr, "WearEndSetCostume", -1, nullptr);
@@ -243,8 +191,8 @@ namespace PlayerCore {
     struct TryEmitEffectHook : public mallow::hook::Trampoline<TryEmitEffectHook> {
         static bool Callback(al::EffectKeeper* keeper, const char* name, const sead::Vector3f* pos) {
 
-            if (isHakoniwa && al::isEqualString(name, "SpinCapStart2Right")
-                && al::isEqualSubString(isHakoniwa->mAnimator->mCurAnim, "SpinSeparate")) return false;
+            if (al::isEqualString(name, "SpinCapStart2Right")
+                && isHakoniwa && al::isEqualSubString(isHakoniwa->mAnimator->mCurAnim, "SpinSeparate")) return false;
 
             return Orig(keeper, name, pos);
         }
@@ -253,9 +201,6 @@ namespace PlayerCore {
     inline void Install() {
         // Initialize player actor
         PlayerActorHakoniwaInitPlayer::InstallAtSymbol("_ZN19PlayerActorHakoniwa10initPlayerERKN2al13ActorInitInfoERK14PlayerInitInfo");
-
-        // Change Mario's idle
-        PlayerStateWaitExeWait::InstallAtSymbol("_ZN15PlayerStateWait7exeWaitEv");
 
         // Handles control/movement
         //PlayerControlHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa7controlEv");

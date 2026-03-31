@@ -79,7 +79,7 @@ public:
                         state->mAnimator->startAnim("TailAttack");
                         al::validateHitSensor(state->mActor, "GalaxySpin");
                         galaxySensorRemaining = 21;
-                    } else if (isBlaster && al::isAlive(isBlaster)) {
+                    } else if (isBlasterOn) {
                         state->mAnimator->startSubAnim("BlastAttack");
                         state->mAnimator->startAnim("BlastAttack");
                         al::validateHitSensor(state->mActor, "GalaxySpin");
@@ -127,7 +127,7 @@ public:
 
         // Home in on nearest target
         if (isNearTarget && al::isAlive(isNearTarget) && !isInHitBuffer(isNearTarget)
-            && (isPunchActive || isNearCollectible || isNearTreasure || isNearSwoonedEnemy)
+            && (isNearCollectible || isNearTreasure || isNearSwoonedEnemy)
         ) {
             al::faceToDirection(player, al::getTrans(isNearTarget) - al::getTrans(player));
 
@@ -171,7 +171,10 @@ public:
         }
 
         if (isFinish) al::setVelocity(player, sead::Vector3f::zero);
-        else state->updateSpinGroundNerve();
+        else {
+            state->updateSpinGroundNerve();
+            //if (isPunchActive) applyEdgeGuard(player);
+        }
 
         if (al::isGreaterStep(state, 41)) al::invalidateHitSensor(state->mActor, "DoubleSpin");
         if (al::isGreaterStep(state, 21)) al::invalidateHitSensor(state->mActor, "GalaxySpin");
@@ -189,9 +192,7 @@ public:
     void execute(al::NerveKeeper* keeper) const override {
         PlayerStateSpinCap* state = keeper->getParent<PlayerStateSpinCap>();
         PlayerActorHakoniwa* player = static_cast<PlayerActorHakoniwa*>(state->mActor);
-        auto* model = player->mModelHolder->findModelActor("Normal");
-        auto* cape = al::tryGetSubActor(model, "ケープ");
-        bool isCape = (isMario && cape && al::isAlive(cape)) || isFeather;
+        bool isCape = (isMario && isCapeOn) || isFeather;
 
         bool isRotatingAirL  = state->mAnimator->isAnim("StartSpinJumpL")
             || state->mAnimator->isAnim("RestartSpinJumpL");
@@ -246,8 +247,8 @@ public:
                     galaxySensorRemaining = 21;
 
                     #ifdef ALLOW_GALAXY_SFX
-                        al::tryEmitEffect(model, "SpinAttack", nullptr);
-                        al::tryStartSe(model, "SpinAttack");
+                        al::tryEmitEffect(player->mModelHolder->findModelActor("Normal"), "SpinAttack", nullptr);
+                        al::tryStartSe(player->mModelHolder->findModelActor("Normal"), "SpinAttack");
                     #endif
                 }
             }

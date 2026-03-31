@@ -100,9 +100,12 @@ namespace PowerUps {
 
             #ifdef ALLOW_KART
                 // Create custom kart
-                isKart = new Motorcycle("Kart");
-                al::initCreateActorNoPlacementInfo(isKart, *actorInfo);
-                isKart->makeActorDead();
+                if (al::isExistArchive("ObjectData/PlayerKart")
+                ) {
+                    isKart = new Motorcycle("Kart");
+                    al::initCreateActorNoPlacementInfo(isKart, *actorInfo);
+                    isKart->makeActorDead();
+                }
             #endif
         #endif
     }
@@ -113,7 +116,6 @@ namespace PowerUps {
 
             PlayerFreeze::clearAllFrozen();
 
-            isBlaster = nullptr;
             if (isHammer) isHammer->makeActorDead();
             if (fireBalls) fireBalls->makeActorDeadAll();
             if (iceBalls) iceBalls->makeActorDeadAll();
@@ -177,8 +179,13 @@ namespace PowerUps {
             auto* anim   = thisPtr->mAnimator;
             auto* holder = thisPtr->mModelHolder;
             auto* model  = holder->findModelActor("Normal");
+            auto* hand = al::tryGetSubActor(model, "右手");
             auto* cape = al::tryGetSubActor(model, "ケープ");
             auto* tail = al::tryGetSubActor(model, "尻尾");
+            auto* blaster = al::tryGetSubActor(model, "Blaster");
+
+            isCapeOn = cape && al::isAlive(cape);
+            isBlasterOn = blaster && al::isAlive(blaster);
 
             bool isMove = thisPtr->mInput->isMove();
             bool onGround = rs::isOnGround(thisPtr, thisPtr->mCollider);
@@ -200,32 +207,28 @@ namespace PowerUps {
             }
 
             // Handle blaster spawning
-            isBlaster = al::tryGetSubActor(model, "Blaster");
-            auto* hand = al::tryGetSubActor(model, "右手");
-
             static int holdRightFrames = 0;
             if (al::isPadHoldRight(-1)) holdRightFrames++;
             else holdRightFrames = 0;
 
-            if (holdRightFrames == 30
-                && isBlaster
+            if (isMario && blaster
+                && holdRightFrames == 30
                 && !thisPtr->mInput->isMove()
                 && !rs::isActiveDemo(thisPtr)
             ) {
-                if (al::isAlive(isBlaster)
+                if (isBlasterOn
                 ) {
                     al::tryEmitEffect(model, "BlasterDisappear", nullptr);
                     al::tryStartSe(thisPtr, "BlasterOpen");
-                    isBlaster->kill();
+                    blaster->kill();
                 } else {
-                    isBlaster->appear();
+                    blaster->appear();
                     al::tryEmitEffect(model, "BlasterAppear", nullptr);
                     al::tryStartSe(thisPtr, "BlasterOpen");
                 }
             }
 
-            bool blasterOn = isBlaster && al::isAlive(isBlaster);
-            if (blasterOn && hand && !al::isActionPlayingSubActor(model, "右手", "AreaWaitDance03"))
+            if (isBlasterOn && hand && !al::isActionPlayingSubActor(model, "右手", "AreaWaitDance03"))
                 al::startActionSubActor(model, "右手", "AreaWaitDance03");
                 
             // Handle fireball/iceball/blaster attack
@@ -233,7 +236,7 @@ namespace PowerUps {
             const char* fireAnim;
             al::LiveActorGroup* currentPool;
 
-            if (blasterOn) {
+            if (isBlasterOn) {
                 jointName = "HandR";
                 fireAnim = "BlastShoot";
                 currentPool = tankBullets;
@@ -250,7 +253,7 @@ namespace PowerUps {
             bool isFloating = al::isActionPlaying(model, "GlideFloat")
                 || al::isActionPlaying(model, "GlideFloatSuper");
 
-            if (blasterOn || isMario || isFire || isIce || isBrawl || isSuper
+            if (isBlasterOn || isMario || isFire || isIce || isBrawl || isSuper
             ) {
                 if (fireStep < 0 && (canFireball || isFloating) && al::isPadTriggerR(-1)
                 ) {
@@ -260,11 +263,11 @@ namespace PowerUps {
                         canFireball = false;
 
                         // Increase Eye sensor range for blaster homing
-                        if (blasterOn) al::setSensorRadius(thisPtr, "Eye", 1600.0f);
+                        if (isBlasterOn) al::setSensorRadius(thisPtr, "Eye", 1600.0f);
 
                         anim->startUpperBodyAnim(fireAnim);
                         if (isFullBody) anim->startAnim(fireAnim);
-                        if (blasterOn) al::tryStartSe(thisPtr, "BlasterShoot");
+                        if (isBlasterOn) al::tryStartSe(thisPtr, "BlasterShoot");
                     }
                 }
                 if (fireStep >= 0
@@ -277,11 +280,11 @@ namespace PowerUps {
                         al::setSensorRadius(thisPtr, "Eye", 800.0f); // Restore default
                         return;
                     }
-                    if ((fireStep == 2 && !blasterOn) || (fireStep == 40 && blasterOn)
+                    if ((fireStep == 2 && !isBlasterOn) || (fireStep == 40 && isBlasterOn)
                     ) {
                         #ifdef ALLOW_HOMING
                             // Home in on nearest target
-                            isNearTarget = findNearestTarget(thisPtr, blasterOn ? 1600.0f : 800.0f);
+                            isNearTarget = findNearestTarget(thisPtr, isBlasterOn ? 1600.0f : 800.0f);
                             if (isNearTarget) {
                                 sead::Vector3f dir = al::getTrans(isNearTarget) - al::getTrans(thisPtr);
                                 dir.normalize();
@@ -297,7 +300,7 @@ namespace PowerUps {
                         sead::Vector3f startPos;
                         al::calcJointPos(&startPos, model, jointName);
 
-                        if (blasterOn) {
+                        if (isBlasterOn) {
                             sead::Vector3f fwd;
                             al::calcQuatFront(&fwd, model);
                             fwd.normalize();
@@ -315,7 +318,7 @@ namespace PowerUps {
                             else al::tryStartSe(projectile, "FireBallShoot");
                         }
 
-                        if (!blasterOn) nextThrowLeft = !nextThrowLeft;
+                        if (!isBlasterOn) nextThrowLeft = !nextThrowLeft;
                     }
                     if (anim->isUpperBodyAnimEnd()
                     ) {
@@ -494,15 +497,6 @@ namespace PowerUps {
             else { stillFrames = 0; healFrames = 0; }
 
             #ifdef ALLOW_DASH // Handles dash animations and effects
-                if (anim && anim->isAnim("JumpDashFast")
-                ) {
-                    if (isBrawl) anim->startAnim("Jump");
-                    else if (isSuper) anim->startAnim("JumpDashFastSuper");
-                    else {
-                        bool isFlyingSuit = isFeather || isTanooki || (isMario && cape && al::isAlive(cape));
-                        if (!isFlyingSuit) anim->startAnim("JumpDashFastClassic");
-                    }
-                }
 
                 bool isMoving = al::isActionPlaying(model, "Move")
                     || al::isActionPlaying(model, "MoveClassic")
@@ -526,10 +520,8 @@ namespace PowerUps {
             if (al::isPadHoldLeft(-1)) holdLeftFrames++;
             else holdLeftFrames = 0;
 
-            if (holdLeftFrames == 30
-                && isKart
-                && !thisPtr->mInput->isMove()
-                && !rs::isActiveDemo(thisPtr)
+            if (isKart && holdLeftFrames == 30
+                && !thisPtr->mInput->isMove() && !rs::isActiveDemo(thisPtr)
             ) {
                 if (al::isAlive(isKart)
                 ) {
@@ -580,16 +572,14 @@ namespace PowerUps {
             if (auto* sensorCeiling = al::tryGetCollidedCeilingSensor(isHammer)) isHammer->attackSensor(sensorHammer, sensorCeiling);
             if (auto* sensorGround = al::tryGetCollidedGroundSensor(isHammer)) isHammer->attackSensor(sensorHammer, sensorGround);
 
-            if (isHakoniwa->mAnimator->isAnim("HammerAttack")
+            if (!hammerHit && isHakoniwa->mAnimator->isAnim("HammerAttack")
+                && isHakoniwa->mAnimator->getAnimFrame() >= 8.0f
+                && al::isCollidedGround(isHammer)
             ) {
-                if (!hammerHit && isHakoniwa->mAnimator->getAnimFrame() >= 8.0f
-                    && al::isCollidedGround(isHammer)
-                ) {
-                    al::tryEmitEffect(isHakoniwa, "HammerLandHit", nullptr);
-                    al::tryStartSe(isHammer, "HammerLand");
-                    al::tryStartSe(isHammer, "HammerHit");
-                    hammerHit = true;
-                }
+                al::tryEmitEffect(isHakoniwa, "HammerLandHit", nullptr);
+                al::tryStartSe(isHammer, "HammerLand");
+                al::tryStartSe(isHammer, "HammerHit");
+                hammerHit = true;
             }
         }
     };
@@ -609,23 +599,6 @@ namespace PowerUps {
 
             if (isKartAnim) *reinterpret_cast<float*>((char*)actor + 312) = savedLean;
             if (hammerParentModel && actor == hammerParentModel) updateHammerMtx();
-        }
-    };
-
-    // Handle custom Kart animations
-    struct FindAnimInfoHook : public mallow::hook::Trampoline<FindAnimInfoHook> {
-        static void* Callback(void* table, const char* name) {
-            if (isKart && isHakoniwa
-                && isHakoniwa->mBindKeeper && isHakoniwa->mBindKeeper->mBindSensor
-                && al::getSensorHost(isHakoniwa->mBindKeeper->mBindSensor) == (al::LiveActor*)isKart
-                && al::isEqualSubString(name, "Motorcycle")
-            ) {
-                sead::FixedSafeString<64> kart;
-                kart.format("Kart%s", name + strlen("Motorcycle"));
-                void* result = Orig(table, kart.cstr());
-                if (result) return result;
-            }
-            return Orig(table, name);
         }
     };
 
@@ -674,7 +647,6 @@ namespace PowerUps {
             if (isDoubleJumpConsume
                 && al::isFirstStep(thisPtr)
             ) {
-                //if (isFeather || isTanooki) anim->startAnim("JumpDashFast");
                 if (isBrawl) anim->startAnim("PoleHandStandJump");
                 isDoubleJumpConsume = false;
             }
@@ -710,11 +682,7 @@ namespace PowerUps {
 
             float speed = al::calcSpeed(thisPtr);
 
-            const char* jumpBroadAnim = isTanooki ? "JumpBroad8Alt" : "JumpBroad8";
-            const char* glideAnim = isTanooki ? "GlideAlt" : "Glide";
-            const char* glideFloatAnim = isSuper ? "GlideFloatSuper" : "GlideFloat";
-
-            if (anim->isAnim(glideAnim)
+            if (anim->isAnim("Glide")
             ) {
                 sead::Vector3f camSide, marioSide;
                 al::calcCameraSideDir(&camSide, thisPtr, 0);
@@ -740,12 +708,12 @@ namespace PowerUps {
                     al::tryEmitEffect(keeper, "AppearBloom", nullptr);
                     al::tryStartSe(thisPtr, "Bloom");
                 }
-                anim->startAnim(jumpBroadAnim);
+                anim->startAnim("JumpBroad8");
             }
-            else if (anim->isAnimEnd() && anim->isAnim(jumpBroadAnim)) anim->startAnim(glideAnim);
+            else if (anim->isAnimEnd() && anim->isAnim("JumpBroad8")) anim->startAnim("Glide");
             else if (speed < 10.f) {
-                if (anim->isAnim(glideAnim)) anim->startAnim("GlideFloatStart");
-                if (anim->isAnimEnd() && anim->isAnim("GlideFloatStart")) anim->startAnim(glideFloatAnim);
+                if (anim->isAnim("Glide")) anim->startAnim("GlideFloatStart");
+                if (anim->isAnimEnd() && anim->isAnim("GlideFloatStart")) anim->startAnim("GlideFloat");
             }
             if (al::isGreaterStep(thisPtr, 25)
             ) {
@@ -843,35 +811,6 @@ namespace PowerUps {
         }
     };
 
-    struct PlayerAnimControlRunUpdate : public mallow::hook::Inline<PlayerAnimControlRunUpdate> {
-        static void Callback(exl::hook::InlineCtx* ctx) {
-            if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mHackActor) return;
-
-            if (isSuper) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveSuper"); //mMoveAnimName in PlayerAnimControlRun
-            else if (isBrawl) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveBrawl");
-            else if (isFeather || isTanooki) *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("Move");
-            else *reinterpret_cast<u64*>(ctx->X[0] + 0x38) = reinterpret_cast<u64>("MoveClassic");
-        }
-    };
-
-    struct PlayerSeCtrlUpdateMove : public mallow::hook::Inline<PlayerSeCtrlUpdateMove> {
-        static void Callback(exl::hook::InlineCtx* ctx) {
-            if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mHackActor) return;
-            
-            if (isSuper) ctx->X[8] = reinterpret_cast<u64>("MoveSuper");
-            else if (isBrawl) ctx->X[8] = reinterpret_cast<u64>("MoveBrawl");
-            else if (isFeather || isTanooki) ctx->X[8] = reinterpret_cast<u64>("Move");
-            else ctx->X[8] = reinterpret_cast<u64>("MoveClassic");
-        }
-    };
-
-    struct PlayerSeCtrlUpdateWearEnd : public mallow::hook::Inline<PlayerSeCtrlUpdateWearEnd> {
-        static void Callback(exl::hook::InlineCtx* ctx) {
-            if (isBrawl) ctx->X[20] = reinterpret_cast<u64>("WearEndBrawl");
-            if (isSuper) ctx->X[20] = reinterpret_cast<u64>("WearEndSuper");
-        }
-    };
-
     struct PlayerAnimatorSetAnimRateCommon : public mallow::hook::Trampoline<PlayerAnimatorSetAnimRateCommon> {
         static void Callback(PlayerAnimator* thisPtr, float rate) {
             if (isMetal && isHakoniwa
@@ -936,14 +875,12 @@ namespace PowerUps {
 
     struct RunWaterSurfaceDisableSink : public mallow::hook::Inline<RunWaterSurfaceDisableSink> {
         static void Callback(exl::hook::InlineCtx* ctx) {
-            // move value > 0 into W8 to cause skipping the "sink" part
             if (isSuperRunningOnSurface) ctx->W[8] = 1;
         }
     };
 
     struct WaterSurfaceRunDisableSlowdown : public mallow::hook::Inline<WaterSurfaceRunDisableSlowdown> {
         static void Callback(exl::hook::InlineCtx* ctx) {
-            // used to redirect `turnVecToVecRate` into this location instead of the proper one, so the call is basically ignored
             static sead::Vector3f garbageVec;
             if (isSuperRunningOnSurface) ctx->X[0] = reinterpret_cast<u64>(&garbageVec);
         }
@@ -1009,7 +946,6 @@ namespace PowerUps {
             // Handles control/movement
             LiveActorMovementHook::InstallAtSymbol("_ZN2al9LiveActor8movementEv");
             CalcAnimHook::InstallAtSymbol("_ZN2al9LiveActor8calcAnimEv");
-            FindAnimInfoHook::InstallAtSymbol("_ZNK2al13AnimInfoTable12findAnimInfoEPKc");
 
             // Handles Hammer while Carrying
             PlayerCarryKeeperStartCarry::InstallAtSymbol("_ZN17PlayerCarryKeeper10startCarryEPN2al9HitSensorE");
@@ -1026,8 +962,6 @@ namespace PowerUps {
             #ifdef ALLOW_DASH // Handles Dash
                 PlayerInputFunctionIsHoldAction::InstallAtSymbol("_ZN19PlayerInputFunction12isHoldActionEPKN2al9LiveActorEi");
                 PlayerActionGroundMoveControlUpdate::InstallAtSymbol("_ZN29PlayerActionGroundMoveControl6updateEv");
-                PlayerAnimControlRunUpdate::InstallAtOffset(0x42C6BC);
-                PlayerSeCtrlUpdateMove::InstallAtOffset(0x463038);
 
                 // Handles running on water
                 StartWaterSurfaceRunJudge::InstallAtSymbol("_ZNK31PlayerJudgeStartWaterSurfaceRun5judgeEv");
@@ -1038,9 +972,6 @@ namespace PowerUps {
                 RsIsTouchDamageFireCode::InstallAtSymbol("_ZN2rs21isTouchDamageFireCodeEPKN2al9LiveActorEPK19IUsePlayerCollisionPK19IPlayerModelChanger");
                 RsIsTouchDeadCode::InstallAtSymbol("_ZN2rs15isTouchDeadCodeEPKN2al9LiveActorEPK19IUsePlayerCollisionPK19IPlayerModelChangerPK13IUseDimensionf");
             #endif
-
-            // Handles WearEnd
-            PlayerSeCtrlUpdateWearEnd::InstallAtOffset(0x463DE0);
 
             // Handle Metal Mario setup
             PlayerAnimatorSetAnimRateCommon::InstallAtSymbol("_ZN14PlayerAnimator17setAnimRateCommonEf");

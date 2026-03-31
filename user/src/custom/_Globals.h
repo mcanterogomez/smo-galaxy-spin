@@ -160,12 +160,14 @@ bool isMetal = false;
 bool isBrawl = false;
 bool isSuper = false;
 
+bool isCapeOn = false;
+bool isBlasterOn = false;
+
 // Actor Pointers
 inline PlayerActorHakoniwa* isHakoniwa = nullptr;
 inline HammerBrosHammer* isHammer = nullptr;
 inline CustomGauge* isGauge = nullptr;
 inline Motorcycle* isKart = nullptr;
-inline al::LiveActor* isBlaster = nullptr;
 inline al::LiveActor* isKoopa = nullptr;
 inline al::LiveActorGroup* fireBalls = nullptr;
 inline al::LiveActorGroup* iceBalls = nullptr;
@@ -204,6 +206,18 @@ inline bool isInHitBuffer(al::LiveActor* actor) {
         if (hitBuffer[i] == actor) return true;
     }
     return false;
+}
+
+// Edge guard logic
+inline void applyEdgeGuard(al::LiveActor* player) {
+    sead::Vector3f front;
+    al::calcFrontDir(&front, player);
+    sead::Vector3f grav = al::getGravity(player);
+    sead::Vector3f hitPos;
+    if (!alCollisionUtil::getHitPosOnArrow(player, &hitPos, al::getTrans(player) + front * 25.0f - grav * 50.0f, grav * 75.0f, nullptr, nullptr)) {
+        sead::Vector3f* vel = al::getVelocityPtr(player);
+        *vel = grav * vel->dot(grav);
+    }
 }
 
 // Home in on nearest target

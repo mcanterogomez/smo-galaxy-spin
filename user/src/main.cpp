@@ -1,6 +1,6 @@
 #include "custom/_Globals.h"
 #include "custom/KoopaBattle.h"
-#include "custom/_Nerves.h"
+#include "custom/CustomAnimation.h"
 #include "custom/AttackSensor.h"
 #include "custom/PlayerCore.h"
 #include "custom/PlayerSpinAttack.h"
@@ -17,7 +17,7 @@ struct TriggerCameraReset : public mallow::hook::Trampoline<TriggerCameraReset> 
 
 struct TriggerAmiibo : public mallow::hook::Trampoline<TriggerAmiibo> {
     static bool Callback(const al::IUseSceneObjHolder* holder) {
-        if (isBlaster) return false;
+        if (isMario) return false;
         return Orig(holder);
     }
 };
@@ -28,6 +28,7 @@ extern "C" void userMain() {
 
     KoopaBattle::Install();
 
+    CustomAnimation::Install();
     PlayerCore::Install();
     PlayerSpinAttack::Install();
     AttackSensor::Install();

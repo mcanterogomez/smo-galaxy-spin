@@ -8,10 +8,6 @@
 // Enable spin attack only.
 //#define ALLOW_SPIN_ATTACK
 
-    // [ OPTION 1.1: GALAXY SFX ]
-    // Enable Galaxy sfx.
-    //#define ALLOW_GALAXY_SFX
-
 // [ OPTION 2: POWER-UPS ]
 // Enable power-ups.
 #define ALLOW_POWERUPS
@@ -39,6 +35,10 @@
 // [ OPTION 5: HOMING ]
 // Enable home-in on punch and fireball.
 #define ALLOW_HOMING
+
+// [ EXTRA: GALAXY SFX ]
+// Enable Galaxy sfx.
+//#define ALLOW_GALAXY_SFX
 
 // [ EXTRA: CAPPY EYES ]
 // Disable Cappy eyes.
