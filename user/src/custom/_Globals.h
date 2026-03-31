@@ -13,7 +13,7 @@
 // Core game system
 #include "System/GameDataFunction.h"
 
-// Engine / “Library” headers
+// Library headers
 #include "Library/Base/StringUtil.h"
 #include "Library/Camera/CameraUtil.h"
 #include "Library/Controller/InputFunction.h"
@@ -57,6 +57,7 @@
 #include "Player/IUsePlayerCollision.h"
 #include "Player/PlayerActionGroundMoveControl.h"
 #include "Player/PlayerActorHakoniwa.h"
+#include "Player/PlayerBindKeeper.h"
 #include "Player/PlayerColliderHakoniwa.h"
 #include "Player/PlayerCounterForceRun.h"
 #include "Player/PlayerEquipmentUser.h"

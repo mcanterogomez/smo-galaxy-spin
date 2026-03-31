@@ -18,7 +18,7 @@ namespace PowerUps {
     struct InitActorSuffixHook : public mallow::hook::Trampoline<InitActorSuffixHook> {
         static void Callback(al::LiveActor* actor, const al::ActorInitInfo& info, const char* suffix) {
             if (actor == (al::LiveActor*)isKart) {
-                al::initActorWithArchiveName(actor, info, "Motorcycle", suffix);
+                al::initActorWithArchiveName(actor, info, "PlayerKart", suffix);
                 return;
             }
             Orig(actor, info, suffix);
@@ -100,7 +100,7 @@ namespace PowerUps {
 
             #ifdef ALLOW_KART
                 // Create custom kart
-                isKart = new Motorcycle("Motorcycle");
+                isKart = new Motorcycle("Kart");
                 al::initCreateActorNoPlacementInfo(isKart, *actorInfo);
                 isKart->makeActorDead();
             #endif
@@ -612,6 +612,23 @@ namespace PowerUps {
         }
     };
 
+    // Handle custom Kart animations
+    struct FindAnimInfoHook : public mallow::hook::Trampoline<FindAnimInfoHook> {
+        static void* Callback(void* table, const char* name) {
+            if (isKart && isHakoniwa
+                && isHakoniwa->mBindKeeper && isHakoniwa->mBindKeeper->mBindSensor
+                && al::getSensorHost(isHakoniwa->mBindKeeper->mBindSensor) == (al::LiveActor*)isKart
+                && al::isEqualSubString(name, "Motorcycle")
+            ) {
+                sead::FixedSafeString<64> kart;
+                kart.format("Kart%s", name + strlen("Motorcycle"));
+                void* result = Orig(table, kart.cstr());
+                if (result) return result;
+            }
+            return Orig(table, name);
+        }
+    };
+
     struct PlayerCarryKeeperStartCarry : public mallow::hook::Trampoline<PlayerCarryKeeperStartCarry> {
         static void Callback(PlayerCarryKeeper* thisPtr, al::HitSensor* sensor) {
             // if in hammer nerve block carry start
@@ -992,6 +1009,7 @@ namespace PowerUps {
             // Handles control/movement
             LiveActorMovementHook::InstallAtSymbol("_ZN2al9LiveActor8movementEv");
             CalcAnimHook::InstallAtSymbol("_ZN2al9LiveActor8calcAnimEv");
+            FindAnimInfoHook::InstallAtSymbol("_ZNK2al13AnimInfoTable12findAnimInfoEPKc");
 
             // Handles Hammer while Carrying
             PlayerCarryKeeperStartCarry::InstallAtSymbol("_ZN17PlayerCarryKeeper10startCarryEPN2al9HitSensorE");
