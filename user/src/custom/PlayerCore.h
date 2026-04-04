@@ -81,7 +81,35 @@ namespace PlayerCore {
                     galaxySensorRemaining = -1;
                 }
             }
+           
+            // Handle wall bounce for attacks
+            al::HitSensor* activeSensor = nullptr;
+            if (sensorPunch && sensorPunch->mIsValid) activeSensor = sensorPunch;
+            else if (sensorSpin && sensorSpin->mIsValid) activeSensor = sensorSpin;
+            else if (sensorDoubleSpin && sensorDoubleSpin->mIsValid) activeSensor = sensorDoubleSpin;
 
+            static int attackFrames = 0;
+            if (activeSensor) attackFrames++;
+            else attackFrames = 0;
+
+            if (activeSensor && attackFrames >= 2
+                && rs::isCollidedWall(thisPtr->mCollider)
+                && hitBufferCount == 0
+            ) {
+                sead::Vector3f wallPos = rs::getCollidedWallPos(thisPtr->mCollider);
+                al::tryEmitEffect(thisPtr, "HitSmall", &wallPos);
+                al::tryStartSe(thisPtr, "HitImpact");
+                al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
+
+                sead::Vector3f wallNormal = rs::getCollidedWallNormal(thisPtr->mCollider);
+                al::tryNormalizeOrZero(&wallNormal);
+
+                if (thisPtr->mInput->isMove()) al::setVelocity(thisPtr, wallNormal * 15.0f - al::getGravity(thisPtr) * 10.0f);
+                else al::setVelocity(thisPtr, wallNormal * 5.0f - al::getGravity(thisPtr) * 10.0f);
+
+                attackFrames = 0;
+            }
+            
             // Reset proximity flag
             isNearCollectible = false;
             isNearTreasure = false;

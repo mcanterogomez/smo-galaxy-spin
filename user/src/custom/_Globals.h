@@ -130,11 +130,11 @@ al::LiveActor* hitBuffer[0x40];
 int hitBufferCount = 0;
 
 // Offsets
-const uintptr_t spinCapNrvOffset = 0x1d78940;
-const uintptr_t nrvSpinCapFall = 0x1d7ff70;
+const uintptr_t spinCapNrvOffset = 0x1D78940;
+const uintptr_t nrvSpinCapFall = 0x1D7ff70;
 const uintptr_t nrvHakoniwaWait = 0x01D78918;
 const uintptr_t nrvHakoniwaSquat = 0x01D78920;
-const uintptr_t nrvHakoniwaFall = 0x01d78910;
+const uintptr_t nrvHakoniwaFall = 0x01D78910;
 const uintptr_t nrvHakoniwaHipDrop = 0x1D78978;
 const uintptr_t nrvHakoniwaJump = 0x1D78948;
 
