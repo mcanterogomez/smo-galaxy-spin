@@ -436,7 +436,26 @@ namespace PowerUps {
                     }
                 }
             }
-            
+
+            // Handle logic for Flying suit
+            if (isFly) {
+                if (!isHack && isVisible) {
+                    if (isGliding) {
+                        al::tryDeleteEffect(model, "FlyingState");
+                        al::tryEmitEffect(model, "FlyingL", nullptr);
+                        al::tryEmitEffect(model, "FlyingR", nullptr);
+                    } else {
+                        al::tryDeleteEffect(model, "FlyingL");
+                        al::tryDeleteEffect(model, "FlyingR");
+                        al::tryEmitEffect(model, "FlyingState", nullptr);
+                    }
+                } else {
+                    al::tryDeleteEffect(model, "FlyingState");
+                    al::tryDeleteEffect(model, "FlyingL");
+                    al::tryDeleteEffect(model, "FlyingR");
+                }
+            } 
+ 
             // Handle logic for Super suit
             if (isSuper) {
                 applyMoonMarioConst(thisPtr->mConst); // force Moon physics
@@ -675,7 +694,7 @@ namespace PowerUps {
             auto* cape = al::tryGetSubActor(model, "ケープ");
             auto* keeper = static_cast<al::IUseEffectKeeper*>(model);
 
-            if (!isMario && !isFeather && !isTanooki && !isBrawl && !isSuper) return;
+            if (!isMario && !isFeather && !isTanooki && !isFly && !isBrawl && !isSuper) return;
 
             float vy = al::getVelocity(thisPtr).y;
             if (vy < -2.5f) al::setVelocityY(thisPtr, -2.5f);

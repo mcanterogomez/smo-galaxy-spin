@@ -12,9 +12,12 @@ namespace CustomAnimation {
         if (isMetal || isBlasterOn) {
             if (al::isEqualString(name, "Wait")) return "BattleWait";
         }
+        if (isFly) {
+            if (al::isEqualString(name, "GlideFloat")) return "GlideFloatSuper";
+            if (al::isEqualString(name, "Wait")) return "WaitSuper";
+        }
         if (isBrawl) {
             if (al::isEqualString(name, "BattleWait")) return "WaitBrawlFight";
-            if (al::isEqualString(name, "DashFast")) return "Dash";
             if (al::isEqualString(name, "JumpDashFast")) return "Jump";
             if (al::isEqualString(name, "Move")) return "MoveBrawl";
             if (al::isEqualString(name, "Wait")) return "WaitBrawl";
@@ -22,20 +25,18 @@ namespace CustomAnimation {
         }
         if (isSuper) {
             if (al::isEqualString(name, "BattleWait")) return "WaitSuperFight";
-            if (al::isEqualString(name, "DashFast")) return "DashFastSuper";
             if (al::isEqualString(name, "GlideFloat")) return "GlideFloatSuper";
             if (al::isEqualString(name, "JumpDashFast")) return "JumpDashFastSuper";
             if (al::isEqualString(name, "Move")) return "MoveSuper";
             if (al::isEqualString(name, "Wait")) return "WaitSuper";
             if (al::isEqualString(name, "WearEnd")) return "WearEndSuper";
         }
-        if (!isFeather && !isTanooki && !isBrawl && !isSuper) {
-            if (al::isEqualString(name, "DashFast")) return "DashFastClassic";
+        if (!isFeather && !isTanooki && !isFly && !isBrawl && !isSuper) {
             if (al::isEqualString(name, "JumpDashFast")) return "JumpDashFastClassic";
             if (al::isEqualString(name, "Move")) return "MoveClassic";
         }
 
-        bool isSuit = (isMario && isCapeOn) || isFeather || isBrawl || isSuper;
+        bool isSuit = (isMario && isCapeOn) || isFeather || isFly || isBrawl || isSuper;
 
         if (isSuit) {
             if (al::isEqualString(name, "HipDrop")) return "HipDropPunch";
@@ -58,7 +59,7 @@ namespace CustomAnimation {
     struct PlayerAnimatorStartAnimHook : public mallow::hook::Trampoline<PlayerAnimatorStartAnimHook> {
         static void Callback(PlayerAnimator* thisPtr, const sead::SafeString& animName) {
 
-            if ((isMetal || isBrawl || isSuper || isBlasterOn)
+            if ((isMetal || isFly || isBrawl || isSuper || isBlasterOn)
                 && al::isEqualString(animName.cstr(), "WaitRelaxStart")) return;
 
             const char* swapped = remapAnim(animName.cstr());
