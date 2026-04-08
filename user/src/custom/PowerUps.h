@@ -708,10 +708,7 @@ namespace PowerUps {
                 al::calcSideDir(&marioSide, thisPtr);
 
                 float localLean = camSide.dot(marioSide) * al::getLeftStick(-1).x;
-
-                if (isTanooki) glideLean = al::lerpValue(glideLean, localLean * 25.0f, 0.025f);
-                else glideLean = al::lerpValue(glideLean, localLean * -50.0f, 0.025f);
-                
+                glideLean = al::lerpValue(glideLean, localLean * -50.0f, 0.025f);
                 glidePitch = al::lerpValue(glidePitch, fabsf(localLean) * -25.0f, 0.025f);
             } else {
                 glideLean = al::lerpValue(glideLean, 0.0f, 0.2f);

@@ -76,8 +76,8 @@
 #include "Player/HackCap.h"
 
 // Mod‑specific & custom actors
-#include "headers/CustomGauge.h"
-#include "headers/CustomPlayerConst.h"
+#include "custom/CustomGauge.h"
+#include "custom/CustomPlayerConst.h"
 #include "headers/FireBall.h"
 #include "headers/HammerBrosHammer.h"
 #include "headers/Motorcycle.h"

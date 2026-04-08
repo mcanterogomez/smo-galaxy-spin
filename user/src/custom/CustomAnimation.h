@@ -4,7 +4,10 @@
 
 namespace CustomAnimation {
 
-    inline const char* remapAnim(const char* name) {
+    inline const char* remapAnim(const char* name, PlayerAnimator* anim = nullptr) {
+        if (!isHakoniwa || (anim && anim != isHakoniwa->mAnimator)
+            || rs::isPlayer2D(isHakoniwa)) return nullptr;
+
         if (isTanooki) {
             if (al::isEqualString(name, "Glide")) return "GlideAlt";
             if (al::isEqualString(name, "JumpBroad8")) return "JumpBroad8Alt";
@@ -26,7 +29,7 @@ namespace CustomAnimation {
         if (isSuper) {
             if (al::isEqualString(name, "BattleWait")) return "WaitSuperFight";
             if (al::isEqualString(name, "GlideFloat")) return "GlideFloatSuper";
-            if (al::isEqualString(name, "JumpDashFast")) return "JumpDashFastSuper";
+            //if (al::isEqualString(name, "JumpDashFast")) return "JumpDashFastSuper";
             if (al::isEqualString(name, "Move")) return "MoveSuper";
             if (al::isEqualString(name, "Wait")) return "WaitSuper";
             if (al::isEqualString(name, "WearEnd")) return "WearEndSuper";
@@ -58,11 +61,10 @@ namespace CustomAnimation {
     // Swaps animation names before they reach the player and sub-actors
     struct PlayerAnimatorStartAnimHook : public mallow::hook::Trampoline<PlayerAnimatorStartAnimHook> {
         static void Callback(PlayerAnimator* thisPtr, const sead::SafeString& animName) {
-
             if ((isMetal || isFly || isBrawl || isSuper || isBlasterOn)
                 && al::isEqualString(animName.cstr(), "WaitRelaxStart")) return;
 
-            const char* swapped = remapAnim(animName.cstr());
+            const char* swapped = remapAnim(animName.cstr(), thisPtr);
             Orig(thisPtr, swapped ? swapped : animName.cstr());
         }
     };
@@ -70,8 +72,7 @@ namespace CustomAnimation {
     // Makes engine checks like isAnim("Move") return true when "MoveBrawl" is playing
     struct PlayerAnimatorIsAnimHook : public mallow::hook::Trampoline<PlayerAnimatorIsAnimHook> {
         static bool Callback(PlayerAnimator* thisPtr, const sead::SafeString& animName) {
-
-            const char* swapped = remapAnim(animName.cstr());
+            const char* swapped = remapAnim(animName.cstr(), thisPtr);
             return Orig(thisPtr, animName) || (swapped && Orig(thisPtr, swapped));
         }
     };
@@ -79,18 +80,17 @@ namespace CustomAnimation {
     // Kart animation swap at the bfres level (motorcycle bypasses PlayerAnimator)
     struct FindAnimInfoHook : public mallow::hook::Trampoline<FindAnimInfoHook> {
         static void* Callback(void* table, const char* name) {
-            
-        if (al::isEqualSubString(name, "Motorcycle") && isKart
-            && isHakoniwa && al::getSensorHost(isHakoniwa->mBindKeeper->mBindSensor) == (al::LiveActor*)isKart
-        ) {
-            sead::FixedSafeString<64> kart;
-            kart.format("Kart%s", name + strlen("Motorcycle"));
-            void* result = Orig(table, kart.cstr());
-            if (result) return result;
+            if (al::isEqualSubString(name, "Motorcycle") && isKart
+                && isHakoniwa && al::getSensorHost(isHakoniwa->mBindKeeper->mBindSensor) == (al::LiveActor*)isKart
+            ) {
+                sead::FixedSafeString<64> kart;
+                kart.format("Kart%s", name + strlen("Motorcycle"));
+                void* result = Orig(table, kart.cstr());
+                if (result) return result;
+            }
+            return Orig(table, name);
         }
-        return Orig(table, name);
-    }
-};
+    };
 
     inline void Install() {
         #ifdef ALLOW_POWERUPS

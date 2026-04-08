@@ -9,6 +9,8 @@ namespace PlayerCore {
 
     struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerActorHakoniwaInitPlayer> {
         static void Callback(PlayerActorHakoniwa* thisPtr, const al::ActorInitInfo* actorInfo, const PlayerInitInfo* playerInfo) {
+            isHakoniwa = nullptr;
+
             Orig(thisPtr, actorInfo, playerInfo);
 
             // Set Hakoniwa pointer
