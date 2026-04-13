@@ -436,6 +436,7 @@ public:
             hammerParentModel = model;
             updateHammerMtx();
 
+            al::setScale(isHammer, sead::Vector3f(0.0f, 0.0f, 0.0f)); // Handle hammer scaling start
             isHammer->makeActorAlive();
             isHammer->attach(
                 &hammerMtx,
@@ -480,6 +481,25 @@ public:
         if (!isGround) al::addVelocity(player, (al::getGravity(player) * 0.5f));
 
         if (al::isStep(player, 6)) al::validateHitSensor(isHammer, "AttackHack");
+
+        // Handle hammer scaling end
+        if (isHammer && al::isAlive(isHammer)
+        ) {
+            int step = al::getNerveStep(player);
+            float s = 1.0f;
+
+            if (step < 4) s = step / 4.0f;
+
+            if (player->mAnimator->isAnim("HammerAttack")
+                && player->mAnimator->getAnimFrame() >= 22.0f
+            ) {
+                s = (26.0f - player->mAnimator->getAnimFrame()) / 4.0f;
+                al::offCollide(isHammer);
+                al::invalidateHitSensor(isHammer, "AttackHack");
+            }
+
+            al::setScale(isHammer, sead::Vector3f(s, s, s));
+        }
         
         if (player->mAnimator->isAnimEnd()
         ) {

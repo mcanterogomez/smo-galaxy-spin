@@ -33,6 +33,8 @@ namespace PlayerCore {
                 && (cap && al::isEqualString(cap, "MarioColorIce"));
             isTanooki = (costume && al::isEqualString(costume, "MarioTanooki"))
                 && (cap && al::isEqualString(cap, "MarioTanooki"));
+            isDrill = (costume && al::isEqualString(costume, "MarioDrill"))
+                && (cap && al::isEqualString(cap, "MarioDrill"));
             isMetal = (costume && al::isEqualString(costume, "MarioColorMetal"))
                 && (cap && al::isEqualString(cap, "MarioColorMetal"));
             isFly = (costume && al::isEqualString(costume, "MarioColorFly"))
