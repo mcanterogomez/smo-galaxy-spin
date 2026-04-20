@@ -4,6 +4,7 @@
 #include "custom/_Nerves.h"
 #include "custom/PlayerFreeze.h"
 #include "headers/PlayerIceCube.h"
+#include "custom/WallStick.h"
 
 namespace PowerUps {
 
@@ -124,56 +125,6 @@ namespace PowerUps {
         }
     };
 
-    // shared pre-logic for TryActionCapSpinAttack hooks
-    static SpinPre TryCapFireballPre(PlayerActorHakoniwa* player) {
-        bool newIsCarry = player->mCarryKeeper->isCarry();
-        if (newIsCarry && !prevIsCarry) { prevIsCarry = newIsCarry; return SpinPre::Reject; }
-        prevIsCarry = newIsCarry;
-
-        if (isFireThrowing()) return SpinPre::Reject;
-
-        if (al::isPadTriggerR(-1)
-            && !rs::is2D(player)
-            && !player->mCarryKeeper->isCarry()
-            && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)) canFireball = true;
-
-        return SpinPre::Fallthrough;
-    }
-
-    struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttack> {
-        static bool Callback(PlayerActorHakoniwa* player, bool a2) {
-            switch (TryCapFireballPre(player)
-            ) {
-                case SpinPre::Accept: return true;
-                case SpinPre::Reject: return false;
-                default: break;
-            }
-            if(Orig(player, a2)) { spin.trigger = false; return true; }
-            return false;
-        }
-    };
-
-    struct PlayerTryActionCapSpinAttackBindEnd : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttackBindEnd> {
-        static bool Callback(PlayerActorHakoniwa* player, bool a2) {
-            switch (TryCapFireballPre(player)
-            ) {
-                case SpinPre::Accept: return true;
-                case SpinPre::Reject: return false;
-                default: break;
-            }
-            if(Orig(player, a2)) { spin.trigger = false; return true; }
-            return false;
-        }
-    };
-
-    struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActorHakoniwaExeSquat> {
-        static void Callback(PlayerActorHakoniwa* thisPtr) {
-            if (isFireThrowing()) return;
-
-            Orig(thisPtr);
-        }
-    };
-
     inline void executeMovement(PlayerActorHakoniwa* thisPtr) {
         #ifdef ALLOW_POWERUPS
             auto* anim   = thisPtr->mAnimator;
@@ -204,6 +155,20 @@ namespace PowerUps {
             ) {
                 isHammer->makeActorDead();
                 al::invalidateHitSensor(isHammer, "AttackHack");
+            }
+
+            // Handle logic for Drill Suit
+            if (!(al::isNerve(thisPtr, getNerveAt(nrvHakoniwaHipDrop))
+                && rs::isCollidedWall(thisPtr->mCollider))) WallStick::update(thisPtr);
+
+            // Add attack to drill
+            if (isDrill) {
+                static bool wasDrillAttack = false;
+                bool isDrillAttack = isDrillAnim(anim);
+                updateAttackSensor(thisPtr, "GalaxySpin", isDrillAttack, wasDrillAttack);
+
+                if (!al::isNerve(thisPtr, getNerveAt(nrvHakoniwaJump))
+                    && !al::isNerve(thisPtr, getNerveAt(nrvHakoniwaFall))) isPopDrill = false;
             }
 
             // Handle blaster spawning
@@ -255,12 +220,14 @@ namespace PowerUps {
 
             if (isBlasterOn || isMario || isFire || isIce || isBrawl || isSuper
             ) {
-                if (fireStep < 0 && (canFireball || isFloating) && al::isPadTriggerR(-1)
+                if (fireStep < 0
+                    && (canAction || isFloating)
+                    && al::isPadTriggerR(-1)
                 ) {
                     if (projectile && al::isDead(projectile)
                     ) {
                         fireStep = 0;
-                        canFireball = false;
+                        canAction = false;
 
                         // Increase Eye sensor range for blaster homing
                         if (isBlasterOn) al::setSensorRadius(thisPtr, "Eye", 1600.0f);
@@ -330,7 +297,7 @@ namespace PowerUps {
                     else fireStep++;
                 }
             }
-            canFireball = false;
+            canAction = false;
 
             // Handle cape logic for Mario/Brawl suit
             bool isGliding =
@@ -340,6 +307,15 @@ namespace PowerUps {
                 || al::isActionPlaying(model, "JumpBroad8")
                 || al::isActionPlaying(model, "JumpBroad8Alt")
                 || isFloating;
+
+            /*if (isGliding && isHakoniwa->mJointControlKeeper) {
+                char* dyn = *(char**)((char*)isHakoniwa->mJointControlKeeper + 0x30);
+                if (dyn) {
+                    float* noseVel = (float*)(*(char**)(dyn + 0x20) + 0x48);
+                    noseVel[0] *= 0.0f;
+                    noseVel[1] *= 0.0f;
+                }
+            }*/
 
             // Handle glide gauge
             if (isGauge && !isSuper
@@ -454,28 +430,21 @@ namespace PowerUps {
                     al::tryDeleteEffect(model, "FlyingL");
                     al::tryDeleteEffect(model, "FlyingR");
                 }
-            } 
- 
+            }
+
             // Handle logic for Super suit
             if (isSuper) {
                 applyMoonMarioConst(thisPtr->mConst); // force Moon physics
 
-                // Apply attack sensor for DashFastSuper
+                // Add attack to Super moves
                 static bool wasMoveSuper = false;
-                bool isMoveSuper = speedH >= dashBorder
-                    || anim->isAnim("JumpBroad8") || anim->isAnim("Glide");
+                bool isMoveSuper = speedH >= dashBorder || anim->isAnim("JumpBroad8") || anim->isAnim("Glide");
+                updateAttackSensor(thisPtr, "GalaxySpin", isMoveSuper, wasMoveSuper);
 
-                if (isMoveSuper != wasMoveSuper
-                ) {
-                    if (isMoveSuper) { al::validateHitSensor(thisPtr, "GalaxySpin"); hitBufferCount = 0; }
-                    else al::invalidateHitSensor(thisPtr, "GalaxySpin");
-                }
-                wasMoveSuper = isMoveSuper;
-                
                 // Apply effects for DashFastSuper
-                bool isDash = al::isPadHoldR(-1) && !isFireThrowing() 
-                        && al::isActionPlaying(model, "MoveSuper") && speedH >= dashBorder;
-                bool isGlide = al::isActionPlaying(model, "Glide") && !isFireThrowing();
+                bool isDash = al::isPadHoldR(-1) && !isActionBusy()
+                    && al::isActionPlaying(model, "MoveSuper") && speedH >= dashBorder;
+                bool isGlide = al::isActionPlaying(model, "Glide") && !isActionBusy();
 
                 if (isDash) al::tryEmitEffect(model, "DashSuper", nullptr);
                 else if (isGlide) al::tryEmitEffect(model, "DashSuperGlide", nullptr);
@@ -524,7 +493,7 @@ namespace PowerUps {
 
                 static bool wasDash = false;
                 bool isDashNow = al::isPadHoldR(-1)
-                    && isMoving && !isFireThrowing() && speedH >= dashBorder;
+                    && isMoving && !isActionBusy() && speedH >= dashBorder;
 
                 if (isDashNow && !wasDash
                 ) {
@@ -792,6 +761,14 @@ namespace PowerUps {
         }
     };
 
+    struct PlayerInputFunctionIsTriggerJump : public mallow::hook::Trampoline<PlayerInputFunctionIsTriggerJump> {
+        static bool Callback(const al::LiveActor* actor, s32 port) {
+            if (isDrillAnim(isHakoniwa ? isHakoniwa->mAnimator : nullptr)) return false;
+
+            return Orig(actor, port);
+        }
+    };
+
     struct PlayerInputFunctionIsHoldAction : public mallow::hook::Trampoline<PlayerInputFunctionIsHoldAction> {
         static bool Callback(const al::LiveActor* actor, s32 port) {
             bool isFlying = isHakoniwa && isHakoniwa->mHackCap && isHakoniwa->mHackCap->isFlying();
@@ -807,7 +784,7 @@ namespace PowerUps {
             if (isHakoniwa->mHackKeeper && isHakoniwa->mHackKeeper->mHackActor) return update;
             PlayerConst* playerConst = const_cast<PlayerConst*>(thisPtr->mConst);
 
-            bool isDash = al::isPadHoldR(-1) && !isFireThrowing();
+            bool isDash = al::isPadHoldR(-1) && !isActionBusy();
 
             if (isSuper && isDash
             ) {
@@ -952,12 +929,6 @@ namespace PowerUps {
             InitActorSuffixHook::InstallAtSymbol("_ZN2al15initActorSuffixEPNS_9LiveActorERKNS_13ActorInitInfoEPKc");
             InitActorArchiveHook::InstallAtSymbol("_ZN2al24initActorWithArchiveNameEPNS_9LiveActorERKNS_13ActorInitInfoERKN4sead14SafeStringBaseIcEEPKc");
             PlayerActorHakoniwaInitAfterPlacement::InstallAtSymbol("_ZN19PlayerActorHakoniwa18initAfterPlacementEv");
-            
-            #ifdef ALLOW_CAPPY_ONLY // Handles Fireball logic
-                PlayerTryActionCapSpinAttack::InstallAtSymbol("_ZN19PlayerActorHakoniwa26tryActionCapSpinAttackImplEb");
-                PlayerTryActionCapSpinAttackBindEnd::InstallAtSymbol("_ZN19PlayerActorHakoniwa29tryActionCapSpinAttackBindEndEv");
-                PlayerActorHakoniwaExeSquat::InstallAtSymbol("_ZN19PlayerActorHakoniwa8exeSquatEv");
-            #endif
 
             // Handles control/movement
             LiveActorMovementHook::InstallAtSymbol("_ZN2al9LiveActor8movementEv");
@@ -969,11 +940,13 @@ namespace PowerUps {
             // Handles Double Jump
             PlayerActorHakoniwaExeJump::InstallAtSymbol("_ZN19PlayerActorHakoniwa7exeJumpEv");
             PlayerStateJumpTryCountUp::InstallAtSymbol("_ZN15PlayerStateJump24tryCountUpContinuousJumpEP20PlayerContinuousJump");
-            
+
             // Handles Glide
             PlayerActorHakoniwaExeHeadSliding::InstallAtSymbol("_ZN19PlayerActorHakoniwa14exeHeadSlidingEv");
             PlayerHeadSlidingKill::InstallAtSymbol("_ZN22PlayerStateHeadSliding4killEv");
             PlayerConstGetHeadSlidingSpeed::InstallAtSymbol("_ZNK11PlayerConst19getHeadSlidingSpeedEv");
+
+            PlayerInputFunctionIsTriggerJump::InstallAtSymbol("_ZN19PlayerInputFunction13isTriggerJumpEPKN2al9LiveActorEi");
 
             #ifdef ALLOW_DASH // Handles Dash
                 PlayerInputFunctionIsHoldAction::InstallAtSymbol("_ZN19PlayerInputFunction12isHoldActionEPKN2al9LiveActorEi");
@@ -993,7 +966,7 @@ namespace PowerUps {
             PlayerAnimatorSetAnimRateCommon::InstallAtSymbol("_ZN14PlayerAnimator17setAnimRateCommonEf");
             ActorActionKeeperUpdatePostHook::InstallAtSymbol("_ZN2al17ActorActionKeeper10updatePostEv");
             TryUpdateSeMaterialCodeHook::InstallAtSymbol("_ZN2al23tryUpdateSeMaterialCodeEPNS_15IUseAudioKeeperEPKc");
-            
+
             // Handles Metal Mario walking in water
             JudgeInWater::InstallAtSymbol("_ZNK18PlayerJudgeInWater5judgeEv");
 
@@ -1002,7 +975,7 @@ namespace PowerUps {
 
             // Prevent crash with water surface calculations
             CalcFindWaterSurfaceFlatFix::InstallAtSymbol("_ZN2al24calcFindWaterSurfaceFlatEPN4sead7Vector3IfEES3_PKNS_9LiveActorERKS2_S8_f");
-            
+
             // Patch PlayerJointControlKeeper capacity from 7 to 9
             exl::patch::CodePatcher jointCapPatcher(0x454F20);
             jointCapPatcher.WriteInst(0x52800121); // MOV W1, #9
@@ -1012,6 +985,9 @@ namespace PowerUps {
             invincibleStartPatcher.WriteInst(0x1F2003D5); // NOP
             exl::patch::CodePatcher invinciblePatcher(0x43F4A8);
             invinciblePatcher.WriteInst(0x1F2003D5); // NOP
+
+            // Install Wall Stick hooks
+            WallStick::Install();
         #endif
     }
 }

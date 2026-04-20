@@ -101,6 +101,7 @@ namespace PlayerCore {
             if (activeSensor && attackFrames >= 2
                 && rs::isCollidedWall(thisPtr->mCollider)
                 && hitBufferCount == 0
+                && drillStep == WallStick::Idle // Skip bounce during drill
             ) {
                 sead::Vector3f wallPos = rs::getCollidedWallPos(thisPtr->mCollider);
                 al::tryEmitEffect(thisPtr, "HitSmall", &wallPos);
@@ -154,14 +155,9 @@ namespace PlayerCore {
                 }
             }
 
-            // Add attack to moves
+            // Add attack to hipdrop
             static bool wasAttackMove = false;
-            const bool isAttackMove = isHipDropAnim(thisPtr->mAnimator);
-
-            if (isAttackMove && !wasAttackMove) { al::validateHitSensor(thisPtr, "HipDropKnockDown"); hitBufferCount = 0;}
-            else if (!isAttackMove && wasAttackMove) al::invalidateHitSensor(thisPtr, "HipDropKnockDown");
-
-            wasAttackMove = isAttackMove;
+            updateAttackSensor(thisPtr, "HipDropKnockDown", isHipDropAnim(thisPtr->mAnimator), wasAttackMove);
 
             // Change face animations
             if (isMetal && face && !al::isActionPlayingSubActor(model, "顔", "AreaWaitFight")) al::startActionSubActor(model, "顔", "AreaWaitFight");
@@ -175,7 +171,7 @@ namespace PlayerCore {
                     || al::isNerve(thisPtr, getNerveAt(nrvHakoniwaSquat)))
                     && !al::isNerve(thisPtr, &TauntLeftNrv)
                     && !al::isNerve(thisPtr, &TauntRightNrv)
-                    && !isFireThrowing()
+                    && !isActionBusy()
                 ) {
                     if (al::isPadTriggerLeft(-1)
                     ) {
@@ -205,6 +201,7 @@ namespace PlayerCore {
 
     struct PlayerActorHakoniwaReceiveMsgHook : public mallow::hook::Trampoline<PlayerActorHakoniwaReceiveMsgHook> {
         static bool Callback(PlayerActorHakoniwa* thisPtr, const al::SensorMsg* msg, al::HitSensor* source, al::HitSensor* target) {
+            if (drillStep != WallStick::Idle || isPopDrill) return false;
 
             if (PlayerFreeze::handleReceiveMsg(msg, source)) return false;
 
@@ -222,9 +219,17 @@ namespace PlayerCore {
         }
     };
 
+    // Protect sub-anims from being killed by game code
+    struct EndSubAnimGuard : public mallow::hook::Trampoline<EndSubAnimGuard> {
+        static void Callback(PlayerAnimator* anim) {
+            if (isDrillAnim(anim) && !anim->isSubAnimEnd()) return;
+
+            Orig(anim);
+        }
+    };
+
     struct TryEmitEffectHook : public mallow::hook::Trampoline<TryEmitEffectHook> {
         static bool Callback(al::EffectKeeper* keeper, const char* name, const sead::Vector3f* pos) {
-
             if (al::isEqualString(name, "SpinCapStart2Right")
                 && isHakoniwa && al::isEqualSubString(isHakoniwa->mAnimator->mCurAnim, "SpinSeparate")) return false;
 
@@ -240,9 +245,10 @@ namespace PlayerCore {
         //PlayerControlHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa7controlEv");
         PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
         PlayerActorHakoniwaReceiveMsgHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa10receiveMsgEPKN2al9SensorMsgEPNS0_9HitSensorES5_");
+        EndSubAnimGuard::InstallAtSymbol("_ZN14PlayerAnimator10endSubAnimEv");
         
         #ifdef ALLOW_GALAXY_SFX
-            TryEmitEffectHook::InstallAtSymbol("_ZN2al12EffectKeeper13tryEmitEffectEPKcPKN4sead7Vector3IfEE");
+            TryEmitEffectHook::InstallAtSymbol("_ZN2al12EffectKeeper10emitEffectEPKcPKN4sead7Vector3IfEE");
         #endif
     }
 }

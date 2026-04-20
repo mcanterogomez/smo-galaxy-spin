@@ -177,19 +177,23 @@ inline al::LiveActorGroup* iceCubes = nullptr;
 inline al::LiveActorGroup* tankBullets = nullptr;
 
 // Powerup Specifics
+int fireStep = -1; // Handle fireball logic
+int drillStep = -1; // Handle drill logic
+bool isActionBusy() { return fireStep >= 0 || drillStep >= 0; }
+
+bool canAction = false; // Handle action input 
 bool nextThrowLeft = true;
-bool canFireball = false;
-int fireStep = -1;
-bool isFireThrowing() { return fireStep >= 0; }
 bool tauntRightAlt = false;
 bool isDoubleJump = false;
 bool isDoubleJumpConsume = false;
-float glideLean = 0.0f;
-float glidePitch = 0.0f;
-int isCapeActive = -1;
+bool isPopDrill = false;
 bool isSuperRunningOnSurface = false;
 const f32 MIN_SPEED_RUN_ON_WATER = 15.0f;
 const sead::Color4u8 paintClear(0, 0, 0, 0);
+
+int isCapeActive = -1;
+float glideLean = 0.0f;
+float glidePitch = 0.0f;
 
 inline sead::Vector3f getHitSpawnPos(al::HitSensor* a, al::HitSensor* b) {
     sead::Vector3f pos = (al::getSensorPos(a) + al::getSensorPos(b)) * 0.5f;
@@ -208,6 +212,13 @@ inline bool isInHitBuffer(al::LiveActor* actor) {
         if (hitBuffer[i] == actor) return true;
     }
     return false;
+}
+
+// Add attack to moves
+inline void updateAttackSensor(al::LiveActor* actor, const char* name, bool active, bool& was) {
+    if (active && !was) { al::validateHitSensor(actor, name); hitBufferCount = 0; }
+    else if (!active && was) al::invalidateHitSensor(actor, name);
+    was = active;
 }
 
 // Edge guard logic
@@ -318,4 +329,12 @@ inline bool isHipDropAnim(PlayerAnimator* anim) {
         || al::isEqualString(anim->mCurAnim, "SwimHipDrop")
         || al::isEqualString(anim->mCurAnim, "SwimHipDropPunch")
         || al::isEqualString(anim->mCurAnim, "SwimDive");
+}
+
+inline bool isDrillAnim(PlayerAnimator* anim) {
+    if (isPopDrill) return true;
+    if (!anim) return false;
+    return anim->isSubAnim("DrillIn")
+        || anim->isSubAnim("DrillOut")
+        || anim->isSubAnim("DrillOutFast");
 }

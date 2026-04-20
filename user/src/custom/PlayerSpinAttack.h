@@ -41,28 +41,31 @@ namespace PlayerSpinAttack {
         if (newIsCarry && !prevIsCarry) { prevIsCarry = newIsCarry; return SpinPre::Reject; }
         prevIsCarry = newIsCarry;
 
-        if (!isSpinRethrow) spin.resetForNewSpin();
+        if (isActionBusy()) return SpinPre::Reject;
 
-        if (isPadTriggerGalaxySpin(-1)
-            && !rs::is2D(player)
-            && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)
-        ) {
-            if (isSpinAnim(player->mAnimator) || isPunchAnim(player->mAnimator)) return SpinPre::Reject;
+        #ifndef ALLOW_CAPPY_ONLY
+            if (!isSpinRethrow) spin.resetForNewSpin();
 
-            if (spin.canGalaxy) spin.trigger = true;
-            else { spin.trigger = true; spin.fakethrowRemainder = -2; }
-            return SpinPre::Accept;
-        }
+            if (isPadTriggerGalaxySpin(-1)
+                && !rs::is2D(player)
+                && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)
+            ) {
+                if (isSpinAnim(player->mAnimator) || isPunchAnim(player->mAnimator)) return SpinPre::Reject;
 
-        if (isFireThrowing()) return SpinPre::Reject;
+                if (spin.canGalaxy) spin.trigger = true;
+                else { spin.trigger = true; spin.fakethrowRemainder = -2; }
+                return SpinPre::Accept;
+            }
+        #endif
 
-        if (al::isPadTriggerR(-1)
+        if ((al::isPadTriggerR(-1) || al::isPadHoldZR(-1))
             && !rs::is2D(player)
             && !player->mCarryKeeper->isCarry()
-            && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)) canFireball = true;
+            && !PlayerEquipmentFunction::isEquipmentNoCapThrow(player->mEquipmentUser)) canAction = true;
 
         return SpinPre::Fallthrough;
     }
+
     struct PlayerTryActionCapSpinAttack : public mallow::hook::Trampoline<PlayerTryActionCapSpinAttack> {
         static bool Callback(PlayerActorHakoniwa* player, bool a2) {
             switch (TryCapSpinPre(player)
@@ -413,8 +416,12 @@ namespace PlayerSpinAttack {
 
     struct PlayerActorHakoniwaExeSquat : public mallow::hook::Trampoline<PlayerActorHakoniwaExeSquat> {
         static void Callback(PlayerActorHakoniwa* thisPtr) {
-            if (isFireThrowing()) return;
-            if (TriggerSpinFromState(thisPtr)) return;
+            if (isActionBusy()) return;
+
+            #ifndef ALLOW_CAPPY_ONLY
+                if (TriggerSpinFromState(thisPtr)) return;
+            #endif
+
             Orig(thisPtr);
         }
     };
@@ -422,6 +429,7 @@ namespace PlayerSpinAttack {
     struct PlayerActorHakoniwaExeRolling : public mallow::hook::Trampoline<PlayerActorHakoniwaExeRolling> {
         static void Callback(PlayerActorHakoniwa* thisPtr) {
             if (TriggerSpinFromState(thisPtr)) return;
+
             Orig(thisPtr);
         }
     };
@@ -448,14 +456,19 @@ namespace PlayerSpinAttack {
     };
 
     inline void Install() {
+
+        PlayerTryActionCapSpinAttack::InstallAtSymbol("_ZN19PlayerActorHakoniwa26tryActionCapSpinAttackImplEb");
+        PlayerTryActionCapSpinAttackBindEnd::InstallAtSymbol("_ZN19PlayerActorHakoniwa29tryActionCapSpinAttackBindEndEv");
+        PlayerActorHakoniwaExeSquat::InstallAtSymbol("_ZN19PlayerActorHakoniwa8exeSquatEv");
+
         #ifndef ALLOW_CAPPY_ONLY
             // Modify triggers
             InputIsTriggerActionXexclusivelyHook::InstallAtSymbol("_ZN19PlayerInputFunction15isTriggerActionEPKN2al9LiveActorEi");
             InputIsTriggerActionCameraResetHook::InstallAtSymbol("_ZN19PlayerInputFunction20isTriggerCameraResetEPKN2al9LiveActorEi");
 
             // Trigger spin instead of cap throw
-            PlayerTryActionCapSpinAttack::InstallAtSymbol("_ZN19PlayerActorHakoniwa26tryActionCapSpinAttackImplEb");
-            PlayerTryActionCapSpinAttackBindEnd::InstallAtSymbol("_ZN19PlayerActorHakoniwa29tryActionCapSpinAttackBindEndEv");
+            //PlayerTryActionCapSpinAttack::InstallAtSymbol("_ZN19PlayerActorHakoniwa26tryActionCapSpinAttackImplEb");
+            //PlayerTryActionCapSpinAttackBindEnd::InstallAtSymbol("_ZN19PlayerActorHakoniwa29tryActionCapSpinAttackBindEndEv");
             PlayerSpinCapAttackAppear::InstallAtSymbol("_ZN18PlayerStateSpinCap6appearEv");
             PlayerStateSpinCapKill::InstallAtSymbol("_ZN18PlayerStateSpinCap4killEv");
             PlayerStateSpinCapFall::InstallAtSymbol("_ZN18PlayerStateSpinCap7exeFallEv");
@@ -473,7 +486,7 @@ namespace PlayerSpinAttack {
             DisallowCancelOnWaterSurfaceSpinPatch::InstallAtOffset(0x48A3C8);
 
             // Allow triggering spin on roll and squat
-            PlayerActorHakoniwaExeSquat::InstallAtSymbol("_ZN19PlayerActorHakoniwa8exeSquatEv");
+            //PlayerActorHakoniwaExeSquat::InstallAtSymbol("_ZN19PlayerActorHakoniwa8exeSquatEv");
             PlayerActorHakoniwaExeRolling::InstallAtSymbol("_ZN19PlayerActorHakoniwa10exeRollingEv");
 
             // Allow carrying an object during a GalaxySpin

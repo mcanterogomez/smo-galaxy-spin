@@ -8,6 +8,10 @@
 // Enable spin attack only.
 //#define ALLOW_SPIN_ATTACK
 
+    // [ OPTION 1.2: CAPPY ONLY ]
+    // Enable Cappy throw only with power-ups.
+    //#define ALLOW_CAPPY_ONLY
+
 // [ OPTION 2: POWER-UPS ]
 // Enable power-ups.
 #define ALLOW_POWERUPS
@@ -19,10 +23,6 @@
     // [ OPTION 2.2: ENABLE KART ]
     // Enable kart related mechanics.
     #define ALLOW_KART
-
-    // [ OPTION 2.3: CAPPY ONLY ]
-    // Enable Cappy throw only with power-ups.
-    //#define ALLOW_CAPPY_ONLY
 
 // [ OPTION 3: TAUNT TRIGGER ]
 // Enable taunts.
