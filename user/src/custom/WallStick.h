@@ -26,7 +26,7 @@ namespace WallStick {
 
     inline void popDrill(al::LiveActor* model) {
         exitDrill(model);
-        al::tryEmitEffect(model, "DrillStart", nullptr);
+        al::tryEmitEffect(model, "DrillLand", nullptr);
         al::tryStartSe(model, "DrillSpin");
 
         if (isHakoniwa) {
@@ -76,14 +76,15 @@ namespace WallStick {
             // Not drilling. Start on ZR+surface. Reset gravity if airborne.
             case Idle: {
                 if (!onGround && !onWall) { resetGravity(thisPtr); return; }
-                if (!isHoldZR || !canAction || isActionBusy() || al::isInWater(thisPtr)) return;
+                if (!isHoldZR || !canAction || isActionBusy()
+                    || input->isTriggerJump() || al::isInWater(thisPtr)) return;
                 canAction = false;
 
                 if (onWall) {
                     // Wall: snap gravity, no animation
                     snapGravityToWall(thisPtr);
-                    enterDrill(model);
-                    drillStep = Active;
+                    anim->startSubAnim("DrillIn");
+                    drillStep = Enter;
                 } else {
                     // Ground: play DrillIn anim
                     stickGravity = defaultGravity;
@@ -123,14 +124,15 @@ namespace WallStick {
                 // Stay stuck: wall takes priority, then raycast, else lost
                 if (onWall) snapGravityToWall(thisPtr);
                 else if (!onGround && !isFoundSurface(thisPtr)) {
-                    popDrill(model);
-                    al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
-                    drillStep = Idle;
+                    resetGravity(thisPtr);
+                    anim->startSubAnim("DrillOutFast");
+                    exitDrill(model);
+                    drillStep = Exit;
                     break;
                 }
 
                 // Fx + sound
-                al::tryEmitEffect(model, "DrillLand", nullptr);
+                al::tryEmitEffect(model, "DrillMove", nullptr);
                 if (isMoving && !al::checkIsPlayingSe(model, "DrillMove", nullptr)) al::tryStartSe(model, "DrillMove");
                 else if (!isMoving) al::tryStopSe(model, "DrillMove", -1, nullptr);
                 break;
