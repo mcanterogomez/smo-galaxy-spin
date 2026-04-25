@@ -14,12 +14,12 @@ public:
 public:
     al::LiveActor* mPlayerActor;            // 0x00
     PlayerEffect*  mPlayerEffect;           // 0x08
-    bool           _10;                     // 0x10 (unknown flag)
-    s32            _14;                     // 0x14 (unknown int)
-    char           filler[4];               // 0x18 (padding)
+    bool           mIsDamageDirty;          // 0x10 (was _10)
+    s32            mFlickerTimer;           // 0x14 (was _14)
+    s32            _18;                     // 0x18
     bool           mIsPreventDamage;        // 0x1C
-    char           filler2[3];              // 0x1D (padding)
+    char           filler2[3];              // 0x1D
     s32            mRemainingInvincibility; // 0x20
-    s32            filler3;                 // 0x24 (padding)
-    void*          gap;                     // 0x28 (unknown)
+    s32            filler3;                 // 0x24
+    void*          gap;                     // 0x28
 };

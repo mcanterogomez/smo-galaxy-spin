@@ -101,7 +101,7 @@ namespace PlayerCore {
             if (activeSensor && attackFrames >= 2
                 && rs::isCollidedWall(thisPtr->mCollider)
                 && hitBufferCount == 0
-                && drillStep == WallStick::Idle // Skip bounce during drill
+                && !isDrillAnim(thisPtr->mAnimator) // Skip bounce during drill
             ) {
                 sead::Vector3f wallPos = rs::getCollidedWallPos(thisPtr->mCollider);
                 al::tryEmitEffect(thisPtr, "HitSmall", &wallPos);
@@ -201,7 +201,7 @@ namespace PlayerCore {
 
     struct PlayerActorHakoniwaReceiveMsgHook : public mallow::hook::Trampoline<PlayerActorHakoniwaReceiveMsgHook> {
         static bool Callback(PlayerActorHakoniwa* thisPtr, const al::SensorMsg* msg, al::HitSensor* source, al::HitSensor* target) {
-            if (drillStep != WallStick::Idle || isPopDrill) return false;
+            if (drillStep != WallStick::Idle || drillSensorRemaining > 0) return false;
 
             if (PlayerFreeze::handleReceiveMsg(msg, source)) return false;
 

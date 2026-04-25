@@ -32,7 +32,7 @@ namespace WallStick {
         if (isHakoniwa) {
             al::validateHitSensor(isHakoniwa, "GalaxySpin");
             hitBufferCount = 0;
-            isPopDrill = true;
+            drillSensorRemaining = 25; // Allow drill hitbox for a few frames after popping
         }
     }
 
@@ -88,7 +88,7 @@ namespace WallStick {
                 } else {
                     // Ground: play DrillIn anim
                     stickGravity = defaultGravity;
-                    anim->startSubAnim("DrillIn");
+                    if (!al::isEqualSubString(anim->mCurAnim, "HipDrop")) anim->startSubAnim("DrillIn");
                     drillStep = Enter;
                 }
                 break;
@@ -140,11 +140,8 @@ namespace WallStick {
 
             // DrillOut anim playing. Wait for it to finish. Nothing interrupts.
             case Exit: {
-                const bool animDone = (!anim->isSubAnim("DrillOutFast") && !anim->isSubAnim("DrillOut")) || anim->isSubAnimEnd();
-                if (animDone) {
-                    al::setNerve(thisPtr, getNerveAt((!onGround || isMoving) ? nrvHakoniwaFall : nrvHakoniwaWait));
-                    drillStep = Idle;
-                }
+                al::setNerve(thisPtr, getNerveAt((!onGround || isMoving) ? nrvHakoniwaFall : nrvHakoniwaWait));
+                drillStep = Idle;
                 break;
             }
         }
@@ -152,7 +149,8 @@ namespace WallStick {
 
     struct PlayerJudgeStartSquatHook : public mallow::hook::Trampoline<PlayerJudgeStartSquatHook> {
         static bool Callback(void* thisPtr) {
-            if (isDrill && al::isPadHoldZR(-1)) return false;
+            if (isDrill && isHakoniwa->mHackCap->isPutOn()
+                && al::isPadHoldZR(-1)) return false;
 
             return Orig(thisPtr);
         }

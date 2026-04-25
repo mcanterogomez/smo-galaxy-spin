@@ -54,6 +54,8 @@
 #include "Util/SensorMsgFunction.h"
 
 // Player actor & state headers
+#include "Player/PlayerAnimator.h"
+#include "Player/PlayerAnimFrameCtrl.h"
 #include "Player/IUsePlayerCollision.h"
 #include "Player/PlayerActionGroundMoveControl.h"
 #include "Player/PlayerActorHakoniwa.h"
@@ -81,7 +83,6 @@
 #include "headers/FireBall.h"
 #include "headers/HammerBrosHammer.h"
 #include "headers/Motorcycle.h"
-#include "headers/PlayerAnimator.h"
 #include "headers/PlayerDamageKeeper.h"
 #include "headers/PlayerIceCube.h"
 #include "headers/PlayerJudgeWallHitDown.h"
@@ -179,6 +180,7 @@ inline al::LiveActorGroup* tankBullets = nullptr;
 // Powerup Specifics
 int fireStep = -1; // Handle fireball logic
 int drillStep = -1; // Handle drill logic
+int drillSensorRemaining = -1; // Allow drill hitbox for a few frames after popping out
 bool isActionBusy() { return fireStep >= 0 || drillStep >= 0; }
 
 bool canAction = false; // Handle action input 
@@ -186,7 +188,6 @@ bool nextThrowLeft = true;
 bool tauntRightAlt = false;
 bool isDoubleJump = false;
 bool isDoubleJumpConsume = false;
-bool isPopDrill = false;
 bool isSuperRunningOnSurface = false;
 const f32 MIN_SPEED_RUN_ON_WATER = 15.0f;
 const sead::Color4u8 paintClear(0, 0, 0, 0);
@@ -194,6 +195,7 @@ const sead::Color4u8 paintClear(0, 0, 0, 0);
 int isCapeActive = -1;
 float glideLean = 0.0f;
 float glidePitch = 0.0f;
+inline sead::Vector3f legScale = {1.0f, 1.0f, 1.0f};
 
 inline sead::Vector3f getHitSpawnPos(al::HitSensor* a, al::HitSensor* b) {
     sead::Vector3f pos = (al::getSensorPos(a) + al::getSensorPos(b)) * 0.5f;
@@ -332,7 +334,7 @@ inline bool isHipDropAnim(PlayerAnimator* anim) {
 }
 
 inline bool isDrillAnim(PlayerAnimator* anim) {
-    if (isPopDrill) return true;
+    if (drillSensorRemaining > 0) return true;
     if (!anim) return false;
     return anim->isSubAnim("DrillIn")
         || anim->isSubAnim("DrillOut")

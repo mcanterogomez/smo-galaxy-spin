@@ -40,11 +40,16 @@ namespace PowerUps {
     inline void executeInitPlayer(PlayerActorHakoniwa* thisPtr, const al::ActorInitInfo* actorInfo, const PlayerInitInfo* playerInfo) {
         #ifdef ALLOW_POWERUPS
             auto* model = thisPtr->mModelHolder->findModelActor("Normal");
+            // Clear joint modifiers on Init
             glideLean = 0.0f;
             glidePitch = 0.0f;
-            
+
+            // Handle joint rotation
             al::initJointLocalYRotator(model, &glideLean, "JointRoot");
             al::initJointLocalZRotator(model, &glidePitch, "Spine1");
+            // Handle joint scaling
+            al::initJointLocalScaleController(model, &legScale, "LegL1");
+            al::initJointLocalScaleController(model, &legScale, "LegR1");
 
             if (al::isExistArchive("ObjectData/PlayerHammer")
             ) {
@@ -130,10 +135,14 @@ namespace PowerUps {
             auto* anim   = thisPtr->mAnimator;
             auto* holder = thisPtr->mModelHolder;
             auto* model  = holder->findModelActor("Normal");
+            auto* head = al::tryGetSubActor(model, "頭");
             auto* hand = al::tryGetSubActor(model, "右手");
             auto* cape = al::tryGetSubActor(model, "ケープ");
-            auto* tail = al::tryGetSubActor(model, "尻尾");
             auto* blaster = al::tryGetSubActor(model, "Blaster");
+            auto* drill = al::tryGetSubActor(model, "Drill");
+            auto* tail = al::tryGetSubActor(model, "尻尾");
+            auto* damage = thisPtr->mDamageKeeper;
+            bool isFlicker = damage && damage->mFlickerTimer > 0;
 
             isCapeOn = cape && al::isAlive(cape);
             isBlasterOn = blaster && al::isAlive(blaster);
@@ -142,8 +151,8 @@ namespace PowerUps {
             bool onGround = rs::isOnGround(thisPtr, thisPtr->mCollider);
             bool isWater = al::isInWater(thisPtr);
             bool isSurface = thisPtr->mWaterSurfaceFinder->isFoundSurface();
-            bool isVisible = !al::isHideModel(model);
             bool isHack = thisPtr->mHackKeeper && thisPtr->mHackKeeper->mHackActor;
+            bool isActive = !isFlicker && !isHack && !rs::isActiveDemo(thisPtr);
 
             f32 speedH = al::calcSpeedH(thisPtr);
             f32 dashBorder = thisPtr->mConst->getDashFastBorderSpeed();
@@ -158,17 +167,51 @@ namespace PowerUps {
             }
 
             // Handle logic for Drill Suit
-            if (!(al::isNerve(thisPtr, getNerveAt(nrvHakoniwaHipDrop))
-                && rs::isCollidedWall(thisPtr->mCollider))) WallStick::update(thisPtr);
+            if (isDrill && thisPtr->mHackCap->isPutOn()
+            ) {
+                bool inHipDrop = al::isNerve(thisPtr, getNerveAt(nrvHakoniwaHipDrop));
+                bool inLand = anim->isAnim("HipDropLand");
+                bool drillDrop = inHipDrop && (!inLand || anim->getAnimFrame() < 8.0f);
 
-            // Add attack to drill
-            if (isDrill) {
+                // Drill Drop: hide cap and legs, show drill subactor
+                if (drillDrop) thisPtr->mAnimator->forceCapOff();
+                else if (thisPtr->mHackCap->isPutOn()) thisPtr->mAnimator->forceCapOn();
+
+                if (drill) {
+                    if (inHipDrop && !inLand && al::isDead(drill)
+                    ) {
+                        drill->appear();
+                        al::tryStartAction(drill, "DrillSpin");
+                        al::tryEmitEffect(model, "DrillSpinDrop", nullptr);
+                        al::tryStartSe(model, "DrillSpin");
+                    }
+                    if (!inHipDrop || inLand) al::tryDeleteEffect(model, "DrillSpinDrop");
+                    if (!drillDrop && al::isAlive(drill)) drill->kill();
+                }
+
+                float legTarget = drillDrop ? 0.0f : 1.0f;
+                legScale.set(legTarget, legTarget, legTarget);
+
+                // Drill Wall: allow sticking to walls and hitting with drill
+                if (isActive && !(al::isNerve(thisPtr, getNerveAt(nrvHakoniwaHipDrop))
+                    && rs::isCollidedWall(thisPtr->mCollider))) WallStick::update(thisPtr);
+                
+                // Drill Attack: add attack during drill jump and hip drop
                 static bool wasDrillAttack = false;
                 bool isDrillAttack = isDrillAnim(anim);
+
+                const char* headAction = isDrillAttack ? "DrillSpin" : "DrillWait";
+                if (head && !al::isActionPlaying(head, headAction)) al::tryStartAction(head, headAction);
+
                 updateAttackSensor(thisPtr, "GalaxySpin", isDrillAttack, wasDrillAttack);
 
+                if (drillSensorRemaining > 0) {
+                    al::tryEmitEffect(model, "DrillSpin", nullptr);
+                    if (--drillSensorRemaining == 0) al::tryDeleteEffect(model, "DrillSpin");
+                }
+
                 if (!al::isNerve(thisPtr, getNerveAt(nrvHakoniwaJump))
-                    && !al::isNerve(thisPtr, getNerveAt(nrvHakoniwaFall))) isPopDrill = false;
+                    && !al::isNerve(thisPtr, getNerveAt(nrvHakoniwaFall))) drillSensorRemaining = 0;
             }
 
             // Handle blaster spawning
@@ -176,10 +219,9 @@ namespace PowerUps {
             if (al::isPadHoldRight(-1)) holdRightFrames++;
             else holdRightFrames = 0;
 
-            if (isMario && blaster
+            if (isMario && blaster && isActive
                 && holdRightFrames == 30
                 && !thisPtr->mInput->isMove()
-                && !rs::isActiveDemo(thisPtr)
             ) {
                 if (isBlasterOn
                 ) {
@@ -415,21 +457,25 @@ namespace PowerUps {
 
             // Handle logic for Flying suit
             if (isFly) {
-                if (!isHack && isVisible) {
+                if (isActive) {
                     if (isGliding) {
+                        al::tryDeleteEffect(model, "GlideWindL");
+                        al::tryDeleteEffect(model, "GlideWindR");
                         al::tryDeleteEffect(model, "FlyingState");
+
                         al::tryEmitEffect(model, "FlyingL", nullptr);
+                        al::tryEmitEffect(model, "FlyingLTrail", nullptr);
                         al::tryEmitEffect(model, "FlyingR", nullptr);
+                        al::tryEmitEffect(model, "FlyingRTrail", nullptr);
                     } else {
                         al::tryDeleteEffect(model, "FlyingL");
+                        al::tryDeleteEffect(model, "FlyingLTrail");
                         al::tryDeleteEffect(model, "FlyingR");
+                        al::tryDeleteEffect(model, "FlyingRTrail");
+
                         al::tryEmitEffect(model, "FlyingState", nullptr);
                     }
-                } else {
-                    al::tryDeleteEffect(model, "FlyingState");
-                    al::tryDeleteEffect(model, "FlyingL");
-                    al::tryDeleteEffect(model, "FlyingR");
-                }
+                } else al::tryKillEmitterAndParticleAll(model);
             }
 
             // Handle logic for Super suit
@@ -454,17 +500,14 @@ namespace PowerUps {
                 }
                 
                 // Apply effects for Invincibility
-                auto* damagekeep = thisPtr->mDamageKeeper;
-
-                if (!isHack && isVisible
-                ) {
-                    if (damagekeep) {
-                        if (!damagekeep->mIsPreventDamage) damagekeep->activatePreventDamage();
-                        damagekeep->mRemainingInvincibility = INT_MAX;
+                if (isActive) {
+                    if (damage) {
+                        if (!damage->mIsPreventDamage) damage->activatePreventDamage();
+                        damage->mRemainingInvincibility = INT_MAX;
                     }
                     al::tryEmitEffect(model, "Bonfire", nullptr);
                 } else {
-                    if (isHack && damagekeep) damagekeep->mRemainingInvincibility = 0;
+                    if (isHack && damage) damage->mRemainingInvincibility = 0;
                     al::tryDeleteEffect(model, "Bonfire");
                 }
             }
@@ -473,7 +516,7 @@ namespace PowerUps {
             static int stillFrames = 0;
             static int healFrames = 0;
 
-            bool isWait = al::isNerve(thisPtr, getNerveAt(nrvHakoniwaWait)) && isVisible;
+            bool isWait = isActive && al::isNerve(thisPtr, getNerveAt(nrvHakoniwaWait));
             bool canHeal = (isMario || isNoCap) && isWait && !GameDataFunction::isPlayerHitPointMax(thisPtr);
 
             if (canHeal) {
@@ -508,8 +551,9 @@ namespace PowerUps {
             if (al::isPadHoldLeft(-1)) holdLeftFrames++;
             else holdLeftFrames = 0;
 
-            if (isKart && holdLeftFrames == 30
-                && !thisPtr->mInput->isMove() && !rs::isActiveDemo(thisPtr)
+            if (isKart && isActive
+                && holdLeftFrames == 30
+                && !thisPtr->mInput->isMove()
             ) {
                 if (al::isAlive(isKart)
                 ) {
@@ -976,9 +1020,9 @@ namespace PowerUps {
             // Prevent crash with water surface calculations
             CalcFindWaterSurfaceFlatFix::InstallAtSymbol("_ZN2al24calcFindWaterSurfaceFlatEPN4sead7Vector3IfEES3_PKNS_9LiveActorERKS2_S8_f");
 
-            // Patch PlayerJointControlKeeper capacity from 7 to 9
+            // Patch PlayerJointControlKeeper capacity from 7 to 12
             exl::patch::CodePatcher jointCapPatcher(0x454F20);
-            jointCapPatcher.WriteInst(0x52800121); // MOV W1, #9
+            jointCapPatcher.WriteInst(0x52800181); // MOV W1, #12
 
             // Disable invincibility music patches
             exl::patch::CodePatcher invincibleStartPatcher(0x4CC6FC);

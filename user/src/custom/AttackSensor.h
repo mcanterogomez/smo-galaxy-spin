@@ -48,7 +48,8 @@ namespace AttackSensor {
             sead::Vector3f spawnPos = getHitSpawnPos(source, target);
             sead::Vector3f fireDir = getFireDir(thisPtr, targetHost);
 
-            if (!spin.isGalaxy && al::isEqualSubString(typeid(*targetHost).name(), "FireBall")) return;
+            if (al::isEqualSubString(typeid(*targetHost).name(), "FireBall")
+                && al::calcSpeedH(thisPtr) >= thisPtr->mConst->getDashFastBorderSpeed()) return;
 
             bool isSpinAttack = al::isSensorName(source, "GalaxySpin")
                 && (isBaseSpinAnim(thisPtr->mAnimator)
