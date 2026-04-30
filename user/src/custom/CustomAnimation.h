@@ -22,7 +22,7 @@ namespace CustomAnimation {
         if (isBrawl) {
             if (al::isEqualString(name, "BattleWait")) return "WaitBrawlFight";
             if (al::isEqualString(name, "JumpDashFast")) return "Jump";
-            if (al::isEqualString(name, "Move")) return "MoveBrawl";
+            if (al::isEqualSubString(name, "Move")) return "MoveBrawl";
             if (al::isEqualString(name, "Wait")) return "WaitBrawl";
             if (al::isEqualString(name, "WearEnd")) return "WearEndBrawl";
         }
@@ -30,13 +30,13 @@ namespace CustomAnimation {
             if (al::isEqualString(name, "BattleWait")) return "WaitSuperFight";
             if (al::isEqualString(name, "GlideFloat")) return "GlideFloatSuper";
             //if (al::isEqualString(name, "JumpDashFast")) return "JumpDashFastSuper";
-            if (al::isEqualString(name, "Move")) return "MoveSuper";
+            if (al::isEqualSubString(name, "Move")) return "MoveSuper";
             if (al::isEqualString(name, "Wait")) return "WaitSuper";
             if (al::isEqualString(name, "WearEnd")) return "WearEndSuper";
         }
         if (!isFeather && !isTanooki && !isFly && !isBrawl && !isSuper) {
             if (al::isEqualString(name, "JumpDashFast")) return "JumpDashFastClassic";
-            if (al::isEqualString(name, "Move")) return "MoveClassic";
+            if (al::isEqualSubString(name, "Move")) return "MoveClassic";
         }
 
         bool isSuit = (isMario && isCapeOn) || isFeather || isFly || isBrawl || isSuper;
@@ -55,6 +55,7 @@ namespace CustomAnimation {
             if (al::isEqualString(name, "LandStiffen")) return "LandSuper";
             if (al::isEqualString(name, "MofumofuDemoOpening2")) return "MofumofuDemoOpening2Super";
         }
+        if (al::isEqualString(name, "BattleWait")) return "WaitBrawl";
         return nullptr;
     }
 

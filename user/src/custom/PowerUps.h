@@ -167,51 +167,49 @@ namespace PowerUps {
             }
 
             // Handle logic for Drill Suit
-            if (isDrill && thisPtr->mHackCap->isPutOn()
-            ) {
+            if (isDrill) {
                 bool inHipDrop = al::isNerve(thisPtr, getNerveAt(nrvHakoniwaHipDrop));
                 bool inLand = anim->isAnim("HipDropLand");
-                bool drillDrop = inHipDrop && (!inLand || anim->getAnimFrame() < 8.0f);
+                bool drillDrop = isActive && thisPtr->mHackCap->isPutOn()
+                                && inHipDrop && (!inLand || anim->getAnimFrame() < 8.0f);
 
-                // Drill Drop: hide cap and legs, show drill subactor
-                if (drillDrop) thisPtr->mAnimator->forceCapOff();
-                else if (thisPtr->mHackCap->isPutOn()) thisPtr->mAnimator->forceCapOn();
-
-                if (drill) {
-                    if (inHipDrop && !inLand && al::isDead(drill)
-                    ) {
-                        drill->appear();
-                        al::tryStartAction(drill, "DrillSpin");
-                        al::tryEmitEffect(model, "DrillSpinDrop", nullptr);
-                        al::tryStartSe(model, "DrillSpin");
-                    }
-                    if (!inHipDrop || inLand) al::tryDeleteEffect(model, "DrillSpinDrop");
-                    if (!drillDrop && al::isAlive(drill)) drill->kill();
+                // Drill subactor and effects: always run so warps and demos clean up
+                if (drill && drillDrop && al::isDead(drill)
+                ) {
+                    drill->appear();
+                    al::tryStartAction(drill, "DrillSpin");
+                    al::tryEmitEffect(model, "DrillSpinDrop", nullptr);
+                    al::tryStartSe(model, "DrillSpin");
                 }
+                if (!inHipDrop || inLand) al::tryDeleteEffect(model, "DrillSpinDrop");
+                if (drill && !drillDrop && al::isAlive(drill)) drill->kill();
 
                 float legTarget = drillDrop ? 0.0f : 1.0f;
                 legScale.set(legTarget, legTarget, legTarget);
 
-                // Drill Wall: allow sticking to walls and hitting with drill
-                if (isActive && !(al::isNerve(thisPtr, getNerveAt(nrvHakoniwaHipDrop))
-                    && rs::isCollidedWall(thisPtr->mCollider))) WallStick::update(thisPtr);
-                
-                // Drill Attack: add attack during drill jump and hip drop
-                static bool wasDrillAttack = false;
-                bool isDrillAttack = isDrillAnim(anim);
+                // Cap visibility and active-only mechanics
+                if (isActive && thisPtr->mHackCap->isPutOn()
+                ) {
+                    if (drillDrop) thisPtr->mAnimator->forceCapOff();
+                    else thisPtr->mAnimator->forceCapOn();
 
-                const char* headAction = isDrillAttack ? "DrillSpin" : "DrillWait";
-                if (head && !al::isActionPlaying(head, headAction)) al::tryStartAction(head, headAction);
+                    if (!(inHipDrop && rs::isCollidedWall(thisPtr->mCollider))) WallStick::update(thisPtr);
 
-                updateAttackSensor(thisPtr, "GalaxySpin", isDrillAttack, wasDrillAttack);
+                    static bool wasDrillAttack = false;
+                    bool isDrillAttack = isDrillAnim(anim);
+                    const char* headAction = isDrillAttack ? "DrillSpin" : "DrillWait";
+                    if (head && !al::isActionPlaying(head, headAction)) al::tryStartAction(head, headAction);
 
-                if (drillSensorRemaining > 0) {
-                    al::tryEmitEffect(model, "DrillSpin", nullptr);
-                    if (--drillSensorRemaining == 0) al::tryDeleteEffect(model, "DrillSpin");
+                    updateAttackSensor(thisPtr, "GalaxySpin", isDrillAttack, wasDrillAttack);
+
+                    if (drillSensorRemaining > 0) {
+                        al::tryEmitEffect(model, "DrillSpin", nullptr);
+                        if (--drillSensorRemaining == 0) al::tryDeleteEffect(model, "DrillSpin");
+                    }
+
+                    if (!al::isNerve(thisPtr, getNerveAt(nrvHakoniwaJump))
+                        && !al::isNerve(thisPtr, getNerveAt(nrvHakoniwaFall))) drillSensorRemaining = 0;
                 }
-
-                if (!al::isNerve(thisPtr, getNerveAt(nrvHakoniwaJump))
-                    && !al::isNerve(thisPtr, getNerveAt(nrvHakoniwaFall))) drillSensorRemaining = 0;
             }
 
             // Handle blaster spawning

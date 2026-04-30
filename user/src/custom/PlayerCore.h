@@ -68,7 +68,7 @@ namespace PlayerCore {
 
             if (sensorSpin && sensorSpin->mIsValid)
                 thisPtr->attackSensor(sensorSpin, rs::tryGetCollidedWallSensor(thisPtr->mCollider));
-            
+
             if (sensorDoubleSpin && sensorDoubleSpin->mIsValid)
                 thisPtr->attackSensor(sensorDoubleSpin, rs::tryGetCollidedWallSensor(thisPtr->mCollider));
 
@@ -77,7 +77,7 @@ namespace PlayerCore {
 
             if (sensorHipDrop && sensorHipDrop->mIsValid)
                 thisPtr->attackSensor(sensorHipDrop, rs::tryGetCollidedGroundSensor(thisPtr->mCollider));
-            
+
             if(galaxySensorRemaining > 0) {
                 galaxySensorRemaining--;
                 if(galaxySensorRemaining == 0) {
@@ -87,7 +87,7 @@ namespace PlayerCore {
                     galaxySensorRemaining = -1;
                 }
             }
-           
+
             // Handle wall bounce for attacks
             al::HitSensor* activeSensor = nullptr;
             if (sensorPunch && sensorPunch->mIsValid) activeSensor = sensorPunch;

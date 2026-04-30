@@ -248,7 +248,7 @@ namespace AttackSensor {
                         || rs::sendMsgCapAttack(target, source)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
-                        al::tryStartSe(thisPtr, "BlowHit");
+                        al::tryStartSe(thisPtr, "HitImpact");
                         return;
                     }
                 }
@@ -261,7 +261,7 @@ namespace AttackSensor {
                         || rs::sendMsgTsukkunThrust(target, source, fireDir, 0, true)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
-                        al::tryStartSe(thisPtr, "BlowHit");
+                        al::tryStartSe(thisPtr, "HitImpact");
                         return;
                     }
                 }
@@ -269,17 +269,17 @@ namespace AttackSensor {
                     && !al::isEqualSubString(typeid(*targetHost).name(), "HipDrop")
                     && !al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
                 ) {
-                    bool isBlowHit = false;
+                    bool isHitImpact = false;
                     if (rs::sendMsgHackAttack(target, source)
                         || al::sendMsgPlayerSpinAttack(target, source, nullptr)
                         || rs::sendMsgCapReflect(target, source)
                         || al::sendMsgPlayerHipDrop(target, source, nullptr)
                         || rs::sendMsgCapAttack(target, source)
                         || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
-                        || (isBlowHit = rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero))
+                        || (isHitImpact = rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero))
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
-                        if (!isBlowHit) al::tryStartSe(thisPtr, "BlowHit");
+                        if (!isHitImpact) al::tryStartSe(thisPtr, "HitImpact");
                         return;
                     }
                 }
