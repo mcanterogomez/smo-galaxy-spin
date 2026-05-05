@@ -78,14 +78,18 @@ namespace PlayerCore {
             if (sensorHipDrop && sensorHipDrop->mIsValid)
                 thisPtr->attackSensor(sensorHipDrop, rs::tryGetCollidedGroundSensor(thisPtr->mCollider));
 
-            if(galaxySensorRemaining > 0) {
-                galaxySensorRemaining--;
-                if(galaxySensorRemaining == 0) {
+            // Handle sensor invalidation after timer expires
+            if (attackSensorRemaining > 0) {
+                attackSensorRemaining--;
+
+                bool animEnded = thisPtr->mAnimator->isAnimEnd();
+                if (attackSensorRemaining == 0 || animEnded
+                ) {
                     al::invalidateHitSensor(thisPtr, "GalaxySpin");
                     al::invalidateHitSensor(thisPtr, "DoubleSpin");
                     al::invalidateHitSensor(thisPtr, "Punch");
                     spin.isGalaxy = false;
-                    galaxySensorRemaining = -1;
+                    attackSensorRemaining = -1;
                 }
             }
 

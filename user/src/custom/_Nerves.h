@@ -44,22 +44,22 @@ public:
                         state->mAnimator->startAnim("SpinAttackRight");
                     }
                     al::validateHitSensor(state->mActor, "DoubleSpin");
-                    galaxySensorRemaining = 41;
+                    attackSensorRemaining = 41;
                 } else if (isRotatingL) {
                     state->mAnimator->startSubAnim("SpinAttackLeft");
                     state->mAnimator->startAnim("SpinAttackLeft");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
-                    galaxySensorRemaining = 41;
+                    attackSensorRemaining = 41;
                 } else if (isRotatingR) {
                     state->mAnimator->startSubAnim("SpinAttackRight");
                     state->mAnimator->startAnim("SpinAttackRight");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
-                    galaxySensorRemaining = 41;
+                    attackSensorRemaining = 41;
                 } else if (isCarrying) {
                     state->mAnimator->startSubAnim("SpinSeparate");
                     state->mAnimator->startAnim("SpinSeparate");
                     al::validateHitSensor(state->mActor, "GalaxySpin");
-                    galaxySensorRemaining = 21;
+                    attackSensorRemaining = 21;
 
                     #ifdef ALLOW_GALAXY_SFX
                         al::tryEmitEffect(player->mModelHolder->findModelActor("Normal"), "SpinAttack", nullptr);
@@ -79,18 +79,18 @@ public:
                         state->mAnimator->startSubAnim("TailAttack");
                         state->mAnimator->startAnim("TailAttack");
                         al::validateHitSensor(state->mActor, "GalaxySpin");
-                        galaxySensorRemaining = 21;
+                        attackSensorRemaining = 21;
                     } else if (isBlasterOn) {
                         state->mAnimator->startSubAnim("BlastAttack");
                         state->mAnimator->startAnim("BlastAttack");
                         al::validateHitSensor(state->mActor, "GalaxySpin");
-                        galaxySensorRemaining = 21;
+                        attackSensorRemaining = 21;
                     } else {
                         #ifdef ALLOW_SPIN_ATTACK // Only spin attack
                             state->mAnimator->startSubAnim("SpinSeparate");
                             state->mAnimator->startAnim("SpinSeparate");
                             al::validateHitSensor(state->mActor, "GalaxySpin");
-                            galaxySensorRemaining = 21;
+                            attackSensorRemaining = 21;
 
                             #ifdef ALLOW_GALAXY_SFX
                                 al::tryEmitEffect(player->mModelHolder->findModelActor("Normal"), "SpinAttack", nullptr);
@@ -157,7 +157,7 @@ public:
             al::setTrans(player, punchPos);
             al::setVelocity(player, al::getGravity(player));
 
-            if (al::isStep(state, 20)) { al::validateHitSensor(state->mActor, "GalaxySpin"); galaxySensorRemaining = 21; }
+            if (al::isStep(state, 20)) { al::validateHitSensor(state->mActor, "GalaxySpin"); attackSensorRemaining = 21; }
             if (state->mAnimator->getAnimFrame() == 60) al::tryEmitEffect(player, "Land", nullptr);
         }
         // Handle Punch logic
@@ -179,7 +179,7 @@ public:
             al::validateHitSensor(state->mActor, "Body");
             al::validateHitSensor(state->mActor, "Head");
             // Validate Punch sensor
-            if (isPunch) { al::validateHitSensor(state->mActor, "Punch"); galaxySensorRemaining = 8; }
+            if (isPunch) { al::validateHitSensor(state->mActor, "Punch"); attackSensorRemaining = 8; }
         }
 
         if (!isJumpPunch) state->updateSpinGroundNerve(); //if (isPunchActive) applyEdgeGuard(player);
@@ -215,19 +215,19 @@ public:
                     if (spinDir > 0) state->mAnimator->startAnim("SpinAttackAirLeft");
                     else state->mAnimator->startAnim("SpinAttackAirRight");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
-                    galaxySensorRemaining = 41;
+                    attackSensorRemaining = 41;
                 } else if (isRotatingAirL) {
                     state->mAnimator->startAnim("SpinAttackAirLeft");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
-                    galaxySensorRemaining = 41;
+                    attackSensorRemaining = 41;
                 } else if (isRotatingAirR) {
                     state->mAnimator->startAnim("SpinAttackAirRight");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
-                    galaxySensorRemaining = 41;
+                    attackSensorRemaining = 41;
                 } else if (isCarrying) {
                     state->mAnimator->startAnim("SpinSeparate");
                     al::validateHitSensor(state->mActor, "GalaxySpin");
-                    galaxySensorRemaining = 21;
+                    attackSensorRemaining = 21;
 
                     #ifdef ALLOW_GALAXY_SFX
                         al::tryEmitEffect(player->mModelHolder->findModelActor("Normal"), "SpinAttack", nullptr);
@@ -236,15 +236,15 @@ public:
                 } else if (isCape) {
                     state->mAnimator->startAnim("CapeAttack");
                     al::validateHitSensor(state->mActor, "GalaxySpin");
-                    galaxySensorRemaining = 21;
+                    attackSensorRemaining = 21;
                 } else if (isTanooki) {
                     state->mAnimator->startAnim("TailAttack");
                     al::validateHitSensor(state->mActor, "GalaxySpin");
-                    galaxySensorRemaining = 21;
+                    attackSensorRemaining = 21;
                 } else {
                     state->mAnimator->startAnim("SpinSeparate");
                     al::validateHitSensor(state->mActor, "GalaxySpin");
-                    galaxySensorRemaining = 21;
+                    attackSensorRemaining = 21;
 
                     #ifdef ALLOW_GALAXY_SFX
                         al::tryEmitEffect(player->mModelHolder->findModelActor("Normal"), "SpinAttack", nullptr);
@@ -256,26 +256,11 @@ public:
         
         state->updateSpinAirNerve();
 
-        if ((isCape || isTanooki)
-            && state->mAnimator->isAnimEnd()
-        ) {
-            al::invalidateHitSensor(state->mActor, "GalaxySpin");
-            al::setNerve(state, getNerveAt(nrvSpinCapFall));
-            isSpinActive = false;
-            return;
-        }
-        if (!isSpinning
-            && al::isGreaterStep(state, 41)
-        ) {
-            al::invalidateHitSensor(state->mActor, "DoubleSpin");
-            al::setNerve(state, getNerveAt(nrvSpinCapFall));
-            isSpinActive = false;
-            return;
-        }
-        if (isSpinning
-            && al::isGreaterStep(state, 21)
-        ) {
-            al::invalidateHitSensor(state->mActor, "GalaxySpin");
+        bool shouldFall = state->mAnimator->isAnimEnd()
+            || (!isSpinning && al::isGreaterStep(state, 41))
+            || (isSpinning && al::isGreaterStep(state, 21));
+
+        if (shouldFall) {
             al::setNerve(state, getNerveAt(nrvSpinCapFall));
             isSpinActive = false;
             return;

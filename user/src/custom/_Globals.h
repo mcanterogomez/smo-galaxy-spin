@@ -140,7 +140,7 @@ const uintptr_t nrvHakoniwaHipDrop = 0x1D78978;
 const uintptr_t nrvHakoniwaJump = 0x1D78948;
 
 // Action Flags
-int galaxySensorRemaining = -1;
+int attackSensorRemaining = -1;
 bool prevIsCarry = false;
 bool isSpinActive = false;
 bool isSpinRethrow = false;

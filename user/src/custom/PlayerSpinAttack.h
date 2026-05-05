@@ -164,18 +164,26 @@ namespace PlayerSpinAttack {
         }
     };
 
+    inline void cleanupSpinAttackState(al::LiveActor* actor) {
+        isPunchActive = false;
+        isSpinActive = false;
+        isNearCollectible = false;
+        isNearTreasure = false;
+        isNearSwoonedEnemy = false;
+
+        spin.fakethrowRemainder = -1;
+        spin.isGalaxy = false;
+        attackSensorRemaining = -1;
+
+        al::invalidateHitSensor(actor, "Punch");
+        al::invalidateHitSensor(actor, "GalaxySpin");
+        al::invalidateHitSensor(actor, "DoubleSpin");
+    }
+
     struct PlayerStateSpinCapKill : public mallow::hook::Trampoline<PlayerStateSpinCapKill> {
         static void Callback(PlayerStateSpinCap* state) {
             Orig(state);
-
-            isPunchActive = false;
-            isSpinActive = false;
-            isNearCollectible = false;
-            isNearTreasure = false;
-            isNearSwoonedEnemy = false;
-
-            spin.fakethrowRemainder = -1; 
-            al::invalidateHitSensor(state->mActor, "Punch");
+            cleanupSpinAttackState(state->mActor); 
         }
     };
 
@@ -199,10 +207,10 @@ namespace PlayerSpinAttack {
                 spin.fakethrowRemainder = 21;
                 al::validateHitSensor(state->mActor, "GalaxySpin");
                 state->mAnimator->startAnim("SpinSeparate");
-                galaxySensorRemaining = 21;
+                attackSensorRemaining = 21;
             }
             else if (spin.fakethrowRemainder > 0) spin.fakethrowRemainder--;
-            else if (spin.fakethrowRemainder == 0) { spin.fakethrowRemainder = -1; al::invalidateHitSensor(state->mActor, "GalaxySpin"); }
+            else if (spin.fakethrowRemainder == 0) spin.fakethrowRemainder = -1;
         }
     };
 
@@ -240,24 +248,16 @@ namespace PlayerSpinAttack {
 
     // Shared swim spin logic
     static void SwimSpinAttackLogic(PlayerStateSwim* thisPtr) {
-        if(spin.trigger && al::isFirstStep(thisPtr)) {
+        if(spin.trigger && al::isFirstStep(thisPtr)
+        ) {
             al::validateHitSensor(thisPtr->mActor, "GalaxySpin");
             hitBufferCount = 0;
             spin.isGalaxy = true;
             spin.trigger = false;
             isSpinActive = true;
 
-            if (isNearCollectible || isNearTreasure || isNearSwoonedEnemy)
-                al::validateHitSensor(thisPtr->mActor, "Punch");
-        }
-
-        if(spin.isGalaxy && (al::isGreaterStep(thisPtr, 15) || al::isStep(thisPtr, -1)))
-            al::invalidateHitSensor(thisPtr->mActor, "Punch");
-
-        if(spin.isGalaxy && (al::isGreaterStep(thisPtr, 32) || al::isStep(thisPtr, -1))) {
-            al::invalidateHitSensor(thisPtr->mActor, "GalaxySpin");
-            spin.isGalaxy = false;
-            isSpinActive = false;
+            if (isNearCollectible || isNearTreasure || isNearSwoonedEnemy) { al::validateHitSensor(thisPtr->mActor, "Punch"); attackSensorRemaining = 15; }
+            else { al::validateHitSensor(thisPtr->mActor, "GalaxySpin"); attackSensorRemaining = 32; }
         }
     }
 
@@ -272,9 +272,7 @@ namespace PlayerSpinAttack {
     struct PlayerStateSwimKill : public mallow::hook::Trampoline<PlayerStateSwimKill> {
         static void Callback(PlayerStateSwim* state) {
             Orig(state);
-            spin.isGalaxy = false;
-            al::invalidateHitSensor(state->mActor, "GalaxySpin");
-            isSpinActive = false;
+            cleanupSpinAttackState(state->mActor);
         }
     };
 
@@ -436,7 +434,7 @@ namespace PlayerSpinAttack {
 
     struct PlayerCarryKeeperStartThrowNoSpin : public mallow::hook::Trampoline<PlayerCarryKeeperStartThrowNoSpin> {
         static bool Callback(PlayerCarryKeeper* state) {
-            if (isSpinActive || galaxySensorRemaining != -1 || spin.fakethrowRemainder != -1) return false;
+            if (isSpinActive || attackSensorRemaining != -1 || spin.fakethrowRemainder != -1) return false;
             return Orig(state); 
         }
     };
