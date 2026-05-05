@@ -16,14 +16,15 @@ public:
         bool isRotatingL = state->mAnimator->isAnim("SpinGroundL");
         bool isRotatingR = state->mAnimator->isAnim("SpinGroundR");
         bool isCarrying = player->mCarryKeeper->isCarry();
-        bool isFinish = state->mAnimator->isAnim("KoopaCapPunchFinishL")
-            || state->mAnimator->isAnim("KoopaCapPunchFinishR");
         bool didSpin = player->mInput->isSpinInput();
         int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
 
         isSpinActive = true;
+        static sead::Vector3f punchDir; // Cache direction
+        static sead::Vector3f punchPos; // Cache position
 
-        if (al::isFirstStep(state)) {
+        if (al::isFirstStep(state)
+        ) {
             #ifdef ALLOW_HOMING
                 isNearTarget = findNearestTarget(player, 250.0f);
             #else
@@ -85,24 +86,29 @@ public:
                         al::validateHitSensor(state->mActor, "GalaxySpin");
                         galaxySensorRemaining = 21;
                     } else {
-                    #ifdef ALLOW_SPIN_ATTACK // Only spin attack
-                        state->mAnimator->startSubAnim("SpinSeparate");
-                        state->mAnimator->startAnim("SpinSeparate");
-                        al::validateHitSensor(state->mActor, "GalaxySpin");
-                        galaxySensorRemaining = 21;
+                        #ifdef ALLOW_SPIN_ATTACK // Only spin attack
+                            state->mAnimator->startSubAnim("SpinSeparate");
+                            state->mAnimator->startAnim("SpinSeparate");
+                            al::validateHitSensor(state->mActor, "GalaxySpin");
+                            galaxySensorRemaining = 21;
 
-                        #ifdef ALLOW_GALAXY_SFX
-                            al::tryEmitEffect(player->mModelHolder->findModelActor("Normal"), "SpinAttack", nullptr);
-                            al::tryStartSe(player->mModelHolder->findModelActor("Normal"), "SpinAttack");
-                        #endif
-                    #else
-                        if (KoopaBattle::isKillReady(isKoopa)) {
+                            #ifdef ALLOW_GALAXY_SFX
+                                al::tryEmitEffect(player->mModelHolder->findModelActor("Normal"), "SpinAttack", nullptr);
+                                al::tryStartSe(player->mModelHolder->findModelActor("Normal"), "SpinAttack");
+                            #endif
+                        #else
+                        al::calcQuatFront(&punchDir, player);
+                        punchDir = -punchDir;
+                        punchPos = al::getTrans(player);
+
+                        if (KoopaBattle::isKillReady(isKoopa)
+                        ) {
                             if (isPunchRight) {
-                                state->mAnimator->startSubAnim("KoopaCapPunchFinishRStart");
-                                state->mAnimator->startAnim("KoopaCapPunchFinishR");
+                                state->mAnimator->startSubAnim("JumpPunchR");
+                                state->mAnimator->startAnim("JumpPunchR");
                             } else {
-                                state->mAnimator->startSubAnim("KoopaCapPunchFinishLStart");
-                                state->mAnimator->startAnim("KoopaCapPunchFinishL");
+                                state->mAnimator->startSubAnim("JumpPunchL");
+                                state->mAnimator->startAnim("JumpPunchL");
                             }
                         } else {
                             if (isPunchRight) {
@@ -141,49 +147,43 @@ public:
             *vel = fwd * hSpeed + grav * gravComp;
         }
 
-        if (isFinish
-            || state->mAnimator->isAnim("KoopaCapPunchR") || state->mAnimator->isAnim("KoopaCapPunchL")
-            || state->mAnimator->isAnim("BlastAttack")
+        bool isPunch = state->mAnimator->isAnim("KoopaCapPunchR") || state->mAnimator->isAnim("KoopaCapPunchL");
+        bool isBlast = state->mAnimator->isAnim("BlastAttack");
+        bool isJumpPunch = state->mAnimator->isAnim("JumpPunchL") || state->mAnimator->isAnim("JumpPunchR");
+
+        // Handle Jump Punch logic
+        if (isJumpPunch) {
+            al::faceToDirection(player, punchDir);
+            al::setTrans(player, punchPos);
+            al::setVelocity(player, al::getGravity(player));
+
+            if (al::isStep(state, 20)) { al::validateHitSensor(state->mActor, "GalaxySpin"); galaxySensorRemaining = 21; }
+            if (state->mAnimator->getAnimFrame() == 60) al::tryEmitEffect(player, "Land", nullptr);
+        }
+        // Handle Punch logic
+        if ((isPunch || isBlast) && al::isStep(state, 3)
         ) {
-            if (al::isStep(state, 3)
-            ) {
-                // Reduce Mario's existing momentum by 50%
-                sead::Vector3 currentVelocity = al::getVelocity(player);
-                currentVelocity *= 0.5f;
-                al::setVelocity(player, currentVelocity);
-    
-                // Apply a small forward movement during the punch
-                sead::Vector3f forward;
-                al::calcQuatFront(&forward, player);
-                forward.normalize();
-                forward *= 5.0f;
-                al::addVelocity(player, forward);
-            }
-            if (!state->mAnimator->isAnim("BlastAttack")
-                && al::isStep(state, 7)
-            ) {
-                al::validateHitSensor(state->mActor, "Punch");
-                // Make Mario vulnerable again
-                al::validateHitSensor(state->mActor, "Foot");
-                al::validateHitSensor(state->mActor, "Body");
-                al::validateHitSensor(state->mActor, "Head");
-            }
+            sead::Vector3f vel = al::getVelocity(player);
+            vel *= 0.5f;
+            al::setVelocity(player, vel);
+
+            sead::Vector3f fwd;
+            al::calcQuatFront(&fwd, player);
+            fwd.normalize();
+            al::addVelocity(player, fwd * 5.0f);
+        }
+        // Re-validate sensors disabled during wind-up
+        if ((isPunch || isJumpPunch) && al::isStep(state, 7)
+        ) {
+            al::validateHitSensor(state->mActor, "Foot");
+            al::validateHitSensor(state->mActor, "Body");
+            al::validateHitSensor(state->mActor, "Head");
+            // Validate Punch sensor
+            if (isPunch) { al::validateHitSensor(state->mActor, "Punch"); galaxySensorRemaining = 8; }
         }
 
-        if (isFinish) al::setVelocity(player, sead::Vector3f::zero);
-        else {
-            state->updateSpinGroundNerve();
-            //if (isPunchActive) applyEdgeGuard(player);
-        }
-
-        if (al::isGreaterStep(state, 41)) al::invalidateHitSensor(state->mActor, "DoubleSpin");
-        if (al::isGreaterStep(state, 21)) al::invalidateHitSensor(state->mActor, "GalaxySpin");
-        if (al::isGreaterStep(state, 15)) al::invalidateHitSensor(state->mActor, "Punch");
-
-        if (state->mAnimator->isAnimEnd()) {
-            state->kill();
-            isSpinActive = false;
-        }
+        if (!isJumpPunch) state->updateSpinGroundNerve(); //if (isPunchActive) applyEdgeGuard(player);
+        if (state->mAnimator->isAnimEnd()) { state->kill(); isSpinActive = false; }
     }
 };
 

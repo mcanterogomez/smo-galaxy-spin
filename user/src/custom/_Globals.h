@@ -314,8 +314,8 @@ inline bool isPunchAnim(PlayerAnimator* anim) {
     if (!anim) return false;
     return al::isEqualString(anim->mCurAnim, "KoopaCapPunchL")
         || al::isEqualString(anim->mCurAnim, "KoopaCapPunchR")
-        || al::isEqualString(anim->mCurAnim, "KoopaCapPunchFinishL")
-        || al::isEqualString(anim->mCurAnim, "KoopaCapPunchFinishR")
+        || al::isEqualString(anim->mCurAnim, "JumpPunchL")
+        || al::isEqualString(anim->mCurAnim, "JumpPunchR")
         || al::isEqualString(anim->mCurAnim, "RabbitGet")
         || al::isEqualString(anim->mCurAnim, "Kick");
 }

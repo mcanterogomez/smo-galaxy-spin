@@ -83,6 +83,7 @@ namespace PlayerCore {
                 if(galaxySensorRemaining == 0) {
                     al::invalidateHitSensor(thisPtr, "GalaxySpin");
                     al::invalidateHitSensor(thisPtr, "DoubleSpin");
+                    al::invalidateHitSensor(thisPtr, "Punch");
                     spin.isGalaxy = false;
                     galaxySensorRemaining = -1;
                 }
@@ -160,10 +161,11 @@ namespace PlayerCore {
             updateAttackSensor(thisPtr, "HipDropKnockDown", isHipDropAnim(thisPtr->mAnimator), wasAttackMove);
 
             // Change face animations
-            if (isMetal && face && !al::isActionPlayingSubActor(model, "顔", "AreaWaitFight")) al::startActionSubActor(model, "顔", "AreaWaitFight");
-
-            if ((isBrawl || isSuper)
+            if ((thisPtr->mAnimator->isAnim("BattleWait") || isBrawl || isSuper)
                 && face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry")) al::startActionSubActor(model, "顔", "WaitAngry");
+
+            if (isMetal && face
+                && !al::isActionPlayingSubActor(model, "顔", "AreaWaitFight")) al::startActionSubActor(model, "顔", "AreaWaitFight");
 
             #ifdef ALLOW_TAUNT // Handle Taunt actions
                 if (!thisPtr->mInput->isMove()
