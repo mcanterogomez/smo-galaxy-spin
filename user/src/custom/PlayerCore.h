@@ -61,22 +61,22 @@ namespace PlayerCore {
 
             PowerUps::executeMovement(thisPtr);
 
-            al::HitSensor* sensorSpin = al::getHitSensor(thisPtr, "GalaxySpin");
-            al::HitSensor* sensorDoubleSpin = al::getHitSensor(thisPtr, "DoubleSpin");
-            al::HitSensor* sensorPunch = al::getHitSensor(thisPtr, "Punch");
+            // Spin-type sensors all attack wall and ceiling contacts
+            const char* attackSensorNames[] = {"GalaxySpin", "DoubleSpin", "Punch"};
+            al::HitSensor* attackSensors[3] = {
+                al::getHitSensor(thisPtr, attackSensorNames[0]),
+                al::getHitSensor(thisPtr, attackSensorNames[1]),
+                al::getHitSensor(thisPtr, attackSensorNames[2]),
+            };
+            for (auto* sensor : attackSensors) {
+                if (sensor && sensor->mIsValid) {
+                    thisPtr->attackSensor(sensor, rs::tryGetCollidedCeilingSensor(thisPtr->mCollider));
+                    thisPtr->attackSensor(sensor, rs::tryGetCollidedWallSensor(thisPtr->mCollider));
+                }
+            }
+
             al::HitSensor* sensorHipDrop = al::getHitSensor(thisPtr, "HipDropKnockDown");
-
-            if (sensorSpin && sensorSpin->mIsValid)
-                thisPtr->attackSensor(sensorSpin, rs::tryGetCollidedWallSensor(thisPtr->mCollider));
-
-            if (sensorDoubleSpin && sensorDoubleSpin->mIsValid)
-                thisPtr->attackSensor(sensorDoubleSpin, rs::tryGetCollidedWallSensor(thisPtr->mCollider));
-
-            if (sensorPunch && sensorPunch->mIsValid)
-                thisPtr->attackSensor(sensorPunch, rs::tryGetCollidedWallSensor(thisPtr->mCollider));
-
-            if (sensorHipDrop && sensorHipDrop->mIsValid)
-                thisPtr->attackSensor(sensorHipDrop, rs::tryGetCollidedGroundSensor(thisPtr->mCollider));
+            if (sensorHipDrop && sensorHipDrop->mIsValid) thisPtr->attackSensor(sensorHipDrop, rs::tryGetCollidedGroundSensor(thisPtr->mCollider));
 
             // Handle sensor invalidation after timer expires
             if (attackSensorRemaining > 0) {
@@ -85,9 +85,7 @@ namespace PlayerCore {
                 bool animEnded = thisPtr->mAnimator->isAnimEnd();
                 if (attackSensorRemaining == 0 || animEnded
                 ) {
-                    al::invalidateHitSensor(thisPtr, "GalaxySpin");
-                    al::invalidateHitSensor(thisPtr, "DoubleSpin");
-                    al::invalidateHitSensor(thisPtr, "Punch");
+                    for (const char* name : attackSensorNames) al::invalidateHitSensor(thisPtr, name);
                     spin.isGalaxy = false;
                     attackSensorRemaining = -1;
                 }
@@ -95,9 +93,9 @@ namespace PlayerCore {
 
             // Handle wall bounce for attacks
             al::HitSensor* activeSensor = nullptr;
-            if (sensorPunch && sensorPunch->mIsValid) activeSensor = sensorPunch;
-            else if (sensorSpin && sensorSpin->mIsValid) activeSensor = sensorSpin;
-            else if (sensorDoubleSpin && sensorDoubleSpin->mIsValid) activeSensor = sensorDoubleSpin;
+            for (auto* sensor : attackSensors) {
+                if (sensor && sensor->mIsValid) { activeSensor = sensor; break; }
+            }
 
             static int attackFrames = 0;
             if (activeSensor) attackFrames++;

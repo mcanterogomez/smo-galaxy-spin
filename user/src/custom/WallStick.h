@@ -77,8 +77,13 @@ namespace WallStick {
             case Idle: {
                 if (!onGround && !onWall) { resetGravity(thisPtr); return; }
                 if (!isHoldZR || !canAction || isActionBusy()
-                    || input->isTriggerJump() || al::isInWater(thisPtr)) return;
+                    || input->isTriggerJump() || al::isInWater(thisPtr)
+                    || PlayerEquipmentFunction::isEquipmentForceDash(thisPtr->mEquipmentUser)) return;
+
                 canAction = false;
+                // Force-cancel any active player state (spin cap, taunt, etc).
+                al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
+                anim->endSubAnim();
 
                 if (onWall) {
                     // Wall: snap gravity, no animation

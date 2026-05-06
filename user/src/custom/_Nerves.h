@@ -103,13 +103,8 @@ public:
 
                         if (KoopaBattle::isKillReady(isKoopa)
                         ) {
-                            if (isPunchRight) {
-                                state->mAnimator->startSubAnim("JumpPunchR");
-                                state->mAnimator->startAnim("JumpPunchR");
-                            } else {
-                                state->mAnimator->startSubAnim("JumpPunchL");
-                                state->mAnimator->startAnim("JumpPunchL");
-                            }
+                            if (isPunchRight) state->mAnimator->startAnim("JumpPunchEndR");
+                            else state->mAnimator->startAnim("JumpPunchEndL");
                         } else {
                             if (isPunchRight) {
                                 state->mAnimator->startSubAnim("KoopaCapPunchRStart");
@@ -120,10 +115,7 @@ public:
                             }
                         }
                         // Make winding up invincible
-                        al::invalidateHitSensor(state->mActor, "Foot");
-                        al::invalidateHitSensor(state->mActor, "Body");
-                        al::invalidateHitSensor(state->mActor, "Head");
-
+                        for (const char* name : {"Foot", "Body", "Head"}) al::invalidateHitSensor(state->mActor, name);
                         isPunchActive = true;
                     #endif
                     }
@@ -150,15 +142,49 @@ public:
         bool isPunch = state->mAnimator->isAnim("KoopaCapPunchR") || state->mAnimator->isAnim("KoopaCapPunchL");
         bool isBlast = state->mAnimator->isAnim("BlastAttack");
         bool isJumpPunch = state->mAnimator->isAnim("JumpPunchL") || state->mAnimator->isAnim("JumpPunchR");
+        bool isBowserPunch = state->mAnimator->isAnim("JumpPunchEndL") || state->mAnimator->isAnim("JumpPunchEndR");
+        float isFrame = state->mAnimator->getAnimFrame();
 
-        // Handle Jump Punch logic
+        // Cancel punch into jump punch
+        if (isPunch && !al::isFirstStep(state) && player->mInput->isTriggerJump()
+        ) {
+            hitBufferCount = 0; // reset buffer
+            if (isPunchRight) state->mAnimator->startAnim("JumpPunchL");
+            else state->mAnimator->startAnim("JumpPunchR");
+
+            for (const char* name : {"Foot", "Body", "Head"}) al::validateHitSensor(state->mActor, name);
+        }
         if (isJumpPunch) {
+            // Slow down during wind-up
+            if (isFrame < 17.0f) {
+                sead::Vector3f vel = al::getVelocity(player);
+                vel *= 0.8f;
+                al::setVelocity(player, vel);
+            }
+            // Launch on frame 17
+            if (isFrame >= 17.0f) {
+                sead::Vector3f up = -al::getGravity(player);
+                up.normalize();
+                sead::Vector3f fwd;
+                al::calcQuatFront(&fwd, player);
+                fwd.normalize();
+                al::setVelocity(player, up * 30.0f + fwd * 5.0f);
+
+                al::validateHitSensor(state->mActor, "GalaxySpin");
+                attackSensorRemaining = 21;
+
+                al::setNerve(state, getNerveAt(nrvSpinCapFall));
+                return;
+            }
+        }
+        // Bowser finisher locked in place
+        if (isBowserPunch) {
             al::faceToDirection(player, punchDir);
             al::setTrans(player, punchPos);
             al::setVelocity(player, al::getGravity(player));
 
-            if (al::isStep(state, 20)) { al::validateHitSensor(state->mActor, "GalaxySpin"); attackSensorRemaining = 21; }
-            if (state->mAnimator->getAnimFrame() == 60) al::tryEmitEffect(player, "Land", nullptr);
+            if (isFrame == 20.0f) { al::validateHitSensor(state->mActor, "GalaxySpin"); attackSensorRemaining = 21; }
+            if (isFrame == 60.0f) al::tryEmitEffect(player, "Land", nullptr);
         }
         // Handle Punch logic
         if ((isPunch || isBlast) && al::isStep(state, 3)
@@ -173,16 +199,14 @@ public:
             al::addVelocity(player, fwd * 5.0f);
         }
         // Re-validate sensors disabled during wind-up
-        if ((isPunch || isJumpPunch) && al::isStep(state, 7)
+        if ((isPunch || isBowserPunch) && al::isStep(state, 7)
         ) {
-            al::validateHitSensor(state->mActor, "Foot");
-            al::validateHitSensor(state->mActor, "Body");
-            al::validateHitSensor(state->mActor, "Head");
+            for (const char* name : {"Foot", "Body", "Head"}) al::validateHitSensor(state->mActor, name);
             // Validate Punch sensor
             if (isPunch) { al::validateHitSensor(state->mActor, "Punch"); attackSensorRemaining = 8; }
         }
 
-        if (!isJumpPunch) state->updateSpinGroundNerve(); //if (isPunchActive) applyEdgeGuard(player);
+        if (!isBowserPunch) state->updateSpinGroundNerve(); //if (isPunchActive) applyEdgeGuard(player);
         if (state->mAnimator->isAnimEnd()) { state->kill(); isSpinActive = false; }
     }
 };

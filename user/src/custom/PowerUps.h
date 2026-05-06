@@ -168,10 +168,10 @@ namespace PowerUps {
 
             // Handle logic for Drill Suit
             if (isDrill) {
+                bool capOn = thisPtr->mHackCap->isPutOn();
                 bool inHipDrop = al::isNerve(thisPtr, getNerveAt(nrvHakoniwaHipDrop));
                 bool inLand = anim->isAnim("HipDropLand");
-                bool drillDrop = isActive && thisPtr->mHackCap->isPutOn()
-                                && inHipDrop && (!inLand || anim->getAnimFrame() < 8.0f);
+                bool drillDrop = isActive && capOn && inHipDrop && (!inLand || anim->getAnimFrame() < 8.0f);
 
                 // Drill subactor and effects: always run so warps and demos clean up
                 if (drill && drillDrop && al::isDead(drill)
@@ -187,19 +187,23 @@ namespace PowerUps {
                 float legTarget = drillDrop ? 0.0f : 1.0f;
                 legScale.set(legTarget, legTarget, legTarget);
 
-                // Cap visibility and active-only mechanics
-                if (isActive && thisPtr->mHackCap->isPutOn()
+                // Visuals: allow flicker so cap and head action recover after a hit, skip demos and captures
+                if (capOn && !isHack && !rs::isActiveDemo(thisPtr)
                 ) {
                     if (drillDrop) thisPtr->mAnimator->forceCapOff();
                     else thisPtr->mAnimator->forceCapOn();
 
-                    if (!(inHipDrop && rs::isCollidedWall(thisPtr->mCollider))) WallStick::update(thisPtr);
-
-                    static bool wasDrillAttack = false;
-                    bool isDrillAttack = isDrillAnim(anim);
-                    const char* headAction = isDrillAttack ? "DrillSpin" : "DrillWait";
+                    const char* headAction = isDrillAnim(anim) ? "DrillSpin" : "DrillWait";
                     if (head && !al::isActionPlaying(head, headAction)) al::tryStartAction(head, headAction);
+                }
 
+                // Active-only mechanics
+                if (isActive && capOn
+                ) {
+                    if (!inHipDrop || !rs::isCollidedWall(thisPtr->mCollider)) WallStick::update(thisPtr);
+
+                    bool isDrillAttack = isDrillAnim(anim);
+                    static bool wasDrillAttack = false;
                     updateAttackSensor(thisPtr, "GalaxySpin", isDrillAttack, wasDrillAttack);
 
                     if (drillSensorRemaining > 0) {

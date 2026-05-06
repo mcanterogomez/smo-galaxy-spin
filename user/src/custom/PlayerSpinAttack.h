@@ -98,7 +98,7 @@ namespace PlayerSpinAttack {
                 && !state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val2);
             const bool forcedGroundSpin = state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val33);
 
-            // Safety fix: clear leftover spin state from area load mid-spin
+            // Safety fix: clear leftover fakethrow state from area load mid-spin
             if (spin.fakethrowRemainder != -1
                 && !al::isNerve(state, &GalaxySpinGround)
                 && !al::isNerve(state, &GalaxySpinAir)
@@ -108,57 +108,43 @@ namespace PlayerSpinAttack {
                 // DO NOT reset spin.trigger here!
             }
 
-            // Handle cross-spin transition flags
-            if (spin.galaxyAfterStandard
-            ) {
-                spin.galaxyAfterStandard = false;
-                spin.canStandard = false;
-                spin.trigger = true;
-            }
+            // Apply cross-spin transition flags set by tryCapSpinAndRethrow
+            if (spin.galaxyAfterStandard) { spin.galaxyAfterStandard = false; spin.canStandard = false; spin.trigger = true; }
+            if (spin.standardAfterGalaxy) { spin.standardAfterGalaxy = false; spin.canGalaxy = false; spin.trigger = false; }
 
-            if (spin.standardAfterGalaxy
-            ) {
-                spin.standardAfterGalaxy = false;
-                spin.canGalaxy = false;
-                spin.trigger = false;
-            }
-
-            // If not a GalaxySpin, run original cap throw logic
-            if (!spin.trigger
-            ) {
+            // Standard cap throw — trigger not set, run vanilla logic
+            if (!spin.trigger) {
                 spin.canStandard = false;
                 spin.isGalaxy = false;
-                Orig(state); // Mario goes full 2017
+                Orig(state);
                 return;
             }
 
-            // Now we’re in GalaxySpin mode
+            // Galaxy spin mode — consume trigger and set state
             hitBufferCount = 0;
             spin.isGalaxy = true;
             spin.canGalaxy = false;
             spin.trigger = false;
 
-            // Reset internal flags
+            // Reset internal spin cap state fields
             state->mIsDead = false;
             state->mIsInWater = false;
             state->_99 = 0;
             state->_80 = 0;
-            state->_9C = {0.0f, 0.0f, 0.0f};
+            state->_9C = sead::Vector3f::zero;
             state->_A8 = 0;
             state->_A9 = state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val0);
 
-            if (forcedGroundSpin || isGrounded
-            ) {
-                if (state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val1)
-                ) {
+            if (forcedGroundSpin || isGrounded) {
+                if (state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val1))
                     al::alongVectorNormalH(al::getVelocityPtr(state->mActor), al::getVelocity(state->mActor),
                         al::getGravity(state->mActor), rs::getCollidedGroundNormal(state->mCollider));
-                }
                 state->mActionGroundMoveControl->appear();
                 al::setNerve(state, &GalaxySpinGround);
             } else {
                 state->_78 = 1;
-                if (spin.isGalaxy && spin.fakethrowRemainder == -2) al::setNerve(state, getNerveAt(nrvSpinCapFall));
+                // fakethrowRemainder == -2 means a fakespin was queued, route directly to fall
+                if (spin.fakethrowRemainder == -2) al::setNerve(state, getNerveAt(nrvSpinCapFall));
                 else al::setNerve(state, &GalaxySpinAir);
             }
         }
@@ -319,83 +305,27 @@ namespace PlayerSpinAttack {
     };
 
     void tryCapSpinAndRethrow(PlayerActorHakoniwa* player, bool a2) {
-        if(spin.isGalaxy
-        ) { // currently in GalaxySpin
-            isSpinRethrow = true;
-            bool trySpin = player->tryActionCapSpinAttackImpl(a2);  // try to start another spin, can only succeed for standard throw
-            isSpinRethrow = false;
+        if (isJumpPunchAnim(player->mAnimator)) spin.canGalaxy = true;
 
-            if(!trySpin) return;
+        isSpinRethrow = true;
+        bool trySpin = player->tryActionCapSpinAttackImpl(a2);
+        isSpinRethrow = false;
+        if (!trySpin) return;
 
-            if(!isPadTriggerGalaxySpin(-1)
-            ) {  // standard throw or fakethrow
-                if(spin.canStandard) {
-                    // tries a standard spin, is allowed to do so
-                    al::setNerve(player, getNerveAt(spinCapNrvOffset));
-                    spin.standardAfterGalaxy = true;
-                    return;
-                } else {
-                    // tries a standard spin, not allowed to do so
-                    //player->mPlayerSpinCapAttack->tryStartCapSpinAirMiss(player->mPlayerAnimator);
-                    // fakespins on standard spins should not happen in this mod
-                    return;
-                }
-            } else {  // Y pressed => GalaxySpin or fake-GalaxySpin
-                if(spin.fakethrowRemainder != -1 || player->mAnimator->isAnim("SpinSeparate"))
-                    return;  // already in fakethrow or GalaxySpin
+        bool spinPressed = isPadTriggerGalaxySpin(-1);
 
-                if(spin.canGalaxy) {
-                    // tries a GalaxySpin, is allowed to do so => should never happen, but better safe than sorry
-                    al::setNerve(player, getNerveAt(spinCapNrvOffset));
-                    return;
-                } else {
-                    // tries a GalaxySpin, not allowed to do so
-                    spin.fakethrowRemainder = -2;
-                    return;
-                }
-            }
-
-            // not attempting or allowed to initiate a spin, so check if should be fakethrow
-            if(isPadTriggerGalaxySpin(-1) && spin.fakethrowRemainder == -1 && !player->mAnimator->isAnim("SpinSeparate")
-            ) {
-                // Y button pressed, start a galaxy fakethrow
+        if (spinPressed) {
+            if (spin.isGalaxy && (spin.fakethrowRemainder != -1 || player->mAnimator->isAnim("SpinSeparate"))) return;
+            if (spin.canGalaxy) {
+                al::setNerve(player, getNerveAt(spinCapNrvOffset));
+                if (!spin.isGalaxy && !isJumpPunchAnim(player->mAnimator)) spin.galaxyAfterStandard = true;
+            } else {
                 spin.fakethrowRemainder = -2;
-                return;
             }
-        } else { // currently in standard spin
-            isSpinRethrow = true;
-            bool trySpin = player->tryActionCapSpinAttackImpl(a2);  // try to start another spin, can succeed for GalaxySpin and fakethrow
-            isSpinRethrow = false;
-
-            if(!trySpin) return;
-
-            if(!isPadTriggerGalaxySpin(-1)
-            ) {  // standard throw or fakethrow
-                if(spin.canStandard) {
-                    // tries a standard spin, is allowed to do so => should never happen, but better safe than sorry
-                    al::setNerve(player, getNerveAt(spinCapNrvOffset));
-                    return;
-                } else {
-                    // tries a standard spin, not allowed to do so
-                    //player->mPlayerSpinCapAttack->tryStartCapSpinAirMiss(player->mPlayerAnimator);
-                    // fakespins on standard spins should not happen in this mod
-                    return;
-                }
-            } else {  // Y pressed => GalaxySpin or fake-GalaxySpin
-                if(spin.fakethrowRemainder != -1 || player->mAnimator->isAnim("SpinSeparate"))
-                    return;  // already in fakethrow or GalaxySpin
-
-                if(spin.canGalaxy) {
-                    // tries a GalaxySpin, is allowed to do so
-                    al::setNerve(player, getNerveAt(spinCapNrvOffset));
-                    spin.galaxyAfterStandard = true;
-                    return;
-                } else {
-                    // tries a GalaxySpin, not allowed to do so
-                    spin.fakethrowRemainder = -2;
-                    return;
-                }
-            }
+        } else {
+            if (!spin.canStandard) return;
+            al::setNerve(player, getNerveAt(spinCapNrvOffset));
+            if (spin.isGalaxy) spin.standardAfterGalaxy = true;
         }
     }
 
