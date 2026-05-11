@@ -10,6 +10,8 @@ namespace PlayerCore {
     struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerActorHakoniwaInitPlayer> {
         static void Callback(PlayerActorHakoniwa* thisPtr, const al::ActorInitInfo* actorInfo, const PlayerInitInfo* playerInfo) {
             isHakoniwa = nullptr;
+            isKoopa = nullptr;
+            isNearTarget = nullptr;
 
             Orig(thisPtr, actorInfo, playerInfo);
 
@@ -209,15 +211,22 @@ namespace PlayerCore {
 
             if (PlayerFreeze::handleReceiveMsg(msg, source)) return false;
 
-            if (thisPtr && rs::isMsgPlayerDamage(msg)
-            ) {
-                if (source && al::isEqualString(al::getSensorHost(source)->getName(), "MarioTankBullet")) return false;
+            bool isDamage = rs::isMsgPlayerDamage(msg)
+                || al::isMsgHit(msg)
+                || al::isMsgHitStrong(msg)
+                || al::isMsgHitVeryStrong(msg)
+                || rs::isMsgPlayerDamageBlowDown(msg)
+                || al::isMsgExplosion(msg);
 
-                if (isMetal || isSuper) {
-                    if (source && target) rs::sendMsgPushToPlayer(target, source);
-                    return true;
-                }
-                if (isHipDropAnim(thisPtr->mAnimator)) return true;
+            if (thisPtr && isDamage
+            ) {
+                auto* anim = thisPtr->mAnimator;
+                const float frame = anim->getAnimFrame();
+
+                if ((al::isEqualSubString(anim->mCurAnim, "CapPunch")  && frame <= 7.0f)
+                    || (al::isEqualSubString(anim->mCurAnim, "JumpPunch") && frame <= 17.0f)) return false;
+                if (source && al::isEqualString(al::getSensorHost(source)->getName(), "MarioTankBullet")) return false;
+                if (isHipDropAnim(anim) || isMetal || isSuper) return false;
             }
             return Orig(thisPtr, msg, source, target);
         }
@@ -232,7 +241,7 @@ namespace PlayerCore {
         }
     };
 
-    struct TryEmitEffectHook : public mallow::hook::Trampoline<TryEmitEffectHook> {
+    struct EmitEffectHook : public mallow::hook::Trampoline<EmitEffectHook> {
         static bool Callback(al::EffectKeeper* keeper, const char* name, const sead::Vector3f* pos) {
             if (al::isEqualString(name, "SpinCapStart2Right")
                 && isHakoniwa && al::isEqualSubString(isHakoniwa->mAnimator->mCurAnim, "SpinSeparate")) return false;
@@ -252,7 +261,7 @@ namespace PlayerCore {
         EndSubAnimGuard::InstallAtSymbol("_ZN14PlayerAnimator10endSubAnimEv");
         
         #ifdef ALLOW_GALAXY_SFX
-            TryEmitEffectHook::InstallAtSymbol("_ZN2al12EffectKeeper10emitEffectEPKcPKN4sead7Vector3IfEE");
+            EmitEffectHook::InstallAtSymbol("_ZN2al12EffectKeeper10emitEffectEPKcPKN4sead7Vector3IfEE");
         #endif
     }
 }

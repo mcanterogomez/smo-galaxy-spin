@@ -101,7 +101,7 @@ public:
                         punchDir = -punchDir;
                         punchPos = al::getTrans(player);
 
-                        if (KoopaBattle::isKillReady(isKoopa)
+                        if (isKoopa && KoopaBattle::isKillReady(isKoopa)
                         ) {
                             if (isPunchRight) state->mAnimator->startAnim("JumpPunchEndR");
                             else state->mAnimator->startAnim("JumpPunchEndL");
@@ -114,8 +114,6 @@ public:
                                 state->mAnimator->startAnim("KoopaCapPunchL");
                             }
                         }
-                        // Make winding up invincible
-                        for (const char* name : {"Foot", "Body", "Head"}) al::invalidateHitSensor(state->mActor, name);
                         isPunchActive = true;
                     #endif
                     }
@@ -149,10 +147,9 @@ public:
         if (isPunch && !al::isFirstStep(state) && player->mInput->isTriggerJump()
         ) {
             hitBufferCount = 0; // reset buffer
+
             if (isPunchRight) state->mAnimator->startAnim("JumpPunchL");
             else state->mAnimator->startAnim("JumpPunchR");
-
-            for (const char* name : {"Foot", "Body", "Head"}) al::validateHitSensor(state->mActor, name);
         }
         if (isJumpPunch) {
             // Slow down during wind-up
@@ -199,12 +196,7 @@ public:
             al::addVelocity(player, fwd * 5.0f);
         }
         // Re-validate sensors disabled during wind-up
-        if ((isPunch || isBowserPunch) && al::isStep(state, 7)
-        ) {
-            for (const char* name : {"Foot", "Body", "Head"}) al::validateHitSensor(state->mActor, name);
-            // Validate Punch sensor
-            if (isPunch) { al::validateHitSensor(state->mActor, "Punch"); attackSensorRemaining = 8; }
-        }
+        if (isPunch && al::isStep(state, 7)) { al::validateHitSensor(state->mActor, "Punch"); attackSensorRemaining = 8; }
 
         if (!isBowserPunch) state->updateSpinGroundNerve(); //if (isPunchActive) applyEdgeGuard(player);
         if (state->mAnimator->isAnimEnd()) { state->kill(); isSpinActive = false; }

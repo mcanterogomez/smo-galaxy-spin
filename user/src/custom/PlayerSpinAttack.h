@@ -191,6 +191,7 @@ namespace PlayerSpinAttack {
             if (spin.fakethrowRemainder == -2
             ) {
                 spin.fakethrowRemainder = 21;
+                hitBufferCount = 0;
                 al::validateHitSensor(state->mActor, "GalaxySpin");
                 state->mAnimator->startAnim("SpinSeparate");
                 attackSensorRemaining = 21;
@@ -312,13 +313,12 @@ namespace PlayerSpinAttack {
         isSpinRethrow = false;
         if (!trySpin) return;
 
-        bool spinPressed = isPadTriggerGalaxySpin(-1);
-
-        if (spinPressed) {
+        if (isPadTriggerGalaxySpin(-1)
+        ) {
             if (spin.isGalaxy && (spin.fakethrowRemainder != -1 || player->mAnimator->isAnim("SpinSeparate"))) return;
             if (spin.canGalaxy) {
                 al::setNerve(player, getNerveAt(spinCapNrvOffset));
-                if (!spin.isGalaxy && !isJumpPunchAnim(player->mAnimator)) spin.galaxyAfterStandard = true;
+                if (!spin.isGalaxy && !spin.canStandard) spin.galaxyAfterStandard = true;
             } else {
                 spin.fakethrowRemainder = -2;
             }

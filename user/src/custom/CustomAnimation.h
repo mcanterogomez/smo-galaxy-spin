@@ -8,16 +8,22 @@ namespace CustomAnimation {
         if (!isHakoniwa || (anim && anim != isHakoniwa->mAnimator)
             || rs::isPlayer2D(isHakoniwa)) return nullptr;
 
+        if (isBlasterOn) {
+            if (al::isEqualString(name, "Wait")) return "BattleWait";
+        }
         if (isTanooki) {
             if (al::isEqualString(name, "Glide")) return "GlideAlt";
             if (al::isEqualString(name, "JumpBroad8")) return "JumpBroad8Alt";
         }
-        if (isMetal || isBlasterOn) {
-            if (al::isEqualString(name, "Wait")) return "BattleWait";
-        }
         if (isFly) {
             if (al::isEqualString(name, "GlideFloat")) return "GlideFloatSuper";
             if (al::isEqualString(name, "Wait")) return "WaitSuper";
+        }
+        if (isMetal) {
+            if (al::isEqualString(name, "Wait")) return "BattleWait";
+            if (al::isEqualSubString(name, "Move")) return "MoveBrawl";
+            if (al::isEqualString(name, "JumpDashFast")) return "Jump";
+            if (al::isEqualString(name, "WearEnd")) return "WearEndSuper";
         }
         if (isBrawl) {
             if (al::isEqualString(name, "BattleWait")) return "WaitBrawlFight";
@@ -29,7 +35,6 @@ namespace CustomAnimation {
         if (isSuper) {
             if (al::isEqualString(name, "BattleWait")) return "WaitSuperFight";
             if (al::isEqualString(name, "GlideFloat")) return "GlideFloatSuper";
-            //if (al::isEqualString(name, "JumpDashFast")) return "JumpDashFastSuper";
             if (al::isEqualSubString(name, "Move")) return "MoveSuper";
             if (al::isEqualString(name, "Wait")) return "WaitSuper";
             if (al::isEqualString(name, "WearEnd")) return "WearEndSuper";
