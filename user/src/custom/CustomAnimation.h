@@ -21,27 +21,31 @@ namespace CustomAnimation {
         }
         if (isMetal) {
             if (al::isEqualString(name, "Wait")) return "BattleWait";
-            if (al::isEqualSubString(name, "Move")) return "MoveBrawl";
             if (al::isEqualString(name, "JumpDashFast")) return "Jump";
             if (al::isEqualString(name, "WearEnd")) return "WearEndSuper";
+            for (const char* move : {"Move", "MoveMoon"})
+                if (al::isEqualString(name, move)) return "MoveBrawl";
         }
         if (isBrawl) {
             if (al::isEqualString(name, "BattleWait")) return "WaitBrawlFight";
             if (al::isEqualString(name, "JumpDashFast")) return "Jump";
-            if (al::isEqualSubString(name, "Move")) return "MoveBrawl";
             if (al::isEqualString(name, "Wait")) return "WaitBrawl";
             if (al::isEqualString(name, "WearEnd")) return "WearEndBrawl";
+            for (const char* move : {"Move", "MoveMoon"})
+                if (al::isEqualString(name, move)) return "MoveBrawl";
         }
         if (isSuper) {
             if (al::isEqualString(name, "BattleWait")) return "WaitSuperFight";
             if (al::isEqualString(name, "GlideFloat")) return "GlideFloatSuper";
-            if (al::isEqualSubString(name, "Move")) return "MoveSuper";
             if (al::isEqualString(name, "Wait")) return "WaitSuper";
             if (al::isEqualString(name, "WearEnd")) return "WearEndSuper";
+            for (const char* move : {"Move", "MoveMoon"})
+                if (al::isEqualString(name, move)) return "MoveSuper";
         }
         if (!isFeather && !isTanooki && !isFly && !isBrawl && !isSuper) {
             if (al::isEqualString(name, "JumpDashFast")) return "JumpDashFastClassic";
-            if (al::isEqualSubString(name, "Move")) return "MoveClassic";
+            for (const char* move : {"Move", "MoveMoon"})
+                if (al::isEqualString(name, move)) return "MoveClassic";
         }
 
         bool isSuit = (isMario && isCapeOn) || isFeather || isFly || isBrawl || isSuper;

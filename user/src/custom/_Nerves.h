@@ -470,7 +470,7 @@ public:
             al::tryStartAction(isHammer, "Wait");
         }
 
-        if (al::isStep(player, 3)
+        if (al::isStep(player, 6)
         ) {
             sead::Vector3f currentVelocity = al::getVelocity(player);
             if (isGround) currentVelocity *= 0.5f;
@@ -481,7 +481,7 @@ public:
 
         if (!isGround) al::addVelocity(player, (al::getGravity(player) * 0.5f));
 
-        if (al::isStep(player, 6)) al::validateHitSensor(isHammer, "AttackHack");
+        if (al::isStep(player, 11)) al::validateHitSensor(isHammer, "AttackHack");
 
         // Handle hammer scaling end
         if (isHammer && al::isAlive(isHammer)

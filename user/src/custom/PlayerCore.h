@@ -98,6 +98,11 @@ namespace PlayerCore {
             for (auto* sensor : attackSensors) {
                 if (sensor && sensor->mIsValid) { activeSensor = sensor; break; }
             }
+            // Handle wall bounce for hammer
+            if (!activeSensor && isHammer && al::isAlive(isHammer)) {
+                al::HitSensor* sensorHack = al::getHitSensor(isHammer, "AttackHack");
+                if (sensorHack && sensorHack->mIsValid) activeSensor = sensorHack;
+            }
 
             static int attackFrames = 0;
             if (activeSensor) attackFrames++;
@@ -111,6 +116,7 @@ namespace PlayerCore {
                 sead::Vector3f wallPos = rs::getCollidedWallPos(thisPtr->mCollider);
                 al::tryEmitEffect(thisPtr, "HitSmall", &wallPos);
                 al::tryStartSe(thisPtr, "HitImpact");
+                if (isHammer && al::isAlive(isHammer)) { al::tryEmitEffect(isHammer, "Break", &wallPos); al::tryStartSe(isHammer, "Hit"); }
                 al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
 
                 sead::Vector3f wallNormal = rs::getCollidedWallNormal(thisPtr->mCollider);

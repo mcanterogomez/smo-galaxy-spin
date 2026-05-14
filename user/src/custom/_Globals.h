@@ -154,6 +154,7 @@ bool isBlasterOn = false;
 // Actor pointers
 inline PlayerActorHakoniwa* isHakoniwa = nullptr;
 inline HammerBrosHammer* isHammer = nullptr;
+inline HammerBrosHammer* isSmashHammer = nullptr;
 inline CustomGauge* isGauge = nullptr;
 inline Motorcycle* isKart = nullptr;
 inline al::LiveActor* isKoopa = nullptr;

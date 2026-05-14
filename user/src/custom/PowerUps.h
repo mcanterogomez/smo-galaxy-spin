@@ -51,11 +51,15 @@ namespace PowerUps {
             al::initJointLocalScaleController(model, &legScale, "LegL1");
             al::initJointLocalScaleController(model, &legScale, "LegR1");
 
-            if (al::isExistArchive("ObjectData/PlayerHammer")
-            ) {
+            if (al::isExistArchive("ObjectData/PlayerHammer")) { // Classic Hammer
                 isHammer = new HammerBrosHammer("HammerBrosHammer", model, "PlayerHammer", true);
                 al::initCreateActorNoPlacementInfo(isHammer, *actorInfo);
             }
+            if (al::isExistArchive("ObjectData/SmashHammer")) { // Smash Hammer
+                isSmashHammer = new HammerBrosHammer("HammerBrosHammer", model, "SmashHammer", true);
+                al::initCreateActorNoPlacementInfo(isSmashHammer, *actorInfo);
+            }
+            if (isBrawl && isSmashHammer) isHammer = isSmashHammer; // Swap in Brawl suit
 
             // Create and hide fireballs
             fireBalls = new al::LiveActorGroup("FireBrosFireBall", 4);
