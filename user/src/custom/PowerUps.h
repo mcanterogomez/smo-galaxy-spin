@@ -146,7 +146,7 @@ namespace PowerUps {
             auto* drill = al::tryGetSubActor(model, "Drill");
             auto* tail = al::tryGetSubActor(model, "尻尾");
             auto* damage = thisPtr->mDamageKeeper;
-            bool isFlicker = damage && damage->mFlickerTimer > 0;
+            bool isFlicker = damage && damage->mDamageInvalidCount > 0;
 
             isCapeOn = cape && al::isAlive(cape);
             isBlasterOn = blaster && al::isAlive(blaster);
@@ -509,11 +509,11 @@ namespace PowerUps {
                 if (isActive) {
                     if (damage) {
                         if (!damage->mIsPreventDamage) damage->activatePreventDamage();
-                        damage->mRemainingInvincibility = INT_MAX;
+                        damage->mInvincibilityTimer = INT_MAX;
                     }
                     al::tryEmitEffect(model, "Bonfire", nullptr);
                 } else {
-                    if (isHack && damage) damage->mRemainingInvincibility = 0;
+                    if (isHack && damage) damage->mInvincibilityTimer = 0;
                     al::tryDeleteEffect(model, "Bonfire");
                 }
             }
