@@ -87,6 +87,24 @@ namespace CustomAnimation {
         }
     };
 
+    //Swap for new 2d animation archive
+    struct PlayerAnimation2DArchiveHook : public mallow::hook::Inline<PlayerAnimation2DArchiveHook> {
+        static void Callback(exl::hook::InlineCtx* ctx) {
+            const char* model = (const char*)ctx->X[20];
+
+            if (al::isEqualString(model, "Mario2D")
+                || al::isEqualString(model, "MarioFeather2D")
+                || al::isEqualString(model, "MarioColorFire2D")
+                || al::isEqualString(model, "MarioColorIce2D")
+                || al::isEqualString(model, "MarioTanooki2D")
+                || al::isEqualString(model, "MarioDrill2D")
+                || al::isEqualString(model, "MarioColorMetal2D")
+                || al::isEqualString(model, "MarioColorFly2D")
+                || al::isEqualString(model, "MarioColorBrawl2D")
+                || al::isEqualString(model, "MarioColorSuper2D")) ctx->X[25] = (u64)"PlayerAnimationNew2D";
+        }
+    };
+
     // Kart animation swap at the bfres level (motorcycle bypasses PlayerAnimator)
     struct FindAnimInfoHook : public mallow::hook::Trampoline<FindAnimInfoHook> {
         static void* Callback(void* table, const char* name) {
@@ -106,8 +124,8 @@ namespace CustomAnimation {
         #ifdef ALLOW_POWERUPS
             PlayerAnimatorStartAnimHook::InstallAtSymbol("_ZN14PlayerAnimator9startAnimERKN4sead14SafeStringBaseIcEE");
             PlayerAnimatorIsAnimHook::InstallAtSymbol("_ZNK14PlayerAnimator6isAnimERKN4sead14SafeStringBaseIcEE");
+            PlayerAnimation2DArchiveHook::InstallAtOffset(0x445664);
         #endif
-
         #ifdef ALLOW_KART
             FindAnimInfoHook::InstallAtSymbol("_ZNK2al13AnimInfoTable12findAnimInfoEPKc");
         #endif

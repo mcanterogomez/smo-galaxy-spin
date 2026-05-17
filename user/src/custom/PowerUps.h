@@ -463,7 +463,8 @@ namespace PowerUps {
 
             // Handle logic for Flying suit
             if (isFly) {
-                if (isActive) {
+                if (isActive && !al::isHideModel(model)
+                ) {
                     if (isGliding) {
                         al::tryDeleteEffect(model, "GlideWindL");
                         al::tryDeleteEffect(model, "GlideWindR");
@@ -506,7 +507,8 @@ namespace PowerUps {
                 }
                 
                 // Apply effects for Invincibility
-                if (isActive) {
+                if (isActive && !al::isHideModel(model)
+                ) {
                     if (damage) {
                         if (!damage->mIsPreventDamage) damage->activatePreventDamage();
                         damage->mInvincibilityTimer = INT_MAX;
