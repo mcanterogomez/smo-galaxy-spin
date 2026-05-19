@@ -397,25 +397,23 @@ public:
 
 // Hammer specific setup
 inline sead::Matrix34f hammerMtx;
-inline al::LiveActor* hammerParentModel = nullptr;  // Track the model we're watching
+inline sead::Vector3f updateHammerMtx() {
+    auto* model = isHakoniwa->mModelHolder->findModelActor("Normal");
+    const sead::Matrix34f* mL = al::getJointMtxPtr(model, "ArmL2");
+    const sead::Matrix34f* mR = al::getJointMtxPtr(model, "ArmR2");
+    if (!mL || !mR) return al::getTrans(isHammer);
 
-inline void updateHammerMtx() {
-    if (!hammerParentModel) return;
-
-    const sead::Matrix34f* mL = al::getJointMtxPtr(hammerParentModel, "ArmL2");
-    const sead::Matrix34f* mR = al::getJointMtxPtr(hammerParentModel, "ArmR2");
-    if (!mL || !mR) return; 
-
-    sead::Vector3f posL = mL->getTranslation();
-    sead::Vector3f posR = mR->getTranslation();
-    sead::Vector3f mid = (posL + posR) * 0.5f;
-
+    sead::Vector3f mid = (mL->getTranslation() + mR->getTranslation()) * 0.5f;
     sead::Quatf qL, qR, qMid;
     mL->toQuat(qL);
     mR->toQuat(qR);
     al::slerpQuat(&qMid, qL, qR, 0.5f);
-
     hammerMtx.makeQT(qMid, mid);
+
+    auto* weapon = static_cast<BrosWeaponBase*>(isHammer);
+    sead::Matrix34f attachMtx;
+    weapon->calcAttachMtx(&attachMtx, &hammerMtx, weapon->mTrans, weapon->mRotation);
+    return attachMtx.getTranslation();
 }
 
 class PlayerActorHakoniwaNrvHammer : public al::Nerve {
@@ -424,7 +422,6 @@ public:
         auto* player = keeper->getParent<PlayerActorHakoniwa>();
         auto* model = player->mModelHolder->findModelActor("Normal");
         auto* hammer = al::tryGetSubActor(model, "Hammer");
-
         bool isGround = rs::isOnGround(player, player->mCollider);
 
         if (al::isFirstStep(player)
@@ -433,84 +430,75 @@ public:
             hitBufferCount = 0;
 
             if (hammer) al::hideModelIfShow(hammer);
-
-            hammerParentModel = model;
             updateHammerMtx();
 
-            al::setScale(isHammer, sead::Vector3f(0.0f, 0.0f, 0.0f)); // Handle hammer scaling start
+            al::setScale(isHammer, sead::Vector3f::zero); // Handle hammer scaling start
             isHammer->makeActorAlive();
-            isHammer->attach(
-                &hammerMtx,
+            isHammer->attach(&hammerMtx,
                 sead::Vector3f(0.0f, -12.5f, -37.5f),
                 sead::Vector3f(0.0f, sead::Mathf::deg2rad(-90.0f), 0.0f),
                 nullptr);
-
             al::onCollide(isHammer);
             al::invalidateClipping(isHammer);
             al::showShadow(isHammer);
 
-            if (!isGround) {
+            if (isGround) player->mAnimator->startAnim("HammerAttack");
+            else {
                 player->mAnimator->startAnim("RollingStart");
                 al::validateHitSensor(isHammer, "AttackHack");
-            } else player->mAnimator->startAnim("HammerAttack");
+            }
         }
 
-        if (player->mAnimator->isAnimEnd()
-            && player->mAnimator->isAnim("RollingStart")
-        ) {
-            player->mAnimator->startAnim("Rolling");
-            al::tryStartAction(isHammer, "Spin");
+        // Air physics + spin transition
+        if (!isGround) {
+            al::addVelocity(player, al::getGravity(player) * 0.5f);
+
+            if (player->mAnimator->isAnim("RollingStart") && player->mAnimator->isAnimEnd()
+            ) {
+                player->mAnimator->startAnim("Rolling");
+                al::tryStartAction(isHammer, "Spin");
+            }
         }
-        
-        if (isGround
-            && (player->mAnimator->isAnim("RollingStart") || player->mAnimator->isAnim("Rolling"))
+
+        // Air -> Ground transition
+        if (isGround && (player->mAnimator->isAnim("RollingStart") || player->mAnimator->isAnim("Rolling"))
         ) {
             player->mAnimator->endSubAnim();
             player->mAnimator->startAnim("HammerAttack");
             al::tryStartAction(isHammer, "Wait");
         }
 
-        if (al::isStep(player, 6)
+        // Ground attack frames
+        if (player->mAnimator->isAnim("HammerAttack")
         ) {
-            sead::Vector3f currentVelocity = al::getVelocity(player);
-            if (isGround) currentVelocity *= 0.5f;
-            else if (currentVelocity.y > 0.0f) currentVelocity.y = 0.0f;
-            
-            al::setVelocity(player, currentVelocity);
-        }
+            float frame = player->mAnimator->getAnimFrame();
 
-        if (!isGround) al::addVelocity(player, (al::getGravity(player) * 0.5f));
-
-        if (al::isStep(player, 11)) al::validateHitSensor(isHammer, "AttackHack");
-
-        // Handle hammer scaling end
-        if (isHammer && al::isAlive(isHammer)
-        ) {
-            int step = al::getNerveStep(player);
-            float s = 1.0f;
-
-            if (step < 4) s = step / 4.0f;
-
-            if (player->mAnimator->isAnim("HammerAttack")
-                && player->mAnimator->getAnimFrame() >= 22.0f
-            ) {
-                s = (26.0f - player->mAnimator->getAnimFrame()) / 4.0f;
-                al::offCollide(isHammer);
-                al::invalidateHitSensor(isHammer, "AttackHack");
+            if (frame == 7.0f) {
+                sead::Vector3f vel = al::getVelocity(player);
+                vel *= 0.5f;
+                al::setVelocity(player, vel);
+                al::validateHitSensor(isHammer, "AttackHack");
             }
-
-            al::setScale(isHammer, sead::Vector3f(s, s, s));
+            if (frame == 11.0f && !rs::isCollidedWall(isHakoniwa->mCollider)) {
+                al::tryEmitEffect(isHakoniwa, "HammerLandHit", nullptr);
+                al::tryStartSe(isHammer, "HammerLand");
+                al::tryStartSe(isHammer, "HammerHit");
+            }
+            if (frame >= 22.0f) al::invalidateHitSensor(isHammer, "AttackHack");
         }
-        
+
+        // Scale fade in/out
+        if (al::isAlive(isHammer)
+        ) {
+            float scale = sead::Mathf::min(1.0f, al::getNerveStep(player) / 4.0f);
+
+            if (player->mAnimator->isAnim("HammerAttack") && player->mAnimator->getAnimFrame() >= 22.0f) scale = (30.0f - player->mAnimator->getAnimFrame()) / 8.0f;
+            al::setScale(isHammer, sead::Vector3f(scale, scale, scale));
+        }
+
         if (player->mAnimator->isAnimEnd()
         ) {
-            hammerParentModel = nullptr;
-            if (hammer) al::showModelIfHide(hammer);
-            if (isHammer) {
-                al::offCollide(isHammer);
-                al::invalidateHitSensor(isHammer, "AttackHack");
-                isHammer->makeActorDead();
-            }
+            cleanup(hammer);
             al::setNerve(player, getNerveAt(nrvHakoniwaFall));
             return;
         }
@@ -520,15 +508,14 @@ public:
 
     void executeOnEnd(al::NerveKeeper* keeper) const override {
         auto* player = keeper->getParent<PlayerActorHakoniwa>();
-        auto* model  = player->mModelHolder->findModelActor("Normal");
-        auto* hammer = al::tryGetSubActor(model, "Hammer");
+        auto* model = player->mModelHolder->findModelActor("Normal");
+        cleanup(al::tryGetSubActor(model, "Hammer"));
+    }
 
-        hammerParentModel = nullptr;
-
+private:
+    static void cleanup(al::LiveActor* hammer) {
         if (hammer) al::showModelIfHide(hammer);
-
         if (isHammer) {
-            al::offCollide(isHammer);
             al::invalidateHitSensor(isHammer, "AttackHack");
             isHammer->makeActorDead();
         }

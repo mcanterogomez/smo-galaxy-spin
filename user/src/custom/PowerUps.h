@@ -597,37 +597,30 @@ namespace PowerUps {
         static void Callback(al::LiveActor* actor) {
             // Check if this actor is frozen
             if (PlayerFreeze::updateFrozenActor(actor)) return; // Skip normal movement
-            
-            Orig(actor);
 
-            static bool hammerHit = false;
-            
-            if (actor != isHammer) return;
-            if (!al::isAlive(isHammer)) { hammerHit = false; return; }
-
-            al::HitSensor* sensorHammer = al::getHitSensor(isHammer, "AttackHack");
-            if (!sensorHammer || !sensorHammer->mIsValid) return;
-
-            if (auto* sensorWall = al::tryGetCollidedWallSensor(isHammer)) isHammer->attackSensor(sensorHammer, sensorWall);
-            if (auto* sensorCeiling = al::tryGetCollidedCeilingSensor(isHammer)) isHammer->attackSensor(sensorHammer, sensorCeiling);
-            if (auto* sensorGround = al::tryGetCollidedGroundSensor(isHammer)) isHammer->attackSensor(sensorHammer, sensorGround);
-
-            if (!hammerHit && isHakoniwa->mAnimator->isAnim("HammerAttack")
-                && isHakoniwa->mAnimator->getAnimFrame() >= 8.0f
-                && al::isCollidedGround(isHammer)
+            if (actor == isHammer && al::isAlive(isHammer)
             ) {
-                al::tryEmitEffect(isHakoniwa, "HammerLandHit", nullptr);
-                al::tryStartSe(isHammer, "HammerLand");
-                al::tryStartSe(isHammer, "HammerHit");
-                hammerHit = true;
+                sead::Vector3f correctPos = updateHammerMtx();
+                Orig(actor);
+                al::setTrans(isHammer, correctPos);
+
+                al::HitSensor* sensorHammer = al::getHitSensor(isHammer, "AttackHack");
+                if (!sensorHammer || !sensorHammer->mIsValid) return;
+                if (auto* sensor = rs::tryGetCollidedWallSensor(isHakoniwa->mCollider)) isHammer->attackSensor(sensorHammer, sensor);
+                if (auto* sensor = al::tryGetCollidedWallSensor(isHammer)) isHammer->attackSensor(sensorHammer, sensor);
+                if (auto* sensor = al::tryGetCollidedCeilingSensor(isHammer)) isHammer->attackSensor(sensorHammer, sensor);
+                if (auto* sensor = al::tryGetCollidedGroundSensor(isHammer)) isHammer->attackSensor(sensorHammer, sensor);
+                return;
             }
+
+            Orig(actor);
         }
     };
 
     struct CalcAnimHook : public mallow::hook::Trampoline<CalcAnimHook> {
         static void Callback(al::LiveActor* actor) {
-            float savedLean = 0.0f;
             bool isKartAnim = typeid(*actor) == typeid(Motorcycle) && al::isAlive(actor);
+            float savedLean = 0.0f;
 
             if (isKartAnim) {
                 float* lean = reinterpret_cast<float*>((char*)actor + 312);
@@ -638,7 +631,6 @@ namespace PowerUps {
             Orig(actor);
 
             if (isKartAnim) *reinterpret_cast<float*>((char*)actor + 312) = savedLean;
-            if (hammerParentModel && actor == hammerParentModel) updateHammerMtx();
         }
     };
 

@@ -108,26 +108,26 @@ namespace PlayerCore {
             if (activeSensor) attackFrames++;
             else attackFrames = 0;
 
-            if (activeSensor && attackFrames >= 2
-                && rs::isCollidedWall(thisPtr->mCollider)
-                && hitBufferCount == 0
-                && !isDrillAnim(thisPtr->mAnimator) // Skip bounce during drill
-            ) {
-                sead::Vector3f wallPos = rs::getCollidedWallPos(thisPtr->mCollider);
-                al::tryEmitEffect(thisPtr, "HitSmall", &wallPos);
-                al::tryStartSe(thisPtr, "HitImpact");
-                if (isHammer && al::isAlive(isHammer)) { al::tryEmitEffect(isHammer, "Break", &wallPos); al::tryStartSe(isHammer, "Hit"); }
-                al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
+            bool isHammerActive = isHammer && al::isAlive(isHammer);
+            bool isHammerWall = isHammerActive && al::isCollidedWall(isHammer);
+            bool wallHit = rs::isCollidedWall(thisPtr->mCollider) || isHammerWall;
 
-                sead::Vector3f wallNormal = rs::getCollidedWallNormal(thisPtr->mCollider);
+            if (activeSensor && attackFrames >= 2 
+                && wallHit && hitBufferCount == 0 
+                && !isDrillAnim(thisPtr->mAnimator)
+            ) {
+                sead::Vector3f wallPos = isHammerWall ? al::getCollidedWallPos(isHammer)    : rs::getCollidedWallPos(thisPtr->mCollider);
+                sead::Vector3f wallNormal = isHammerWall ? al::getCollidedWallNormal(isHammer) : rs::getCollidedWallNormal(thisPtr->mCollider);
                 al::tryNormalizeOrZero(&wallNormal);
 
-                if (thisPtr->mInput->isMove()) al::setVelocity(thisPtr, wallNormal * 15.0f - al::getGravity(thisPtr) * 10.0f);
-                else al::setVelocity(thisPtr, wallNormal * 5.0f - al::getGravity(thisPtr) * 10.0f);
-
+                al::tryEmitEffect(thisPtr, "HitSmall", &wallPos);
+                al::tryStartSe(thisPtr, "HitImpact");
+                if (isHammerActive) { al::tryEmitEffect(isHammer, "Break", &wallPos); al::tryStartSe(isHammer, "Hit"); }
+                al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
+                al::setVelocity(thisPtr, wallNormal * (thisPtr->mInput->isMove() ? 15.0f : 5.0f) - al::getGravity(thisPtr) * 10.0f);
                 attackFrames = 0;
             }
-            
+
             // Reset proximity flag
             isNearCollectible = false;
             isNearTreasure = false;
