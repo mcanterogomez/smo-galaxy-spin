@@ -110,25 +110,9 @@ namespace CustomAnimation {
         }
     };
 
-    // Kart animation swap at the bfres level (motorcycle bypasses PlayerAnimator)
-    struct FindAnimInfoHook : public mallow::hook::Trampoline<FindAnimInfoHook> {
-        static void* Callback(void* table, const char* name) {
-            if (al::isEqualSubString(name, "Motorcycle") && isKart
-                && isHakoniwa && al::getSensorHost(isHakoniwa->mBindKeeper->mBindSensor) == (al::LiveActor*)isKart
-            ) {
-                sead::FixedSafeString<64> kart;
-                kart.format("Kart%s", name + strlen("Motorcycle"));
-                void* result = Orig(table, kart.cstr());
-                if (result) return result;
-            }
-            return Orig(table, name);
-        }
-    };
-
     inline void Install() {
         PlayerAnimatorStartAnimHook::InstallAtSymbol("_ZN14PlayerAnimator9startAnimERKN4sead14SafeStringBaseIcEE");
         PlayerAnimatorIsAnimHook::InstallAtSymbol("_ZNK14PlayerAnimator6isAnimERKN4sead14SafeStringBaseIcEE");
         PlayerAnimation2DArchiveHook::InstallAtOffset(0x445664);
-        FindAnimInfoHook::InstallAtSymbol("_ZNK2al13AnimInfoTable12findAnimInfoEPKc");
     }
 }

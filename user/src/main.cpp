@@ -1,6 +1,7 @@
 #include "custom/_Globals.h"
-#include "custom/KoopaBattle.h"
 #include "custom/CustomAnimation.h"
+#include "custom/KoopaBattle.h"
+#include "custom/PlayerKart.h"
 #include "custom/AttackSensor.h"
 #include "custom/PlayerCore.h"
 #include "custom/PlayerSpinAttack.h"
@@ -31,6 +32,7 @@ extern "C" void userMain() {
     PlayerSpinAttack::Install();
     AttackSensor::Install();
     KoopaBattle::Install();
+    PlayerKart::Install();
 
     #ifdef ALLOW_POWERUPS
         PowerUps::Install();

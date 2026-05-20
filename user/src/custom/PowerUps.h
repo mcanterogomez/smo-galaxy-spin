@@ -16,16 +16,6 @@ namespace PowerUps {
         }
     };
 
-    struct InitActorSuffixHook : public mallow::hook::Trampoline<InitActorSuffixHook> {
-        static void Callback(al::LiveActor* actor, const al::ActorInitInfo& info, const char* suffix) {
-            if (actor == (al::LiveActor*)isKart) {
-                al::initActorWithArchiveName(actor, info, "PlayerKart", suffix);
-                return;
-            }
-            Orig(actor, info, suffix);
-        }
-    };
-
     struct InitActorArchiveHook : public mallow::hook::Trampoline<InitActorArchiveHook> {
         static void Callback(al::LiveActor* actor, const al::ActorInitInfo& info, const sead::SafeString& archive, const char* suffix) {
             if (al::isEqualString(actor->getName(), "MarioTankBullet")) {
@@ -106,29 +96,15 @@ namespace PowerUps {
 
         // Create custom gauge
         isGauge = new CustomGauge(*actorInfo->layoutInitInfo);
-
-        // Create custom kart
-        if (al::isExistArchive("ObjectData/PlayerKart")
-        ) {
-            isKart = new Motorcycle("Kart");
-            al::initCreateActorNoPlacementInfo(isKart, *actorInfo);
-            isKart->makeActorDead();
-        }
     }
 
-    struct PlayerActorHakoniwaInitAfterPlacement : public mallow::hook::Trampoline<PlayerActorHakoniwaInitAfterPlacement> {
-        static void Callback(PlayerActorHakoniwa* thisPtr) {
-            Orig(thisPtr);
-
-            PlayerFreeze::clearAllFrozen();
-
-            if (isHammer) isHammer->makeActorDead();
-            if (fireBalls) fireBalls->makeActorDeadAll();
-            if (iceBalls) iceBalls->makeActorDeadAll();
-            if (tankBullets) tankBullets->makeActorDeadAll();
-            if (isKart) isKart->makeActorDead();
-        }
-    };
+    inline void executeInitAfterPlacement() {
+        PlayerFreeze::clearAllFrozen();
+        if (isHammer) isHammer->makeActorDead();
+        if (fireBalls) fireBalls->makeActorDeadAll();
+        if (iceBalls) iceBalls->makeActorDeadAll();
+        if (tankBullets) tankBullets->makeActorDeadAll();
+    }
 
     inline void executeMovement(PlayerActorHakoniwa* thisPtr) {
         auto* anim   = thisPtr->mAnimator;
@@ -545,43 +521,6 @@ namespace PowerUps {
             }
             wasDash = isDashNow;
         #endif
-
-        // Handle kart spawning
-        static int holdLeftFrames = 0;
-        if (al::isPadHoldLeft(-1)) holdLeftFrames++;
-        else holdLeftFrames = 0;
-
-        if (isKart && isActive
-            && holdLeftFrames == 30
-            && !thisPtr->mInput->isMove()
-        ) {
-            if (al::isAlive(isKart)
-            ) {
-                if (rs::isPlayerBinding(thisPtr)) return;
-
-                al::tryEmitEffect(isKart, "Disappear", nullptr);
-                al::tryStartSe(isKart, "CommonVanishS");
-                isKart->kill();
-                return;
-            } else {
-                sead::Vector3f front;
-                al::calcFrontDir(&front, thisPtr);
-                sead::Vector3f gravity = al::getGravity(thisPtr);
-                sead::Vector3f marioPos = al::getTrans(thisPtr);
-                sead::Vector3f target = marioPos + front * 500.0f;
-
-                sead::Vector3f groundPos;
-                bool hasGround = alCollisionUtil::getHitPosOnArrow(thisPtr, &groundPos, target - gravity * 1000.0f, gravity * 2000.0f, nullptr, nullptr);
-
-                if (!hasGround) { al::tryStartSe(thisPtr, "InvalidCapAction"); return; }
-                target = groundPos - gravity;
-
-                al::setTrans(isKart, target);
-                isKart->appear();
-                al::tryEmitEffect(isKart, "Appear", nullptr);
-                al::tryStartSe(isKart, "Appear");
-            }
-        }
     }
 
     struct LiveActorMovementHook : public mallow::hook::Trampoline<LiveActorMovementHook> {
@@ -605,23 +544,6 @@ namespace PowerUps {
             }
 
             Orig(actor);
-        }
-    };
-
-    struct CalcAnimHook : public mallow::hook::Trampoline<CalcAnimHook> {
-        static void Callback(al::LiveActor* actor) {
-            bool isKartAnim = typeid(*actor) == typeid(Motorcycle) && al::isAlive(actor);
-            float savedLean = 0.0f;
-
-            if (isKartAnim) {
-                float* lean = reinterpret_cast<float*>((char*)actor + 312);
-                savedLean = *lean;
-                *lean = 0.0f;
-            }
-
-            Orig(actor);
-
-            if (isKartAnim) *reinterpret_cast<float*>((char*)actor + 312) = savedLean;
         }
     };
 
@@ -949,24 +871,12 @@ namespace PowerUps {
         }
     };
 
-    // Prevent crash when Motorcycle enters water (null OceanWave in fluid system)
-    struct CalcFindWaterSurfaceFlatFix : public mallow::hook::Trampoline<CalcFindWaterSurfaceFlatFix> {
-        static bool Callback(sead::Vector3f* outPos, sead::Vector3f* outNormal, const al::LiveActor* actor,
-            const sead::Vector3f& pos, const sead::Vector3f& up, float range) {
-            if (actor == isKart) return false;
-            return Orig(outPos, outNormal, actor, pos, up, range);
-        }
-    };
-
     inline void Install() {
         FireBrosFireBallInitArchive::InstallAtOffset(0x10082C);
-        InitActorSuffixHook::InstallAtSymbol("_ZN2al15initActorSuffixEPNS_9LiveActorERKNS_13ActorInitInfoEPKc");
         InitActorArchiveHook::InstallAtSymbol("_ZN2al24initActorWithArchiveNameEPNS_9LiveActorERKNS_13ActorInitInfoERKN4sead14SafeStringBaseIcEEPKc");
-        PlayerActorHakoniwaInitAfterPlacement::InstallAtSymbol("_ZN19PlayerActorHakoniwa18initAfterPlacementEv");
 
         // Handles control/movement
         LiveActorMovementHook::InstallAtSymbol("_ZN2al9LiveActor8movementEv");
-        CalcAnimHook::InstallAtSymbol("_ZN2al9LiveActor8calcAnimEv");
 
         // Handles Hammer while Carrying
         PlayerCarryKeeperStartCarry::InstallAtSymbol("_ZN17PlayerCarryKeeper10startCarryEPN2al9HitSensorE");
@@ -1006,9 +916,6 @@ namespace PowerUps {
 
         // Handles Super Mario breathing in water
         ReduceOxygen ::InstallAtSymbol("_ZN12PlayerOxygen6reduceEv");
-
-        // Prevent crash with water surface calculations
-        CalcFindWaterSurfaceFlatFix::InstallAtSymbol("_ZN2al24calcFindWaterSurfaceFlatEPN4sead7Vector3IfEES3_PKNS_9LiveActorERKS2_S8_f");
 
         // Patch PlayerJointControlKeeper capacity from 7 to 12
         exl::patch::CodePatcher jointCapPatcher(0x454F20);

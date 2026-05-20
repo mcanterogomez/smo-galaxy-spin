@@ -4,6 +4,7 @@
 #include "custom/_Nerves.h"
 #include "custom/PowerUps.h"
 #include "custom/PlayerFreeze.h"
+#include "custom/PlayerKart.h"
 
 namespace PlayerCore {
 
@@ -18,11 +19,11 @@ namespace PlayerCore {
             // Set Hakoniwa pointer
             isHakoniwa = thisPtr;
 
-            // Check for Super suit costume and cap
-            const char* costume = GameDataFunction::getCurrentCostumeTypeName(thisPtr);
-            const char* cap = GameDataFunction::getCurrentCapTypeName(thisPtr);
-
             #ifdef ALLOW_POWERUPS
+                // Check for Super suit costume and cap
+                const char* costume = GameDataFunction::getCurrentCostumeTypeName(thisPtr);
+                const char* cap = GameDataFunction::getCurrentCapTypeName(thisPtr);
+
                 #ifdef ALLOW_MARIO
                     isMario = (costume && al::isEqualString(costume, "Mario"))
                         && (cap && al::isEqualString(cap, "Mario"));
@@ -52,6 +53,17 @@ namespace PlayerCore {
 
                 PowerUps::executeInitPlayer(thisPtr, actorInfo, playerInfo);
             #endif
+
+            PlayerKart::executeInitPlayer(thisPtr, actorInfo, playerInfo);
+        }
+    };
+
+    struct PlayerActorHakoniwaInitAfterPlacement : public mallow::hook::Trampoline<PlayerActorHakoniwaInitAfterPlacement> {
+        static void Callback(PlayerActorHakoniwa* thisPtr) {
+            Orig(thisPtr);
+
+            PowerUps::executeInitAfterPlacement();
+            PlayerKart::executeInitAfterPlacement();            
         }
     };
 
@@ -66,6 +78,8 @@ namespace PlayerCore {
             #ifdef ALLOW_POWERUPS
                 PowerUps::executeMovement(thisPtr);
             #endif
+
+            PlayerKart::executeMovement(thisPtr);
 
             // Spin-type sensors all attack wall and ceiling contacts
             const char* attackSensorNames[] = {"GalaxySpin", "DoubleSpin", "Punch"};
@@ -264,9 +278,9 @@ namespace PlayerCore {
     inline void Install() {
         // Initialize player actor
         PlayerActorHakoniwaInitPlayer::InstallAtSymbol("_ZN19PlayerActorHakoniwa10initPlayerERKN2al13ActorInitInfoERK14PlayerInitInfo");
+        PlayerActorHakoniwaInitAfterPlacement::InstallAtSymbol("_ZN19PlayerActorHakoniwa18initAfterPlacementEv");
 
         // Handles control/movement
-        //PlayerControlHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa7controlEv");
         PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
         PlayerActorHakoniwaReceiveMsgHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa10receiveMsgEPKN2al9SensorMsgEPNS0_9HitSensorES5_");
         EndSubAnimGuard::InstallAtSymbol("_ZN14PlayerAnimator10endSubAnimEv");

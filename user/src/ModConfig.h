@@ -6,6 +6,9 @@
 //              COMPILE-TIME FLAGS
 // =========================================================
 
+// Disables galaxy spin hooks entirely — vanilla Cappy throw only.
+//#define ALLOW_CAPPY_ONLY
+
 // Gates all power-up suits, fireballs, ice, hammer, drill etc.
 #define ALLOW_POWERUPS
     #define ALLOW_MARIO // Enables Mario costume detection for powers and blaster.
@@ -21,9 +24,6 @@
 
 // Patches out Cappy eyes at binary level.
 #define REMOVE_CAPPY_EYES
-
-// Disables galaxy spin hooks entirely — vanilla Cappy throw only.
-//#define ALLOW_CAPPY_ONLY
 
 // =========================================================
 //              RUNTIME CONFIG  (mod_config.json)
