@@ -506,12 +506,6 @@ namespace AttackSensor {
             auto* target = reinterpret_cast<al::HitSensor*>(ctx->X[21]);
 
             if (!isValidAttackTarget(target)) return;
-
-            #ifndef ALLOW_CAPPY_ONLY
-                al::LiveActor* targetHost = al::getSensorHost(target);
-                if (al::isEqualSubString(typeid(*targetHost).name(), "KoopaCap")
-                    && al::isModelName(targetHost, "KoopaCap")) return;
-            #endif
             
             rs::sendMsgSeedAttackBig(target, source);
 

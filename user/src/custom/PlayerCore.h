@@ -22,34 +22,36 @@ namespace PlayerCore {
             const char* costume = GameDataFunction::getCurrentCostumeTypeName(thisPtr);
             const char* cap = GameDataFunction::getCurrentCapTypeName(thisPtr);
 
-            #ifdef ALLOW_MARIO
-                isMario = (costume && al::isEqualString(costume, "Mario"))
-                    && (cap && al::isEqualString(cap, "Mario"));
+            #ifdef ALLOW_POWERUPS
+                #ifdef ALLOW_MARIO
+                    isMario = (costume && al::isEqualString(costume, "Mario"))
+                        && (cap && al::isEqualString(cap, "Mario"));
+                #endif
+
+                isNoCap = (cap && al::isEqualString(cap, "MarioNoCap"));
+                isFeather = (costume && al::isEqualString(costume, "MarioFeather"));
+                isFire = (costume && al::isEqualString(costume, "MarioColorFire"))
+                    && (cap && al::isEqualString(cap, "MarioColorFire"));
+                isIce = (costume && al::isEqualString(costume, "MarioColorIce"))
+                    && (cap && al::isEqualString(cap, "MarioColorIce"));
+                isTanooki = (costume && al::isEqualString(costume, "MarioTanooki"))
+                    && (cap && al::isEqualString(cap, "MarioTanooki"));
+                isDrill = (costume && al::isEqualString(costume, "MarioDrill"))
+                    && (cap && al::isEqualString(cap, "MarioDrill"));
+                isMetal = (costume && al::isEqualString(costume, "MarioColorMetal"))
+                    && (cap && al::isEqualString(cap, "MarioColorMetal"));
+                isFly = (costume && al::isEqualString(costume, "MarioColorFly"))
+                    && (cap && al::isEqualString(cap, "MarioColorFly"));
+                isBrawl = (costume && al::isEqualString(costume, "MarioColorBrawl"))
+                    && (cap && al::isEqualString(cap, "MarioColorBrawl"));
+                isSuper = (costume && al::isEqualString(costume, "MarioColorSuper"))
+                    && (cap && al::isEqualString(cap, "MarioColorSuper"));
+
+                // Set Cap sounds
+                if (isMetal && thisPtr->mHackCap) al::setSeKeeperPlayNamePrefix(thisPtr->mHackCap, "Iron");
+
+                PowerUps::executeInitPlayer(thisPtr, actorInfo, playerInfo);
             #endif
-
-            isNoCap = (cap && al::isEqualString(cap, "MarioNoCap"));
-            isFeather = (costume && al::isEqualString(costume, "MarioFeather"));
-            isFire = (costume && al::isEqualString(costume, "MarioColorFire"))
-                && (cap && al::isEqualString(cap, "MarioColorFire"));
-            isIce = (costume && al::isEqualString(costume, "MarioColorIce"))
-                && (cap && al::isEqualString(cap, "MarioColorIce"));
-            isTanooki = (costume && al::isEqualString(costume, "MarioTanooki"))
-                && (cap && al::isEqualString(cap, "MarioTanooki"));
-            isDrill = (costume && al::isEqualString(costume, "MarioDrill"))
-                && (cap && al::isEqualString(cap, "MarioDrill"));
-            isMetal = (costume && al::isEqualString(costume, "MarioColorMetal"))
-                && (cap && al::isEqualString(cap, "MarioColorMetal"));
-            isFly = (costume && al::isEqualString(costume, "MarioColorFly"))
-                && (cap && al::isEqualString(cap, "MarioColorFly"));
-            isBrawl = (costume && al::isEqualString(costume, "MarioColorBrawl"))
-                && (cap && al::isEqualString(cap, "MarioColorBrawl"));
-            isSuper = (costume && al::isEqualString(costume, "MarioColorSuper"))
-                && (cap && al::isEqualString(cap, "MarioColorSuper"));
-
-            // Set Cap sounds
-            if (isMetal && thisPtr->mHackCap) al::setSeKeeperPlayNamePrefix(thisPtr->mHackCap, "Iron");
-
-            PowerUps::executeInitPlayer(thisPtr, actorInfo, playerInfo);
         }
     };
 
@@ -60,8 +62,10 @@ namespace PlayerCore {
             auto* holder = thisPtr->mModelHolder;
             auto* model  = holder->findModelActor("Normal");
             al::LiveActor* face = al::tryGetSubActor(model, "顔");
-
-            PowerUps::executeMovement(thisPtr);
+            
+            #ifdef ALLOW_POWERUPS
+                PowerUps::executeMovement(thisPtr);
+            #endif
 
             // Spin-type sensors all attack wall and ceiling contacts
             const char* attackSensorNames[] = {"GalaxySpin", "DoubleSpin", "Punch"};
@@ -247,9 +251,10 @@ namespace PlayerCore {
         }
     };
 
-    struct EmitEffectHook : public mallow::hook::Trampoline<EmitEffectHook> {
+    struct TryEmitEffectHook : public mallow::hook::Trampoline<TryEmitEffectHook> {
         static bool Callback(al::EffectKeeper* keeper, const char* name, const sead::Vector3f* pos) {
-            if (al::isEqualString(name, "SpinCapStart2Right")
+            if (isConfig()->galaxySfx
+                && al::isEqualString(name, "SpinCapStart2Right")
                 && isHakoniwa && al::isEqualSubString(isHakoniwa->mAnimator->mCurAnim, "SpinSeparate")) return false;
 
             return Orig(keeper, name, pos);
@@ -265,9 +270,6 @@ namespace PlayerCore {
         PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
         PlayerActorHakoniwaReceiveMsgHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa10receiveMsgEPKN2al9SensorMsgEPNS0_9HitSensorES5_");
         EndSubAnimGuard::InstallAtSymbol("_ZN14PlayerAnimator10endSubAnimEv");
-        
-        #ifdef ALLOW_GALAXY_SFX
-            EmitEffectHook::InstallAtSymbol("_ZN2al12EffectKeeper10emitEffectEPKcPKN4sead7Vector3IfEE");
-        #endif
+        TryEmitEffectHook::InstallAtSymbol("_ZN2al13tryEmitEffectEPNS_16IUseEffectKeeperEPKcPKN4sead7Vector3IfEE");
     }
 }

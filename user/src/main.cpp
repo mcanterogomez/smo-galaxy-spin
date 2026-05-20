@@ -17,7 +17,8 @@ struct TriggerCameraReset : public mallow::hook::Trampoline<TriggerCameraReset> 
 
 struct TriggerAmiibo : public mallow::hook::Trampoline<TriggerAmiibo> {
     static bool Callback(const al::IUseSceneObjHolder* holder) {
-        if (isMario) return false;
+        if (isMario && al::tryGetSubActor(isHakoniwa->mModelHolder->findModelActor("Normal"), "Blaster")) return false;
+
         return Orig(holder);
     }
 };
@@ -26,16 +27,17 @@ extern "C" void userMain() {
     exl::hook::Initialize();
     mallow::init::installHooks();
 
-    KoopaBattle::Install();
-
-    CustomAnimation::Install();
     PlayerCore::Install();
     PlayerSpinAttack::Install();
     AttackSensor::Install();
-    PowerUps::Install();
+    KoopaBattle::Install();
 
-    TriggerCameraReset::InstallAtSymbol("_ZN19PlayerInputFunction20isTriggerCameraResetEPKN2al9LiveActorEi");
-    TriggerAmiibo::InstallAtSymbol("_ZN2rs19isTriggerAmiiboModeEPKN2al18IUseSceneObjHolderE");
+    #ifdef ALLOW_POWERUPS
+        PowerUps::Install();
+        CustomAnimation::Install();
+        TriggerCameraReset::InstallAtSymbol("_ZN19PlayerInputFunction20isTriggerCameraResetEPKN2al9LiveActorEi");
+        TriggerAmiibo::InstallAtSymbol("_ZN2rs19isTriggerAmiiboModeEPKN2al18IUseSceneObjHolderE");
+    #endif
 
     #ifdef REMOVE_CAPPY_EYES // Remove Cappy eyes while ide
         exl::patch::CodePatcher eyePatcher(0x41F7E4);

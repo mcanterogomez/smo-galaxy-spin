@@ -3,26 +3,26 @@
 #include <nn/fs/fs_directories.h>
 #include <nn/fs/fs_types.h>
 
-#include "ModOptions.h"
+#include "ModConfig.h"
 
 namespace mallow::config {
-    const char* path = "sd:/atmosphere/contents/0100000000010000/GalaxySpin_config.json";
-    const char* pathEmu = "sd:/GalaxySpin_config.json";
-    const char* defaultConfig = R"(
-{
-    "spinButton": "Y",
-}
-    )";
+    const char* path = "sd:/atmosphere/contents/0100000000010000/mod_config.json";
+    const char* pathEmu = "sd:/mod_config.json";
+    const char* defaultConfig = R"({ 
+        "attackButton":"Y",
+        "spinOnly":false,
+        "galaxySfx":false
+    })";
 
     Allocator* getAllocator() {
         static DefaultAllocator allocator = {};
         return &allocator;
     }
     ConfigBase* getConfig() {
-        static ModOptions modConfig = {};
+        static ModConfig modConfig = {};
         return &modConfig;
     }
-    bool isEmu(){
+    bool isEmu() {
         nn::fs::DirectoryEntryType type;
         nn::fs::GetEntryType(&type, "sd:/atmosphere/package3");
         return type != nn::fs::DirectoryEntryType_File;

@@ -90,7 +90,7 @@
 #include "headers/PlayerStateWait.h"
 #include "headers/PlayerStainControl.h"
 #include "headers/TankBullet.h"
-#include "ModOptions.h"
+#include "ModConfig.h"
 #include "math/seadVectorFwd.h"
 
 // Namespaces
@@ -118,13 +118,20 @@ const al::Nerve* getNerveAt(uintptr_t offset) {
     return (const al::Nerve*)((((u64)malloc) - 0x00724b94) + offset);
 }
 
+inline ModConfig* isConfig() { return mallow::config::getConfg<ModConfig>(); }
 // Spin button config
 bool isPadTriggerGalaxySpin(int port) {
-    switch (mallow::config::getConfg<ModOptions>()->spinButton) {
-        case 'L': return al::isPadTriggerL(port);
+    switch (isConfig()->attackButton) {
         case 'X': return al::isPadTriggerX(port);
-        case 'Y': default: return al::isPadTriggerY(port);
+        default: return al::isPadTriggerY(port);
     }
+}
+// Galaxy SFX config
+inline void isGalaxySfx(PlayerActorHakoniwa* player) {
+    if (!isConfig()->galaxySfx) return;
+    auto* model = player->mModelHolder->findModelActor("Normal");
+    al::tryEmitEffect(model, "SpinAttack", nullptr);
+    al::tryStartSe(model, "SpinAttack");
 }
 
 // Nerve offsets

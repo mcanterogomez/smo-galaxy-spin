@@ -25,12 +25,7 @@ public:
 
         if (al::isFirstStep(state)
         ) {
-            #ifdef ALLOW_HOMING
-                isNearTarget = findNearestTarget(player, 250.0f);
-            #else
-                isNearTarget = nullptr;
-            #endif
-
+            isNearTarget = findNearestTarget(player, 250.0f);
             state->mAnimator->endSubAnim();
             isPunchRight = !isPunchRight;
 
@@ -61,10 +56,7 @@ public:
                     al::validateHitSensor(state->mActor, "GalaxySpin");
                     attackSensorRemaining = 21;
 
-                    #ifdef ALLOW_GALAXY_SFX
-                        al::tryEmitEffect(player->mModelHolder->findModelActor("Normal"), "SpinAttack", nullptr);
-                        al::tryStartSe(player->mModelHolder->findModelActor("Normal"), "SpinAttack");
-                    #endif
+                    isGalaxySfx(player);
                 } else if (isNearCollectible) {
                     state->mAnimator->startAnim("RabbitGet");
                     al::validateHitSensor(state->mActor, "Punch");
@@ -86,36 +78,35 @@ public:
                         al::validateHitSensor(state->mActor, "GalaxySpin");
                         attackSensorRemaining = 21;
                     } else {
-                        #ifdef ALLOW_SPIN_ATTACK // Only spin attack
+                        if (isConfig()->spinOnly
+                        ) {
                             state->mAnimator->startSubAnim("SpinSeparate");
                             state->mAnimator->startAnim("SpinSeparate");
                             al::validateHitSensor(state->mActor, "GalaxySpin");
                             attackSensorRemaining = 21;
 
-                            #ifdef ALLOW_GALAXY_SFX
-                                al::tryEmitEffect(player->mModelHolder->findModelActor("Normal"), "SpinAttack", nullptr);
-                                al::tryStartSe(player->mModelHolder->findModelActor("Normal"), "SpinAttack");
-                            #endif
-                        #else
-                        al::calcQuatFront(&punchDir, player);
-                        punchDir = -punchDir;
-                        punchPos = al::getTrans(player);
-
-                        if (isKoopa && KoopaBattle::isKillReady(isKoopa)
-                        ) {
-                            if (isPunchRight) state->mAnimator->startAnim("JumpPunchEndR");
-                            else state->mAnimator->startAnim("JumpPunchEndL");
-                        } else {
-                            if (isPunchRight) {
-                                state->mAnimator->startSubAnim("KoopaCapPunchRStart");
-                                state->mAnimator->startAnim("KoopaCapPunchR");
-                            } else {
-                                state->mAnimator->startSubAnim("KoopaCapPunchLStart");
-                                state->mAnimator->startAnim("KoopaCapPunchL");
-                            }
+                            isGalaxySfx(player);
                         }
-                        isPunchActive = true;
-                    #endif
+                        else {
+                            al::calcQuatFront(&punchDir, player);
+                            punchDir = -punchDir;
+                            punchPos = al::getTrans(player);
+
+                            if (isKoopa && KoopaBattle::isKillReady(isKoopa)
+                            ) {
+                                if (isPunchRight) state->mAnimator->startAnim("JumpPunchEndR");
+                                else state->mAnimator->startAnim("JumpPunchEndL");
+                            } else {
+                                if (isPunchRight) {
+                                    state->mAnimator->startSubAnim("KoopaCapPunchRStart");
+                                    state->mAnimator->startAnim("KoopaCapPunchR");
+                                } else {
+                                    state->mAnimator->startSubAnim("KoopaCapPunchLStart");
+                                    state->mAnimator->startAnim("KoopaCapPunchL");
+                                }
+                            }
+                            isPunchActive = true;
+                        }
                     }
                 }
             }
@@ -245,10 +236,7 @@ public:
                     al::validateHitSensor(state->mActor, "GalaxySpin");
                     attackSensorRemaining = 21;
 
-                    #ifdef ALLOW_GALAXY_SFX
-                        al::tryEmitEffect(player->mModelHolder->findModelActor("Normal"), "SpinAttack", nullptr);
-                        al::tryStartSe(player->mModelHolder->findModelActor("Normal"), "SpinAttack");
-                    #endif
+                    isGalaxySfx(player);
                 } else if (isCape) {
                     state->mAnimator->startAnim("CapeAttack");
                     al::validateHitSensor(state->mActor, "GalaxySpin");
@@ -262,10 +250,7 @@ public:
                     al::validateHitSensor(state->mActor, "GalaxySpin");
                     attackSensorRemaining = 21;
 
-                    #ifdef ALLOW_GALAXY_SFX
-                        al::tryEmitEffect(player->mModelHolder->findModelActor("Normal"), "SpinAttack", nullptr);
-                        al::tryStartSe(player->mModelHolder->findModelActor("Normal"), "SpinAttack");
-                    #endif
+                    isGalaxySfx(player);
                 }
             }
         }

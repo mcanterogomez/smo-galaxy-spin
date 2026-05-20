@@ -23,29 +23,21 @@ namespace CustomAnimation {
             if (al::isEqualString(name, "Wait")) return "BattleWait";
             if (al::isEqualString(name, "JumpDashFast")) return "Jump";
             if (al::isEqualString(name, "WearEnd")) return "WearEndSuper";
-            for (const char* move : {"Move", "MoveMoon"})
-                if (al::isEqualString(name, move)) return "MoveBrawl";
         }
         if (isBrawl) {
             if (al::isEqualString(name, "BattleWait")) return "WaitBrawlFight";
             if (al::isEqualString(name, "JumpDashFast")) return "Jump";
             if (al::isEqualString(name, "Wait")) return "WaitBrawl";
             if (al::isEqualString(name, "WearEnd")) return "WearEndBrawl";
-            for (const char* move : {"Move", "MoveMoon"})
-                if (al::isEqualString(name, move)) return "MoveBrawl";
         }
         if (isSuper) {
             if (al::isEqualString(name, "BattleWait")) return "WaitSuperFight";
             if (al::isEqualString(name, "GlideFloat")) return "GlideFloatSuper";
             if (al::isEqualString(name, "Wait")) return "WaitSuper";
             if (al::isEqualString(name, "WearEnd")) return "WearEndSuper";
-            for (const char* move : {"Move", "MoveMoon"})
-                if (al::isEqualString(name, move)) return "MoveSuper";
         }
         if (!isFeather && !isTanooki && !isFly && !isBrawl && !isSuper) {
             if (al::isEqualString(name, "JumpDashFast")) return "JumpDashFastClassic";
-            for (const char* move : {"Move", "MoveMoon"})
-                if (al::isEqualString(name, move)) return "MoveClassic";
         }
 
         bool isSuit = (isMario && isCapeOn) || isFeather || isFly || isBrawl || isSuper;
@@ -65,14 +57,27 @@ namespace CustomAnimation {
             if (al::isEqualString(name, "MofumofuDemoOpening2")) return "MofumofuDemoOpening2Super";
         }
         if (al::isEqualString(name, "BattleWait")) return "WaitBrawl";
+
+        #ifdef ALLOW_DASH
+            if (isMetal || isBrawl)
+                for (const char* move : {"Move", "MoveMoon"})
+                    if (al::isEqualString(name, move)) return "MoveBrawl";
+            if (isSuper)
+                for (const char* move : {"Move", "MoveMoon"})
+                    if (al::isEqualString(name, move)) return "MoveSuper";
+            if (!isFeather && !isTanooki && !isFly && !isBrawl && !isSuper)
+                for (const char* move : {"Move", "MoveMoon"})
+                    if (al::isEqualString(name, move)) return "MoveClassic";
+        #endif
+
         return nullptr;
     }
 
     // Swaps animation names before they reach the player and sub-actors
     struct PlayerAnimatorStartAnimHook : public mallow::hook::Trampoline<PlayerAnimatorStartAnimHook> {
         static void Callback(PlayerAnimator* thisPtr, const sead::SafeString& animName) {
-            if ((isMetal || isFly || isBrawl || isSuper || isBlasterOn)
-                && al::isEqualString(animName.cstr(), "WaitRelaxStart")) return;
+            if (al::isEqualString(animName.cstr(), "WaitRelaxStart")
+                && remapAnim("Wait", thisPtr)) return;
 
             const char* swapped = remapAnim(animName.cstr(), thisPtr);
             Orig(thisPtr, swapped ? swapped : animName.cstr());
@@ -121,13 +126,9 @@ namespace CustomAnimation {
     };
 
     inline void Install() {
-        #ifdef ALLOW_POWERUPS
-            PlayerAnimatorStartAnimHook::InstallAtSymbol("_ZN14PlayerAnimator9startAnimERKN4sead14SafeStringBaseIcEE");
-            PlayerAnimatorIsAnimHook::InstallAtSymbol("_ZNK14PlayerAnimator6isAnimERKN4sead14SafeStringBaseIcEE");
-            PlayerAnimation2DArchiveHook::InstallAtOffset(0x445664);
-        #endif
-        #ifdef ALLOW_KART
-            FindAnimInfoHook::InstallAtSymbol("_ZNK2al13AnimInfoTable12findAnimInfoEPKc");
-        #endif
+        PlayerAnimatorStartAnimHook::InstallAtSymbol("_ZN14PlayerAnimator9startAnimERKN4sead14SafeStringBaseIcEE");
+        PlayerAnimatorIsAnimHook::InstallAtSymbol("_ZNK14PlayerAnimator6isAnimERKN4sead14SafeStringBaseIcEE");
+        PlayerAnimation2DArchiveHook::InstallAtOffset(0x445664);
+        FindAnimInfoHook::InstallAtSymbol("_ZNK2al13AnimInfoTable12findAnimInfoEPKc");
     }
 }

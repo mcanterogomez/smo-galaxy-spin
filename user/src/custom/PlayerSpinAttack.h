@@ -7,31 +7,9 @@ namespace PlayerSpinAttack {
 
     struct InputIsTriggerActionXexclusivelyHook : public mallow::hook::Trampoline<InputIsTriggerActionXexclusivelyHook> {
         static bool Callback(const al::LiveActor* actor, int port) {
-            if(port == 100) return Orig(actor, PlayerFunction::getPlayerInputPort(actor));
-
-            bool canCapThrow = true;
-
-            switch (mallow::config::getConfg<ModOptions>()->spinButton) {
-                case 'Y':
-                    canCapThrow = al::isPadTriggerX(port);
-                    break;
-                case 'X':
-                    canCapThrow = al::isPadTriggerY(port);
-                    break;
-            }
-            return Orig(actor, port) && canCapThrow;
-        }
-    };
-
-    struct InputIsTriggerActionCameraResetHook : public mallow::hook::Trampoline<InputIsTriggerActionCameraResetHook> {
-        static bool Callback(const al::LiveActor* actor, int port) {
-            switch (mallow::config::getConfg<ModOptions>()->spinButton) {
-                case 'L':
-                    return al::isPadTriggerR(port);
-                /*case 'R':
-                    return al::isPadTriggerL(port);*/
-            }
-            return Orig(actor, port);
+            if (port == 100) return Orig(actor, PlayerFunction::getPlayerInputPort(actor));
+            return Orig(actor, port)
+                && (isConfig()->attackButton == 'X' ? al::isPadTriggerY(port) : al::isPadTriggerX(port));
         }
     };
 
@@ -271,11 +249,7 @@ namespace PlayerSpinAttack {
         else if (isTanooki) animator->startAnim("TailAttack");
         else {
             animator->startAnim("SpinSeparateSwim");
-
-            #ifdef ALLOW_GALAXY_SFX
-                al::tryEmitEffect(isHakoniwa->mModelHolder->findModelActor("Normal"), "SpinAttack", nullptr);
-                al::tryStartSe(isHakoniwa->mModelHolder->findModelActor("Normal"), "SpinAttack");
-            #endif
+            isGalaxySfx(isHakoniwa);
         }
     }
 
@@ -392,7 +366,6 @@ namespace PlayerSpinAttack {
         #ifndef ALLOW_CAPPY_ONLY
             // Modify triggers
             InputIsTriggerActionXexclusivelyHook::InstallAtSymbol("_ZN19PlayerInputFunction15isTriggerActionEPKN2al9LiveActorEi");
-            InputIsTriggerActionCameraResetHook::InstallAtSymbol("_ZN19PlayerInputFunction20isTriggerCameraResetEPKN2al9LiveActorEi");
 
             // Trigger spin instead of cap throw
             //PlayerTryActionCapSpinAttack::InstallAtSymbol("_ZN19PlayerActorHakoniwa26tryActionCapSpinAttackImplEb");

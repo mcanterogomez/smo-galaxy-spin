@@ -1,45 +1,47 @@
 #pragma once
 
+#include <mallow/config.hpp>
+
 // =========================================================
-//                 MOD VARIANT CONFIGURATION
+//              COMPILE-TIME FLAGS
 // =========================================================
 
-// [ OPTION 1: SPIN ATTACK ]
-// Enable spin attack only.
-//#define ALLOW_SPIN_ATTACK
-
-    // [ OPTION 1.2: CAPPY ONLY ]
-    // Enable Cappy throw only with power-ups.
-    //#define ALLOW_CAPPY_ONLY
-
-// [ OPTION 2: POWER-UPS ]
-// Enable power-ups.
+// Gates all power-up suits, fireballs, ice, hammer, drill etc.
 #define ALLOW_POWERUPS
+    #define ALLOW_MARIO // Enables Mario costume detection for powers and blaster.
+    #define ALLOW_DASH // Enables dash and water surface running. Requires ALLOW_POWERUPS.
 
-    // [ OPTION 2.1: DASH TRIGGER ]
-    // Enable dashing with power-ups.
-    #define ALLOW_DASH
+#ifndef ALLOW_POWERUPS
+    #undef ALLOW_MARIO
+    #undef ALLOW_DASH
+#endif
 
-    // [ OPTION 2.2: ENABLE KART ]
-    // Enable kart related mechanics.
-    #define ALLOW_KART
-
-// [ OPTION 3: TAUNT TRIGGER ]
-// Enable taunts.
+// Enables taunts via D-pad left/right while idle.
 #define ALLOW_TAUNT
 
-// [ OPTION 4: DEFINITIVE MARIO ]
-// Enable definitive Mario.
-#define ALLOW_MARIO
-
-// [ OPTION 5: HOMING ]
-// Enable home-in on punch and fireball.
-#define ALLOW_HOMING
-
-// [ EXTRA: GALAXY SFX ]
-// Enable Galaxy sfx.
-//#define ALLOW_GALAXY_SFX
-
-// [ EXTRA: CAPPY EYES ]
-// Disable Cappy eyes.
+// Patches out Cappy eyes at binary level.
 #define REMOVE_CAPPY_EYES
+
+// Disables galaxy spin hooks entirely — vanilla Cappy throw only.
+//#define ALLOW_CAPPY_ONLY
+
+// =========================================================
+//              RUNTIME CONFIG  (mod_config.json)
+// =========================================================
+
+struct ModConfig : public mallow::config::ConfigBase {
+    // Which button triggers attack: "Y" (default) or "X".
+    char attackButton;
+    // Use spin instead of punch as attack.
+    bool spinOnly;
+    // Emit Galaxy-style SFX and particles on spin.
+    bool galaxySfx;
+
+    void read(const ArduinoJson::JsonObject& config) override {
+        mallow::config::ConfigBase::read(config);
+
+        attackButton = (config["attackButton"] | "Y")[0];
+        spinOnly = config["spinOnly"] | false;
+        galaxySfx = config["galaxySfx"] | false;
+    }
+};

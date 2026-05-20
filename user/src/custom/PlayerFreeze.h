@@ -169,13 +169,10 @@ namespace PlayerFreeze {
     }
 
     inline bool handleReceiveMsg(const al::SensorMsg* msg, al::HitSensor* source) {
-#ifdef ALLOW_POWERUPS
         if (!msg || !source) return false;
+
         al::LiveActor* attacker = al::getSensorHost(source);
         return attacker && isFrozen(attacker) && al::isMsgEnemyAttack(msg);
-#else
-        return false;
-#endif
     }
 
 }  // namespace PlayerFreeze
