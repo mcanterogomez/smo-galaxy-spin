@@ -11,7 +11,8 @@ namespace mallow::config {
     const char* defaultConfig = R"({ 
         "attackButton":"Y",
         "spinOnly":false,
-        "galaxySfx":false
+        "galaxySfx":false,
+        "enableMario":false
     })";
 
     Allocator* getAllocator() {

@@ -80,6 +80,7 @@ namespace PowerUps {
                 al::initCreateActorNoPlacementInfo(cube, *actorInfo);
                 iceCubes->registerActor(cube);
             }
+            iceCubes->makeActorDeadAll();
         }
 
         // Create and hide tank bullets
@@ -103,6 +104,7 @@ namespace PowerUps {
         if (isHammer) isHammer->makeActorDead();
         if (fireBalls) fireBalls->makeActorDeadAll();
         if (iceBalls) iceBalls->makeActorDeadAll();
+        if (iceCubes) iceCubes->makeActorDeadAll();
         if (tankBullets) tankBullets->makeActorDeadAll();
     }
 
@@ -110,23 +112,14 @@ namespace PowerUps {
         auto* anim   = thisPtr->mAnimator;
         auto* holder = thisPtr->mModelHolder;
         auto* model  = holder->findModelActor("Normal");
-        auto* head = al::tryGetSubActor(model, "頭");
-        auto* hand = al::tryGetSubActor(model, "右手");
-        auto* cape = al::tryGetSubActor(model, "ケープ");
-        auto* blaster = al::tryGetSubActor(model, "Blaster");
-        auto* drill = al::tryGetSubActor(model, "Drill");
-        auto* tail = al::tryGetSubActor(model, "尻尾");
         auto* damage = thisPtr->mDamageKeeper;
-        bool isFlicker = damage && damage->mDamageInvalidCount > 0;
-
-        isCapeOn = cape && al::isAlive(cape);
-        isBlasterOn = blaster && al::isAlive(blaster);
 
         bool isMove = thisPtr->mInput->isMove();
         bool onGround = rs::isOnGround(thisPtr, thisPtr->mCollider);
         bool isWater = al::isInWater(thisPtr);
         bool isSurface = thisPtr->mWaterSurfaceFinder->isFoundSurface();
         bool isHack = thisPtr->mHackKeeper && thisPtr->mHackKeeper->mHackActor;
+        bool isFlicker = damage && damage->mDamageInvalidCount > 0;
         bool isActive = !isFlicker && !isHack && !rs::isActiveDemo(thisPtr);
 
         f32 speedH = al::calcSpeedH(thisPtr);
@@ -143,6 +136,8 @@ namespace PowerUps {
 
         // Handle logic for Drill Suit
         if (isDrill) {
+            auto* head = al::tryGetSubActor(model, "頭");
+            auto* drill = al::tryGetSubActor(model, "Drill");
             bool capOn = thisPtr->mHackCap->isPutOn();
             bool inHipDrop = al::isNerve(thisPtr, getNerveAt(nrvHakoniwaHipDrop));
             bool inLand = anim->isAnim("HipDropLand");
@@ -196,22 +191,22 @@ namespace PowerUps {
         if (al::isPadHoldRight(-1)) holdRightFrames++;
         else holdRightFrames = 0;
 
-        if (isMario && blaster && isActive
-            && holdRightFrames == 30
-            && !thisPtr->mInput->isMove()
-        ) {
-            if (isBlasterOn
-            ) {
-                al::tryEmitEffect(model, "BlasterDisappear", nullptr);
-                al::tryStartSe(thisPtr, "BlasterOpen");
-                blaster->kill();
-            } else {
-                blaster->appear();
-                al::tryEmitEffect(model, "BlasterAppear", nullptr);
-                al::tryStartSe(thisPtr, "BlasterOpen");
-            }
+        auto* blaster = al::tryGetSubActor(model, "Blaster");
+        isBlasterOn = blaster && al::isAlive(blaster);
+        bool blasterToggle = isMario && isActive && holdRightFrames == 30;
+
+        if (blaster && isBlasterOn && (blasterToggle || isMarioActive == -1)) {
+            blaster->kill();
+            al::tryEmitEffect(model, "BlasterDisappear", nullptr);
+            al::tryStartSe(thisPtr, "BlasterOpen");
+        }
+        else if (blaster && !isBlasterOn && blasterToggle) {
+            blaster->appear();
+            al::tryEmitEffect(model, "BlasterAppear", nullptr);
+            al::tryStartSe(thisPtr, "BlasterOpen");
         }
 
+        auto* hand = al::tryGetSubActor(model, "右手");
         if (isBlasterOn && hand && !al::isActionPlayingSubActor(model, "右手", "AreaWaitDance03"))
             al::startActionSubActor(model, "右手", "AreaWaitDance03");
             
@@ -237,82 +232,80 @@ namespace PowerUps {
         bool isFloating = al::isActionPlaying(model, "GlideFloat")
             || al::isActionPlaying(model, "GlideFloatSuper");
 
-        if (isBlasterOn || isMario || isFire || isIce || isBrawl || isSuper
+        if ((isBlasterOn || isMario || isFire || isIce || isBrawl || isSuper)
+            && fireStep < 0
+            && (canAction || isFloating)
+            && al::isPadTriggerR(-1)
         ) {
-            if (fireStep < 0
-                && (canAction || isFloating)
-                && al::isPadTriggerR(-1)
+            if (projectile && al::isDead(projectile)
             ) {
-                if (projectile && al::isDead(projectile)
-                ) {
-                    fireStep = 0;
-                    canAction = false;
+                fireStep = 0;
+                canAction = false;
 
-                    // Increase Eye sensor range for blaster homing
-                    if (isBlasterOn) al::setSensorRadius(thisPtr, "Eye", 1600.0f);
+                // Increase Eye sensor range for blaster homing
+                if (isBlasterOn) al::setSensorRadius(thisPtr, "Eye", 1600.0f);
 
-                    anim->startUpperBodyAnim(fireAnim);
-                    if (isFullBody) anim->startAnim(fireAnim);
-                    if (isBlasterOn) al::tryStartSe(thisPtr, "BlasterShoot");
-                }
+                anim->startUpperBodyAnim(fireAnim);
+                if (isFullBody) anim->startAnim(fireAnim);
+                if (isBlasterOn) al::tryStartSe(thisPtr, "BlasterShoot");
             }
-            if (fireStep >= 0
+        }
+        if (fireStep >= 0
+        ) {
+            bool isShooting = anim->isUpperBodyAnim("FireL") || anim->isUpperBodyAnim("FireR") || anim->isUpperBodyAnim("BlastShoot")
+                || anim->isAnim("FireL") || anim->isAnim("FireR") || anim->isAnim("BlastShoot");
+
+            if (!isShooting) {
+                fireStep = -1;
+                al::setSensorRadius(thisPtr, "Eye", 800.0f); // Restore default
+                return;
+            }
+            if ((fireStep == 2 && !isBlasterOn) || (fireStep == 40 && isBlasterOn)
             ) {
-                bool isShooting = anim->isUpperBodyAnim("FireL") || anim->isUpperBodyAnim("FireR") || anim->isUpperBodyAnim("BlastShoot")
-                    || anim->isAnim("FireL") || anim->isAnim("FireR") || anim->isAnim("BlastShoot");
+                // Home in on nearest target
+                isNearTarget = findNearestTarget(thisPtr, isBlasterOn ? 1600.0f : 800.0f);
+                if (isNearTarget) {
+                    sead::Vector3f dir = al::getTrans(isNearTarget) - al::getTrans(thisPtr);
+                    dir.normalize();
+                    sead::Vector3f fwd;
+                    al::calcQuatFront(&fwd, model);
 
-                if (!isShooting) {
-                    fireStep = -1;
-                    al::setSensorRadius(thisPtr, "Eye", 800.0f); // Restore default
-                    return;
+                    if (fwd.dot(dir) > 0.85f) al::faceToDirection(model, al::getTrans(isNearTarget) - al::getTrans(thisPtr));
                 }
-                if ((fireStep == 2 && !isBlasterOn) || (fireStep == 40 && isBlasterOn)
-                ) {
-                    // Home in on nearest target
-                    isNearTarget = findNearestTarget(thisPtr, isBlasterOn ? 1600.0f : 800.0f);
-                    if (isNearTarget) {
-                        sead::Vector3f dir = al::getTrans(isNearTarget) - al::getTrans(thisPtr);
-                        dir.normalize();
-                        sead::Vector3f fwd;
-                        al::calcQuatFront(&fwd, model);
 
-                        if (fwd.dot(dir) > 0.85f) al::faceToDirection(model, al::getTrans(isNearTarget) - al::getTrans(thisPtr));
-                    }
-                    
-                    hitBufferCount = 0;
+                hitBufferCount = 0;
 
-                    sead::Vector3f startPos;
-                    al::calcJointPos(&startPos, model, jointName);
+                sead::Vector3f startPos;
+                al::calcJointPos(&startPos, model, jointName);
 
-                    if (isBlasterOn) {
-                        sead::Vector3f fwd;
-                        al::calcQuatFront(&fwd, model);
-                        fwd.normalize();
+                if (isBlasterOn) {
+                    sead::Vector3f fwd;
+                    al::calcQuatFront(&fwd, model);
+                    fwd.normalize();
 
-                        ((TankBullet*)projectile)->shoot(startPos, fwd * 85.0f, 200, false, false);
-                        al::tryEmitEffect(model, "Shoot", nullptr);
-                        al::tryStartSe(projectile, "Shoot");
-                    } else {
-                        sead::Vector3f offset(0.0f, 0.0f, 0.0f);
+                    ((TankBullet*)projectile)->shoot(startPos, fwd * 85.0f, 200, false, false);
+                    al::tryEmitEffect(model, "Shoot", nullptr);
+                    al::tryStartSe(projectile, "Shoot");
+                } else {
+                    sead::Vector3f offset(0.0f, 0.0f, 0.0f);
 
-                        if (isSuper) ((FireBrosFireBall*)projectile)->shoot(startPos, al::getQuat(model), offset, true, 0, true);
-                        else ((FireBrosFireBall*)projectile)->shoot(startPos, al::getQuat(model), offset, true, 0, false);
+                    if (isSuper) ((FireBrosFireBall*)projectile)->shoot(startPos, al::getQuat(model), offset, true, 0, true);
+                    else ((FireBrosFireBall*)projectile)->shoot(startPos, al::getQuat(model), offset, true, 0, false);
 
-                        if (isIce) al::tryStartSe(projectile, "IceBallShoot");
-                        else al::tryStartSe(projectile, "FireBallShoot");
-                    }
-
-                    if (!isBlasterOn) nextThrowLeft = !nextThrowLeft;
+                    if (isIce) al::tryStartSe(projectile, "IceBallShoot");
+                    else al::tryStartSe(projectile, "FireBallShoot");
                 }
-                if (anim->isUpperBodyAnimEnd()
-                ) {
-                    if (isFullBody) al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
-                    anim->clearUpperBodyAnim();
-                    fireStep = -1;
-                    al::setSensorRadius(thisPtr, "Eye", 800.0f); // Restore default
-                }
-                else fireStep++;
+
+                if (!isBlasterOn) nextThrowLeft = !nextThrowLeft;
             }
+            if (anim->isUpperBodyAnimEnd()
+            ) {
+                if (isFullBody) al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
+                anim->clearUpperBodyAnim();
+                fireStep = -1;
+                al::setSensorRadius(thisPtr, "Eye", 800.0f); // Restore default
+            }
+            else fireStep++;
         }
         canAction = false;
 
@@ -324,15 +317,6 @@ namespace PowerUps {
             || al::isActionPlaying(model, "JumpBroad8")
             || al::isActionPlaying(model, "JumpBroad8Alt")
             || isFloating;
-
-        /*if (isGliding && isHakoniwa->mJointControlKeeper) {
-            char* dyn = *(char**)((char*)isHakoniwa->mJointControlKeeper + 0x30);
-            if (dyn) {
-                float* noseVel = (float*)(*(char**)(dyn + 0x20) + 0x48);
-                noseVel[0] *= 0.0f;
-                noseVel[1] *= 0.0f;
-            }
-        }*/
 
         // Handle glide gauge
         if (isGauge && !isSuper
@@ -374,23 +358,23 @@ namespace PowerUps {
             wasInAir = inAir;
         }
 
-        if ((isMario || isBrawl)
-            && cape
+        // Handle cape spawning
+        auto* cape = al::tryGetSubActor(model, "ケープ");
+        isCapeOn = cape && al::isAlive(cape);
+        bool capeTimer = !isGliding && isCapeActive > 0 && --isCapeActive == 0;
+
+        if (cape && !isCapeOn) isCapeActive = -1;
+        if (cape && isCapeOn && (isMarioActive == -1 || capeTimer)
         ) {
-            if (al::isDead(cape)) isCapeActive = -1;
-            else if (!isGliding && isCapeActive > 0) {
-                if (--isCapeActive == 0) {
-                    cape->kill();
-                    al::tryEmitEffect(model, "AppearBloom", nullptr);
-                    al::tryStartSe(thisPtr, "Bloom");
-                    isCapeActive = -1;
-                }
-            }
+            cape->kill();
+            al::tryEmitEffect(model, "AppearBloom", nullptr);
+            al::tryStartSe(thisPtr, "Bloom");
+            isCapeActive = -1;
         }
 
         // Handle tail logic for Tanooki suit
-        if (isTanooki
-            && tail && al::isAlive(tail)
+        auto* tail = al::tryGetSubActor(model, "尻尾");
+        if (isTanooki && tail && al::isAlive(tail)
         ) {
             if (isGliding) {
                 if (!al::isActionPlaying(tail, "TailSpin")
@@ -560,16 +544,16 @@ namespace PowerUps {
 
     struct PlayerActorHakoniwaExeJump : public mallow::hook::Trampoline<PlayerActorHakoniwaExeJump> {
         static void Callback(PlayerActorHakoniwa* thisPtr) {
-            auto* anim = thisPtr->mAnimator;
-            auto* model = thisPtr->mModelHolder->findModelActor("Normal");
-            auto* keeper = static_cast<al::IUseEffectKeeper*>(model);
-
             bool wasGround = rs::isOnGround(thisPtr, thisPtr->mCollider);
             bool wasWater = al::isInWater(thisPtr);
 
             Orig(thisPtr);
 
             if (!isBrawl) return;
+
+            auto* anim = thisPtr->mAnimator;
+            auto* model = thisPtr->mModelHolder->findModelActor("Normal");
+            auto* keeper = static_cast<al::IUseEffectKeeper*>(model);
 
             bool isGround = rs::isOnGround(thisPtr, thisPtr->mCollider);
             bool isWater = al::isInWater(thisPtr);
@@ -586,13 +570,13 @@ namespace PowerUps {
                 isDoubleJump = true;
                 isDoubleJumpConsume = true;
 
-                if (isBrawl) al::tryEmitEffect(keeper, "DoubleJump", nullptr);
+                al::tryEmitEffect(keeper, "DoubleJump", nullptr);
                 al::setNerve(thisPtr, getNerveAt(nrvHakoniwaJump));
             }
             if (isDoubleJumpConsume
                 && al::isFirstStep(thisPtr)
             ) {
-                if (isBrawl) anim->startAnim("PoleHandStandJump");
+                anim->startAnim("PoleHandStandJump");
                 isDoubleJumpConsume = false;
             }
         }

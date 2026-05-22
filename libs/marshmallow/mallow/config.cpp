@@ -135,6 +135,8 @@ namespace mallow::config {
     }
 
     bool saveConfig() {
+        if (getConfig()) getConfig()->write(getConfigJson());
+
         nn::fs::FileHandle file;
         auto res = nn::fs::OpenFile(&file, calcConfigPath(), nn::fs::OpenMode_Write);
         if (nn::fs::ResultPathNotFound::Includes(res)) {

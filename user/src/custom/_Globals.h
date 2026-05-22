@@ -183,6 +183,7 @@ int fireStep = -1;
 int drillStep = -1;
 int drillSensorRemaining = -1; // hitbox lingers N frames after drill pop
 int isCapeActive = -1;
+int isMarioActive = 0; // 0 = none, 1 = enabling, -1 = disabling
 
 bool isActionBusy() { return fireStep >= 0 || drillStep >= 0; }
 

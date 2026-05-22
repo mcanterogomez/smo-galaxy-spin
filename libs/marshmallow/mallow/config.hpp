@@ -18,6 +18,7 @@ namespace mallow::config {
         u16 loggerPort;
 
         virtual void read(const ArduinoJson::JsonObject& config);
+        virtual void write(ArduinoJson::JsonObject config) {}
     };
 
     extern const char* path;

@@ -6,6 +6,10 @@
 #include "custom/PlayerFreeze.h"
 #include "custom/PlayerKart.h"
 
+inline bool detectIsMario(const char* costume, const char* cap) {
+    return (costume && al::isEqualString(costume, "Mario"))
+        && (cap && al::isEqualString(cap, "Mario"));
+}
 namespace PlayerCore {
 
     struct PlayerActorHakoniwaInitPlayer : public mallow::hook::Trampoline<PlayerActorHakoniwaInitPlayer> {
@@ -24,11 +28,7 @@ namespace PlayerCore {
                 const char* costume = GameDataFunction::getCurrentCostumeTypeName(thisPtr);
                 const char* cap = GameDataFunction::getCurrentCapTypeName(thisPtr);
 
-                #ifdef ALLOW_MARIO
-                    isMario = (costume && al::isEqualString(costume, "Mario"))
-                        && (cap && al::isEqualString(cap, "Mario"));
-                #endif
-
+                if (isConfig()->enableMario) isMario = detectIsMario(costume, cap);
                 isNoCap = (cap && al::isEqualString(cap, "MarioNoCap"));
                 isFeather = (costume && al::isEqualString(costume, "MarioFeather"));
                 isFire = (costume && al::isEqualString(costume, "MarioColorFire"))
@@ -70,16 +70,50 @@ namespace PlayerCore {
     struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> {
         static void Callback(PlayerActorHakoniwa* thisPtr) {
             Orig(thisPtr);
+            
+            #ifdef ALLOW_POWERUPS
+                PowerUps::executeMovement(thisPtr);
+            #endif
+            PlayerKart::executeMovement(thisPtr);
 
             auto* holder = thisPtr->mModelHolder;
             auto* model  = holder->findModelActor("Normal");
             al::LiveActor* face = al::tryGetSubActor(model, "顔");
             
-            #ifdef ALLOW_POWERUPS
-                PowerUps::executeMovement(thisPtr);
-            #endif
+            // Toggle configs
+            if (al::isPadHoldL(-1) && al::isPadHoldPressLeftStick(-1)
+            ) {
+                bool changed = false;
 
-            PlayerKart::executeMovement(thisPtr);
+                if (isPadTriggerGalaxySpin(-1)) { isConfig()->spinOnly = !isConfig()->spinOnly; changed = true; }
+                else if (al::isPadTriggerY(-1) || al::isPadTriggerX(-1)) { isConfig()->attackButton = isConfig()->attackButton == 'Y' ? 'X' : 'Y'; changed = true; }
+                else if (thisPtr->mInput->isTriggerJump()) { isConfig()->galaxySfx = !isConfig()->galaxySfx; changed = true; }
+
+                #ifdef ALLOW_POWERUPS
+                    else if (al::isPadTriggerZR(-1) && rs::isOnGround(thisPtr, thisPtr->mCollider)
+                    ) {
+                        const char* costume = GameDataFunction::getCurrentCostumeTypeName(thisPtr);
+                        const char* cap = GameDataFunction::getCurrentCapTypeName(thisPtr);
+                        if (!detectIsMario(costume, cap)) return;
+
+                        auto* damage = thisPtr->mDamageKeeper;
+                        bool isFlicker = damage && damage->mDamageInvalidCount > 0;
+                        bool isHack = thisPtr->mHackKeeper && thisPtr->mHackKeeper->mHackActor;
+                        if (isFlicker || isHack || rs::isActiveDemo(thisPtr)) return;
+
+                        isMario = detectIsMario(costume, cap) && !isMario;
+                        isConfig()->enableMario = isMario;
+                        isMarioActive = isMario ? 1 : -1;
+                        
+                        al::setNerve(thisPtr, &TauntRightNrv);
+                        thisPtr->mDamageKeeper->invalidate(60);
+                        al::tryStartSe(thisPtr, isMario ? "HrPowerUpNormal" : "EndInvincible");
+                        mallow::config::saveConfig();
+                    }
+                #endif
+
+                if (changed) { mallow::config::saveConfig(); al::tryStartSe(thisPtr, "DemoReturnHomeJingle"); }
+            }
 
             // Spin-type sensors all attack wall and ceiling contacts
             const char* attackSensorNames[] = {"GalaxySpin", "DoubleSpin", "Punch"};

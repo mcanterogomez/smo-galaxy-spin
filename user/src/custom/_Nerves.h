@@ -309,7 +309,9 @@ public:
         ) {
             anim->endSubAnim();
 
-            if (tauntRightAlt) {
+            if (isMarioActive == 1) anim->startAnim("TauntSuper");
+            else if (isMarioActive == -1) anim->startAnim("AreaWaitSigh");
+            else if (tauntRightAlt) {
                 if (isBrawl) {
                     if (cape && al::isDead(cape)) anim->startAnim("LandJump3");
                     else anim->startAnim("TauntFeather");
@@ -360,7 +362,7 @@ public:
                     al::tryEmitEffect(effect, "BonfireSuper", nullptr);
                     al::tryStartSe(player, "FireOn");
                 }
-                if (isSuper) {
+                if (isMarioActive == 1 || isSuper) {
                     al::tryEmitEffect(player, "InvincibleStart", nullptr);
                     al::tryEmitEffect(effect, "ChargeSuper", nullptr);
                     al::tryStartSe(player, "StartInvincible");
@@ -370,6 +372,7 @@ public:
 
         if (anim->isAnimEnd()
         ) {
+            isMarioActive = 0;
             tauntRightAlt = false;
             al::tryDeleteEffect(effect, "BonfireSuper");
             al::tryDeleteEffect(effect, "IceEffect");
