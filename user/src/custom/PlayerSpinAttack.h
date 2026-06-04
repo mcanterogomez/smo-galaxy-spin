@@ -135,8 +135,8 @@ namespace PlayerSpinAttack {
         isNearTreasure = false;
         isNearSwoonedEnemy = false;
 
-        spin.fakethrowRemainder = -1;
         spin.isGalaxy = false;
+        spin.fakethrowRemainder = -1;
         attackSensorRemaining = -1;
 
         al::invalidateHitSensor(actor, "Punch");

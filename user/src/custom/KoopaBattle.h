@@ -59,7 +59,7 @@ namespace KoopaBattle {
 
             sead::Vector3f away = al::getTrans(mario) - al::getTrans(bowser);
             al::tryNormalizeOrZero(&away);
-            al::setVelocity(mario, away * 15.0f - al::getGravity(mario) * 20.0f);
+            al::setVelocity(mario, away * (isHakoniwa->mInput->isMove() ? 25.0f : 15.0f) - al::getGravity(mario) * 20.0f);
         }
 
         if (isInvincible) al::tryEmitEffect(bowser, "Guard", &hitPos);

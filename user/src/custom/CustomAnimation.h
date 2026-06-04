@@ -96,23 +96,29 @@ namespace CustomAnimation {
     struct PlayerAnimation2DArchiveHook : public mallow::hook::Inline<PlayerAnimation2DArchiveHook> {
         static void Callback(exl::hook::InlineCtx* ctx) {
             const char* model = (const char*)ctx->X[20];
+            static bool isNew2D = al::isExistFile("ObjectData/MarioNew2D.txt");
 
-            if (al::isEqualString(model, "Mario2D")
-                || al::isEqualString(model, "MarioFeather2D")
-                || al::isEqualString(model, "MarioColorFire2D")
-                || al::isEqualString(model, "MarioColorIce2D")
-                || al::isEqualString(model, "MarioTanooki2D")
-                || al::isEqualString(model, "MarioDrill2D")
-                || al::isEqualString(model, "MarioColorMetal2D")
-                || al::isEqualString(model, "MarioColorFly2D")
-                || al::isEqualString(model, "MarioColorBrawl2D")
-                || al::isEqualString(model, "MarioColorSuper2D")) ctx->X[25] = (u64)"PlayerAnimationNew2D";
+            if ((al::isEqualString(model, "Mario2D") && isNew2D)
+                #ifdef ALLOW_POWERUPS
+                    || al::isEqualString(model, "MarioFeather2D")
+                    || al::isEqualString(model, "MarioColorFire2D")
+                    || al::isEqualString(model, "MarioColorIce2D")
+                    || al::isEqualString(model, "MarioTanooki2D")
+                    || al::isEqualString(model, "MarioDrill2D")
+                    || al::isEqualString(model, "MarioColorMetal2D")
+                    || al::isEqualString(model, "MarioColorFly2D")
+                    || al::isEqualString(model, "MarioColorBrawl2D")
+                    || al::isEqualString(model, "MarioColorSuper2D")
+                #endif
+            ) ctx->X[25] = (u64)"PlayerAnimationNew2D";
         }
     };
 
     inline void Install() {
-        PlayerAnimatorStartAnimHook::InstallAtSymbol("_ZN14PlayerAnimator9startAnimERKN4sead14SafeStringBaseIcEE");
-        PlayerAnimatorIsAnimHook::InstallAtSymbol("_ZNK14PlayerAnimator6isAnimERKN4sead14SafeStringBaseIcEE");
+        #ifdef ALLOW_POWERUPS
+            PlayerAnimatorStartAnimHook::InstallAtSymbol("_ZN14PlayerAnimator9startAnimERKN4sead14SafeStringBaseIcEE");
+            PlayerAnimatorIsAnimHook::InstallAtSymbol("_ZNK14PlayerAnimator6isAnimERKN4sead14SafeStringBaseIcEE");
+        #endif
         PlayerAnimation2DArchiveHook::InstallAtOffset(0x445664);
     }
 }

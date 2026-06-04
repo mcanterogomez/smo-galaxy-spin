@@ -19,9 +19,6 @@
 // Enables taunts via D-pad left/right while idle.
 #define ALLOW_TAUNT
 
-// Patches out Cappy eyes at binary level.
-#define REMOVE_CAPPY_EYES
-
 // =========================================================
 //              RUNTIME CONFIG  (mod_config.json)
 // =========================================================

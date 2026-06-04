@@ -3,6 +3,9 @@
 #include "custom/_Globals.h"
 
 // Custom Nerves
+class PlayerStateSpinCapNrvGalaxySpinGround; 
+extern PlayerStateSpinCapNrvGalaxySpinGround GalaxySpinGround; 
+
 class PlayerStateSpinCapNrvGalaxySpinAir; 
 extern PlayerStateSpinCapNrvGalaxySpinAir GalaxySpinAir; 
 
@@ -31,23 +34,13 @@ public:
 
             if (!isSpinning) {
                 if (didSpin) {
-                    if (spinDir > 0) {
-                        state->mAnimator->startSubAnim("SpinAttackLeft");
-                        state->mAnimator->startAnim("SpinAttackLeft");
-                    } else {
-                        state->mAnimator->startSubAnim("SpinAttackRight");
-                        state->mAnimator->startAnim("SpinAttackRight");
-                    }
+                    state->mAnimator->startSubAnim(spinDir > 0 ? "SpinAttackLeft" : "SpinAttackRight");
+                    state->mAnimator->startAnim(spinDir > 0 ? "SpinAttackLeft" : "SpinAttackRight");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
                     attackSensorRemaining = 41;
-                } else if (isRotatingL) {
-                    state->mAnimator->startSubAnim("SpinAttackLeft");
-                    state->mAnimator->startAnim("SpinAttackLeft");
-                    al::validateHitSensor(state->mActor, "DoubleSpin");
-                    attackSensorRemaining = 41;
-                } else if (isRotatingR) {
-                    state->mAnimator->startSubAnim("SpinAttackRight");
-                    state->mAnimator->startAnim("SpinAttackRight");
+                } else if (isRotatingL || isRotatingR) {
+                    state->mAnimator->startSubAnim(isRotatingL ? "SpinAttackLeft" : "SpinAttackRight");
+                    state->mAnimator->startAnim(isRotatingL ? "SpinAttackLeft" : "SpinAttackRight");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
                     attackSensorRemaining = 41;
                 } else if (isCarrying) {
@@ -63,51 +56,37 @@ public:
                 } else if (isNearTreasure || isNearSwoonedEnemy) {
                     state->mAnimator->startAnim("Kick");
                     al::validateHitSensor(state->mActor, "Punch");
+                } else if (isFeather) {
+                    al::setNerve(state, reinterpret_cast<al::Nerve*>(&GalaxySpinAir));
+                    return;
+                } else if (isTanooki) {
+                    state->mAnimator->startSubAnim("TailAttack");
+                    state->mAnimator->startAnim("TailAttack");
+                    al::validateHitSensor(state->mActor, "GalaxySpin");
+                    attackSensorRemaining = 21;
+                } else if (isBlasterOn) {
+                    state->mAnimator->startSubAnim("BlastAttack");
+                    state->mAnimator->startAnim("BlastAttack");
+                    al::validateHitSensor(state->mActor, "GalaxySpin");
+                    attackSensorRemaining = 21;
+                } else if (isConfig()->spinOnly) {
+                    state->mAnimator->startSubAnim("SpinSeparate");
+                    state->mAnimator->startAnim("SpinSeparate");
+                    al::validateHitSensor(state->mActor, "GalaxySpin");
+                    attackSensorRemaining = 21;
+
+                    isGalaxySfx(player);
                 } else {
-                    if (isFeather) {
-                        al::setNerve(state, reinterpret_cast<al::Nerve*>(&GalaxySpinAir));
-                        return;
-                    } else if (isTanooki) {
-                        state->mAnimator->startSubAnim("TailAttack");
-                        state->mAnimator->startAnim("TailAttack");
-                        al::validateHitSensor(state->mActor, "GalaxySpin");
-                        attackSensorRemaining = 21;
-                    } else if (isBlasterOn) {
-                        state->mAnimator->startSubAnim("BlastAttack");
-                        state->mAnimator->startAnim("BlastAttack");
-                        al::validateHitSensor(state->mActor, "GalaxySpin");
-                        attackSensorRemaining = 21;
-                    } else {
-                        if (isConfig()->spinOnly
-                        ) {
-                            state->mAnimator->startSubAnim("SpinSeparate");
-                            state->mAnimator->startAnim("SpinSeparate");
-                            al::validateHitSensor(state->mActor, "GalaxySpin");
-                            attackSensorRemaining = 21;
+                    al::calcQuatFront(&punchDir, player);
+                    punchDir = -punchDir;
+                    punchPos = al::getTrans(player);
 
-                            isGalaxySfx(player);
-                        }
-                        else {
-                            al::calcQuatFront(&punchDir, player);
-                            punchDir = -punchDir;
-                            punchPos = al::getTrans(player);
-
-                            if (isKoopa && KoopaBattle::isKillReady(isKoopa)
-                            ) {
-                                if (isPunchRight) state->mAnimator->startAnim("JumpPunchEndR");
-                                else state->mAnimator->startAnim("JumpPunchEndL");
-                            } else {
-                                if (isPunchRight) {
-                                    state->mAnimator->startSubAnim("KoopaCapPunchRStart");
-                                    state->mAnimator->startAnim("KoopaCapPunchR");
-                                } else {
-                                    state->mAnimator->startSubAnim("KoopaCapPunchLStart");
-                                    state->mAnimator->startAnim("KoopaCapPunchL");
-                                }
-                            }
-                            isPunchActive = true;
-                        }
+                    if (isKoopa && KoopaBattle::isKillReady(isKoopa)) state->mAnimator->startAnim(isPunchRight ? "JumpPunchEndR" : "JumpPunchEndL");
+                    else {
+                        state->mAnimator->startSubAnim(isPunchRight ? "KoopaCapPunchRStart" : "KoopaCapPunchLStart");
+                        state->mAnimator->startAnim(isPunchRight ? "KoopaCapPunchR" : "KoopaCapPunchL");
                     }
+                    isPunchActive = true;
                 }
             }
         }
@@ -134,23 +113,28 @@ public:
         bool isBowserPunch = state->mAnimator->isAnim("JumpPunchEndL") || state->mAnimator->isAnim("JumpPunchEndR");
         float isFrame = state->mAnimator->getAnimFrame();
 
+        // Cancel punch with punch
+        if (isPunch && isFrame >= state->mAnimator->getAnimFrameMax() - 5.0f
+            && isPadTriggerGalaxySpin(-1)
+        ) {
+            hitBufferCount = 0;
+            al::setNerve(state, &GalaxySpinGround);
+            return;
+        }
         // Cancel punch into jump punch
         if (isPunch && !al::isFirstStep(state) && player->mInput->isTriggerJump()
         ) {
-            hitBufferCount = 0; // reset buffer
-
-            if (isPunchRight) state->mAnimator->startAnim("JumpPunchL");
-            else state->mAnimator->startAnim("JumpPunchR");
+            hitBufferCount = 0;
+            state->mAnimator->startAnim(isPunchRight ? "JumpPunchL" : "JumpPunchR");
         }
         if (isJumpPunch) {
-            // Slow down during wind-up
             if (isFrame < 17.0f) {
+                // Slow down during wind-up
                 sead::Vector3f vel = al::getVelocity(player);
                 vel *= 0.8f;
                 al::setVelocity(player, vel);
-            }
-            // Launch on frame 17
-            if (isFrame >= 17.0f) {
+            } else {
+                // Launch on frame 17
                 sead::Vector3f up = -al::getGravity(player);
                 up.normalize();
                 sead::Vector3f fwd;
@@ -159,8 +143,7 @@ public:
                 al::setVelocity(player, up * 30.0f + fwd * 5.0f);
 
                 al::validateHitSensor(state->mActor, "GalaxySpin");
-                attackSensorRemaining = 21;
-
+                attackSensorRemaining = 13;
                 al::setNerve(state, getNerveAt(nrvSpinCapFall));
                 return;
             }
@@ -171,24 +154,13 @@ public:
             al::setTrans(player, punchPos);
             al::setVelocity(player, al::getGravity(player));
 
-            if (isFrame == 20.0f) { al::validateHitSensor(state->mActor, "GalaxySpin"); attackSensorRemaining = 21; }
+            if (isFrame == 20.0f) { al::validateHitSensor(state->mActor, "GalaxySpin"); attackSensorRemaining = 10; }
             if (isFrame == 60.0f) al::tryEmitEffect(player, "Land", nullptr);
         }
         // Handle Punch logic
-        if ((isPunch || isBlast) && al::isStep(state, 3)
-        ) {
-            sead::Vector3f vel = al::getVelocity(player);
-            vel *= 0.5f;
-            al::setVelocity(player, vel);
-
-            sead::Vector3f fwd;
-            al::calcQuatFront(&fwd, player);
-            fwd.normalize();
-            al::addVelocity(player, fwd * 5.0f);
-        }
+        if ((isPunch || isBlast) && al::isStep(state, 3)) applyLunge(player);
         // Re-validate sensors disabled during wind-up
-        if (isPunch && al::isStep(state, 7)) { al::validateHitSensor(state->mActor, "Punch"); attackSensorRemaining = 8; }
-
+        if (isPunch && isFrame == 5.0f) { al::validateHitSensor(state->mActor, "Punch"); attackSensorRemaining = 5; }
         if (!isBowserPunch) state->updateSpinGroundNerve(); //if (isPunchActive) applyEdgeGuard(player);
         if (state->mAnimator->isAnimEnd()) { state->kill(); isSpinActive = false; }
     }
@@ -219,16 +191,13 @@ public:
             
             if (!isSpinning) {
                 if (didSpin) {
-                    if (spinDir > 0) state->mAnimator->startAnim("SpinAttackAirLeft");
-                    else state->mAnimator->startAnim("SpinAttackAirRight");
+                    state->mAnimator->startSubAnim(spinDir > 0 ? "SpinAttackAirLeft" : "SpinAttackAirRight");
+                    state->mAnimator->startAnim(spinDir > 0 ? "SpinAttackAirLeft" : "SpinAttackAirRight");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
                     attackSensorRemaining = 41;
-                } else if (isRotatingAirL) {
-                    state->mAnimator->startAnim("SpinAttackAirLeft");
-                    al::validateHitSensor(state->mActor, "DoubleSpin");
-                    attackSensorRemaining = 41;
-                } else if (isRotatingAirR) {
-                    state->mAnimator->startAnim("SpinAttackAirRight");
+                } else if (isRotatingAirL || isRotatingAirR) {
+                    state->mAnimator->startSubAnim(isRotatingAirL ? "SpinAttackAirLeft" : "SpinAttackAirRight");
+                    state->mAnimator->startAnim(isRotatingAirL ? "SpinAttackAirLeft" : "SpinAttackAirRight");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
                     attackSensorRemaining = 41;
                 } else if (isCarrying) {
@@ -351,18 +320,11 @@ public:
         ) {
             if (isFire) player->mStainControl->recordDamageFire();
             if (isIce) player->mStainControl->recordIceWater();
-
-            if (al::isStep(player, 14)
-            ) {
-                if (isIce) {
-                    al::tryEmitEffect(effect, "IceEffect", nullptr);
-                    al::tryStartSe(player, "FireOn");
-                }
-                if (isFire || isSuper) {
-                    al::tryEmitEffect(effect, "BonfireSuper", nullptr);
-                    al::tryStartSe(player, "FireOn");
-                }
-                if (isMarioActive == 1 || isSuper) {
+            if (al::isStep(player, 14)) {
+                if (isIce) { al::tryEmitEffect(effect, "IceEffect", nullptr); al::tryStartSe(player, "FireOn"); }
+                if (isMarioActive == 1) { player->mDamageKeeper->invalidate(60); al::tryStartSe(player, "HrPowerUpNormal"); }
+                if (isFire || isSuper || isMarioActive == 1) { al::tryEmitEffect(effect, "BonfireSuper", nullptr); al::tryStartSe(player, "FireOn"); }
+                if (isSuper) {
                     al::tryEmitEffect(player, "InvincibleStart", nullptr);
                     al::tryEmitEffect(effect, "ChargeSuper", nullptr);
                     al::tryStartSe(player, "StartInvincible");

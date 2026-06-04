@@ -70,48 +70,39 @@ namespace PlayerCore {
     struct PlayerMovementHook : public mallow::hook::Trampoline<PlayerMovementHook> {
         static void Callback(PlayerActorHakoniwa* thisPtr) {
             Orig(thisPtr);
-            
+
             #ifdef ALLOW_POWERUPS
                 PowerUps::executeMovement(thisPtr);
             #endif
             PlayerKart::executeMovement(thisPtr);
+            auto* model  = thisPtr->mModelHolder->findModelActor("Normal");
 
-            auto* holder = thisPtr->mModelHolder;
-            auto* model  = holder->findModelActor("Normal");
-            al::LiveActor* face = al::tryGetSubActor(model, "顔");
-            
             // Toggle configs
             if (al::isPadHoldL(-1) && al::isPadHoldPressLeftStick(-1)
             ) {
+                bool isHack = thisPtr->mHackKeeper && thisPtr->mHackKeeper->mHackActor;
+                bool isFlicker = thisPtr->mDamageKeeper && thisPtr->mDamageKeeper->mDamageInvalidCount > 0;
+                if (isHack || isFlicker || rs::isActiveDemo(thisPtr)) return;
                 bool changed = false;
 
                 if (isPadTriggerGalaxySpin(-1)) { isConfig()->spinOnly = !isConfig()->spinOnly; changed = true; }
                 else if (al::isPadTriggerY(-1) || al::isPadTriggerX(-1)) { isConfig()->attackButton = isConfig()->attackButton == 'Y' ? 'X' : 'Y'; changed = true; }
                 else if (thisPtr->mInput->isTriggerJump()) { isConfig()->galaxySfx = !isConfig()->galaxySfx; changed = true; }
+            #ifdef ALLOW_POWERUPS
+                else if (al::isPadTriggerZR(-1) && rs::isOnGround(thisPtr, thisPtr->mCollider)
+                ) {
+                    const char* costume = GameDataFunction::getCurrentCostumeTypeName(thisPtr);
+                    const char* cap = GameDataFunction::getCurrentCapTypeName(thisPtr);
+                    if (!detectIsMario(costume, cap)) return;
+                    isMario = !isMario;
+                    isConfig()->enableMario = isMario;
+                    isMarioActive = isMario ? 1 : -1;
 
-                #ifdef ALLOW_POWERUPS
-                    else if (al::isPadTriggerZR(-1) && rs::isOnGround(thisPtr, thisPtr->mCollider)
-                    ) {
-                        const char* costume = GameDataFunction::getCurrentCostumeTypeName(thisPtr);
-                        const char* cap = GameDataFunction::getCurrentCapTypeName(thisPtr);
-                        if (!detectIsMario(costume, cap)) return;
-
-                        auto* damage = thisPtr->mDamageKeeper;
-                        bool isFlicker = damage && damage->mDamageInvalidCount > 0;
-                        bool isHack = thisPtr->mHackKeeper && thisPtr->mHackKeeper->mHackActor;
-                        if (isFlicker || isHack || rs::isActiveDemo(thisPtr)) return;
-
-                        isMario = detectIsMario(costume, cap) && !isMario;
-                        isConfig()->enableMario = isMario;
-                        isMarioActive = isMario ? 1 : -1;
-                        
-                        al::setNerve(thisPtr, &TauntRightNrv);
-                        thisPtr->mDamageKeeper->invalidate(60);
-                        al::tryStartSe(thisPtr, isMario ? "HrPowerUpNormal" : "EndInvincible");
-                        mallow::config::saveConfig();
-                    }
-                #endif
-
+                    al::setNerve(thisPtr, &TauntRightNrv);
+                    if (!isMario) { thisPtr->mDamageKeeper->invalidate(60); al::tryStartSe(thisPtr, "EndInvincible"); }
+                    mallow::config::saveConfig();
+                }
+            #endif
                 if (changed) { mallow::config::saveConfig(); al::tryStartSe(thisPtr, "DemoReturnHomeJingle"); }
             }
 
@@ -223,11 +214,13 @@ namespace PlayerCore {
             updateAttackSensor(thisPtr, "HipDropKnockDown", isHipDropAnim(thisPtr->mAnimator), wasAttackMove);
 
             // Change face animations
-            if ((thisPtr->mAnimator->isAnim("BattleWait") || isBrawl || isSuper)
-                && face && !al::isActionPlayingSubActor(model, "顔", "WaitAngry")) al::startActionSubActor(model, "顔", "WaitAngry");
-
-            if (isMetal && face
-                && !al::isActionPlayingSubActor(model, "顔", "AreaWaitFight")) al::startActionSubActor(model, "顔", "AreaWaitFight");
+            al::LiveActor* face = al::tryGetSubActor(model, "顔");
+            if (face) {
+                if ((thisPtr->mAnimator->isAnim("BattleWait") || isBrawl || isSuper) && !al::isActionPlayingSubActor(model, "顔", "WaitAngry"))
+                    al::startActionSubActor(model, "顔", "WaitAngry");
+                if (isMetal && !al::isActionPlayingSubActor(model, "顔", "AreaWaitFight"))
+                    al::startActionSubActor(model, "顔", "AreaWaitFight");
+            }
 
             #ifdef ALLOW_TAUNT // Handle Taunt actions
                 if (!thisPtr->mInput->isMove()
@@ -266,7 +259,6 @@ namespace PlayerCore {
     struct PlayerActorHakoniwaReceiveMsgHook : public mallow::hook::Trampoline<PlayerActorHakoniwaReceiveMsgHook> {
         static bool Callback(PlayerActorHakoniwa* thisPtr, const al::SensorMsg* msg, al::HitSensor* source, al::HitSensor* target) {
             if (drillStep != WallStick::Idle || drillSensorRemaining > 0) return false;
-
             if (PlayerFreeze::handleReceiveMsg(msg, source)) return false;
 
             bool isDamage = rs::isMsgPlayerDamage(msg)
@@ -276,15 +268,13 @@ namespace PlayerCore {
                 || rs::isMsgPlayerDamageBlowDown(msg)
                 || al::isMsgExplosion(msg);
 
-            if (thisPtr && isDamage
-            ) {
+            if (isDamage) {
                 auto* anim = thisPtr->mAnimator;
                 const float frame = anim->getAnimFrame();
 
-                if ((al::isEqualSubString(anim->mCurAnim, "CapPunch")  && frame <= 7.0f)
-                    || (al::isEqualSubString(anim->mCurAnim, "JumpPunch") && frame <= 17.0f)) return false;
-                if (source && al::isEqualString(al::getSensorHost(source)->getName(), "MarioTankBullet")) return false;
+                if ((al::isEqualSubString(anim->mCurAnim, "CapPunch")  && frame <= 5.0f) || (al::isEqualSubString(anim->mCurAnim, "JumpPunch") && frame <= 17.0f)) return false;
                 if (isHipDropAnim(anim) || isMetal || isSuper) return false;
+                if (source && al::isEqualString(al::getSensorHost(source)->getName(), "MarioTankBullet")) return false;
             }
             return Orig(thisPtr, msg, source, target);
         }

@@ -304,7 +304,6 @@ namespace AttackSensor {
             if(al::isSensorName(source, "AttackHack")
             ) {
                 rs::sendMsgPaint(target, source, paintClear, 300, 0);
-
                 if (isInHitBuffer(targetHost)) { Orig(thisPtr, source, target); return; }
                 
                 if (al::isEqualSubString(typeid(*targetHost).name(), "BlockHard")
@@ -476,6 +475,7 @@ namespace AttackSensor {
             if (!ctx->W[0]) {
                 if (al::sendMsgExplosion(target, source, nullptr)
                     || al::sendMsgKickStoneAttackReflect(target, source)
+                    || rs::sendMsgKoopaCapPunchL(target, source)
                 ) {
                     ctx->W[0] = true;
                     if (!al::isEffectEmitting(thisPtr, "Hit")) al::tryEmitEffect(isHakoniwa, "Hit", &spawnPos);
@@ -493,7 +493,8 @@ namespace AttackSensor {
 
             rs::sendMsgSphinxRideAttack(target, source)
             || rs::sendMsgSphinxRideAttackReflect(target, source)
-            || rs::sendMsgHackAttack(target, source);
+            || rs::sendMsgHackAttack(target, source)
+            || rs::sendMsgKoopaCapPunchL(target, source);
         }
     };
 
@@ -512,7 +513,8 @@ namespace AttackSensor {
             ctx->W[0] = ctx->W[0]
                 || al::sendMsgPlayerFireBallAttack(target, source)
                 || rs::sendMsgCapAttack(target, source)
-                || al::sendMsgKickStoneAttackReflect(target, source);
+                || al::sendMsgKickStoneAttackReflect(target, source)
+                || rs::sendMsgKoopaCapPunchL(target, source);
 
             rs::sendMsgWeaponItemGet(target, source);
         }

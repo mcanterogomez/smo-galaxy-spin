@@ -32,18 +32,13 @@ extern "C" void userMain() {
     PlayerCore::Install();
     PlayerSpinAttack::Install();
     AttackSensor::Install();
+    CustomAnimation::Install();
     KoopaBattle::Install();
     PlayerKart::Install();
 
     #ifdef ALLOW_POWERUPS
         PowerUps::Install();
-        CustomAnimation::Install();
         TriggerCameraReset::InstallAtSymbol("_ZN19PlayerInputFunction20isTriggerCameraResetEPKN2al9LiveActorEi");
         TriggerAmiibo::InstallAtSymbol("_ZN2rs19isTriggerAmiiboModeEPKN2al18IUseSceneObjHolderE");
-    #endif
-
-    #ifdef REMOVE_CAPPY_EYES // Remove Cappy eyes while ide
-        exl::patch::CodePatcher eyePatcher(0x41F7E4);
-        eyePatcher.WriteInst(exl::armv8::inst::Movk(exl::armv8::reg::W0, 0));
     #endif
 }

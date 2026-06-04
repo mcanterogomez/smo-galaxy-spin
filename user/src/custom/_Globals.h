@@ -244,6 +244,16 @@ inline void updateAttackSensor(al::LiveActor* actor, const char* name, bool acti
     was = active;
 }
 
+// Reduce momentum and lunge forward (shared by punch and blast)
+inline void applyLunge(PlayerActorHakoniwa* player) {
+    sead::Vector3f* vel = al::getVelocityPtr(player);
+    *vel *= 0.5f;
+    sead::Vector3f fwd;
+    al::calcQuatFront(&fwd, player);
+    fwd.normalize();
+    *vel += fwd * 5.0f;
+}
+
 // Zero horizontal velocity if no floor geometry ahead
 inline void applyEdgeGuard(al::LiveActor* player) {
     sead::Vector3f front;
