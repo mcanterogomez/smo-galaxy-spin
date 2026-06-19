@@ -72,8 +72,7 @@ namespace PlayerSpinAttack {
 
     struct PlayerSpinCapAttackAppear : public mallow::hook::Trampoline<PlayerSpinCapAttackAppear> {
         static void Callback(PlayerStateSpinCap* state) {
-            const bool isGrounded = rs::isOnGround(state->mActor, state->mCollider)
-                && !state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val2);
+            const bool isGrounded = rs::isOnGround(state->mActor, state->mCollider) && !state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val2);
             const bool forcedGroundSpin = state->mTrigger->isOn(PlayerTrigger::EActionTrigger_val33);
 
             // Safety fix: clear leftover fakethrow state from area load mid-spin
@@ -129,7 +128,6 @@ namespace PlayerSpinAttack {
     };
 
     inline void cleanupSpinAttackState(al::LiveActor* actor) {
-        isPunchActive = false;
         isSpinActive = false;
         isNearCollectible = false;
         isNearTreasure = false;
@@ -199,7 +197,7 @@ namespace PlayerSpinAttack {
 
     struct PlayerStateSpinCapIsEnableCancelGround : public mallow::hook::Trampoline<PlayerStateSpinCapIsEnableCancelGround> {
         static bool Callback(PlayerStateSpinCap* state) {
-            return Orig(state) || (al::isNerve(state, &GalaxySpinGround) && isSpinAnim(state->mAnimator) && al::isGreaterStep(state, 10));
+            return Orig(state) || (al::isNerve(state, &GalaxySpinGround) && isSpinAnim(state->mAnimator) && !state->mAnimator->isAnim("SpinLow") && al::isGreaterStep(state, 10));
         }
     };
 
@@ -308,6 +306,7 @@ namespace PlayerSpinAttack {
         if (!isPadTriggerGalaxySpin(-1) || isSpinAnim(thisPtr->mAnimator)) return false;
 
         if ((isMario || isBrawl)
+            && (al::isPadTriggerZR(-1) || al::isPadHoldZR(-1))
             && isHammer && al::isDead(isHammer)) al::setNerve(thisPtr, &HammerNrv);
         else {
             spin.trigger = true;

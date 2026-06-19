@@ -50,8 +50,6 @@ public:
 
         f32 effectScale = mScale * kEffectScaleMult;
         al::setEffectAllScale(this, "Appear", sead::Vector3f(effectScale, effectScale, effectScale));
-
-        sendKnockdown();
     }
 
     void unfreeze() {
@@ -150,25 +148,6 @@ private:
             pos = pos - (gravity * halfHeight);
 
         al::setTrans(this, pos);
-    }
-
-    void sendKnockdown() {
-        if (!mTarget) return;
-
-        al::HitSensor* self = al::getHitSensor(mTarget, "Body");
-        if (!self && mTarget->getHitSensorKeeper()) self = mTarget->getHitSensorKeeper()->getSensor(0);
-        if (!self) return;
-
-        sead::Vector3f center = al::getTrans(this);
-
-        for (u16 i = 0; i < self->mSensorCount; i++) {
-            al::HitSensor* other = self->mSensors[i];
-            if (!other) continue;
-
-            al::LiveActor* actor = other->getParentActor();
-            if (!actor || actor == mTarget || !al::isAlive(actor) || al::isSensorPlayerAll(other)) continue;
-            if (al::isNear(actor, center, kAOERadius)) rs::sendMsgKuriboFlick(other, self);
-        }
     }
 
     al::LiveActor* mTarget = nullptr;

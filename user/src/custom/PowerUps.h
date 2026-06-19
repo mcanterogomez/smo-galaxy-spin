@@ -134,6 +134,7 @@ namespace PowerUps {
         }
 
         // Handle logic for Drill Suit
+        legScale.set(1.0f, 1.0f, 1.0f);
         if (isDrill) {
             auto* head = al::tryGetSubActor(model, "頭");
             auto* drill = al::tryGetSubActor(model, "Drill");
@@ -343,7 +344,7 @@ namespace PowerUps {
         // Handle cape spawning
         auto* cape = al::tryGetSubActor(model, "ケープ");
         isCapeOn = cape && al::isAlive(cape);
-        bool capeTimer = (isMario || isBrawl) && !isGliding && isCapeActive > 0 && --isCapeActive == 0;
+        bool capeTimer = (isMario || isBrawl) && !isGliding && isActive && isCapeActive > 0 && --isCapeActive == 0;
 
         if (cape && !isCapeOn) isCapeActive = -1;
         if (cape && isCapeOn && (isMarioActive == -1 || capeTimer)

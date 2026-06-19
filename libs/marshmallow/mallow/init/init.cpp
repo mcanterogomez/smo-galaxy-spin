@@ -5,6 +5,7 @@
 #include <exl/util/sys/cur_proc_handle.hpp>
 #include <exl/util/sys/mem_layout.hpp>
 #include <mallow/exception/handler.hpp>
+#include <mallow/init/initLogging.hpp>
 #include <mallow/logging/debug.hpp>
 #include <mallow/logging/logSinks.hpp>
 #include <mallow/logging/logger.hpp>
@@ -20,10 +21,10 @@ extern void (*__init_array_start[])(void) __attribute__((weak));
 extern void (*__init_array_end[])(void) __attribute__((weak));
 
 /* Exported by program. */
-void userMain();
+__attribute__((visibility("hidden"))) void userMain();
 
 /* Optionally exported by program. */
-__attribute__((weak)) extern void userInit();
+__attribute__((visibility("hidden"))) __attribute__((weak)) extern void userInit();
 
 void __init_array(void) {
     size_t count;
@@ -41,10 +42,8 @@ void __init_array(void) {
 static void* initArgs[2] = {};
 
 void getInitArgs(void** x0, void** x1) {
-    if (x0)
-        *x0 = initArgs[0];
-    if (x1)
-        *x1 = initArgs[1];
+    if (x0) *x0 = initArgs[0];
+    if (x1) *x1 = initArgs[1];
 }
 
 void entrypointInit(void* x0, void* x1) {
@@ -73,7 +72,7 @@ extern "C" void __cxa_atexit(void (*func)(void*), void* arg, void* dso_handle) {
     // we will never have a graceful exit, so this doesn't matter to us
 }
 
-extern "C" void userInit() {
+extern "C" __attribute__((visibility("hidden"))) void userInit() {
     exl::util::impl::InitMemLayout();
     virtmemSetup();
     exl::patch::impl::InitPatcherImpl();

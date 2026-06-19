@@ -2,6 +2,29 @@
 #include "ModConfig.h"
 #include "custom/_Globals.h"
 
+inline bool isLunge = false;
+
+inline void applyLunge(PlayerActorHakoniwa* player) {
+	sead::Vector3f* vel = al::getVelocityPtr(player);
+	*vel *= 0.5f;
+	sead::Vector3f fwd;
+	al::calcQuatFront(&fwd, player);
+	fwd.normalize();
+	*vel += fwd * 5.0f;
+	isLunge = true;
+}
+
+inline void updateLunge(PlayerActorHakoniwa* player) {
+	if (!isLunge) return;
+	sead::Vector3f& normal = static_cast<PlayerColliderHakoniwa*>(player->mCollider)->mGroundNormal;
+	sead::Vector3f* vel = al::getVelocityPtr(player);
+	sead::Vector3f hVel = *vel - normal * vel->dot(normal);
+	f32 hSpeed = hVel.length();
+	if (hSpeed > 0.25f) hVel *= (hSpeed - 0.25f) / hSpeed;
+	else { hVel = sead::Vector3f::zero; isLunge = false; }
+	*vel = hVel + normal * vel->dot(normal);
+}
+
 // Custom Nerves
 class PlayerStateSpinCapNrvGalaxySpinGround; 
 extern PlayerStateSpinCapNrvGalaxySpinGround GalaxySpinGround; 
@@ -43,6 +66,11 @@ public:
                     state->mAnimator->startAnim(isRotatingL ? "SpinAttackLeft" : "SpinAttackRight");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
                     attackSensorRemaining = 41;
+                } else if (player->mInput->isHoldSquat()) {
+                    state->mAnimator->startSubAnim("SpinLow");
+                    state->mAnimator->startAnim("SpinLow");
+                    al::validateHitSensor(state->mActor, "GalaxySpin");
+                    attackSensorRemaining = 12;
                 } else if (isCarrying) {
                     state->mAnimator->startSubAnim("SpinSeparate");
                     state->mAnimator->startAnim("SpinSeparate");
@@ -86,14 +114,13 @@ public:
                         state->mAnimator->startSubAnim(isPunchRight ? "KoopaCapPunchRStart" : "KoopaCapPunchLStart");
                         state->mAnimator->startAnim(isPunchRight ? "KoopaCapPunchR" : "KoopaCapPunchL");
                     }
-                    isPunchActive = true;
                 }
             }
         }
 
         // Home in on nearest target
         if (isNearTarget && al::isAlive(isNearTarget) && !isInHitBuffer(isNearTarget)
-            && (isNearCollectible || isNearTreasure || isNearSwoonedEnemy)
+            && (state->mAnimator->isAnim("RabbitGet") || state->mAnimator->isAnim("Kick"))
         ) {
             al::faceToDirection(player, al::getTrans(isNearTarget) - al::getTrans(player));
 
@@ -108,6 +135,7 @@ public:
         }
 
         bool isPunch = state->mAnimator->isAnim("KoopaCapPunchR") || state->mAnimator->isAnim("KoopaCapPunchL");
+        bool isLow = state->mAnimator->isAnim("SpinLow");
         bool isBlast = state->mAnimator->isAnim("BlastAttack");
         bool isJumpPunch = state->mAnimator->isAnim("JumpPunchL") || state->mAnimator->isAnim("JumpPunchR");
         bool isBowserPunch = state->mAnimator->isAnim("JumpPunchEndL") || state->mAnimator->isAnim("JumpPunchEndR");
@@ -153,15 +181,17 @@ public:
             al::faceToDirection(player, punchDir);
             al::setTrans(player, punchPos);
             al::setVelocity(player, al::getGravity(player));
-
             if (isFrame == 20.0f) { al::validateHitSensor(state->mActor, "GalaxySpin"); attackSensorRemaining = 10; }
             if (isFrame == 60.0f) al::tryEmitEffect(player, "Land", nullptr);
         }
-        // Handle Punch logic
-        if ((isPunch || isBlast) && al::isStep(state, 3)) applyLunge(player);
-        // Re-validate sensors disabled during wind-up
-        if (isPunch && isFrame == 5.0f) { al::validateHitSensor(state->mActor, "Punch"); attackSensorRemaining = 5; }
-        if (!isBowserPunch) state->updateSpinGroundNerve(); //if (isPunchActive) applyEdgeGuard(player);
+        if (!isBowserPunch && !isLow) state->updateSpinGroundNerve();
+
+        if ((isLow || isBlast) && isFrame == 2.0f) applyLunge(player);
+        //if (isLow && isFrame > 2.0f) state->mActionGroundMoveControl->mMaxSpeed = 0.0f;
+        if (isLow && !rs::isOnGround(player, player->mCollider)) al::setNerve(state, getNerveAt(nrvSpinCapFall));
+        if (isPunch && isFrame == 5.0f) { applyLunge(player); al::validateHitSensor(state->mActor, "Punch"); attackSensorRemaining = 10; }
+        updateLunge(player);
+
         if (state->mAnimator->isAnimEnd()) { state->kill(); isSpinActive = false; }
     }
 };
@@ -186,17 +216,13 @@ public:
         
         if(al::isFirstStep(state)
         ) {
-            const char* cur = state->mAnimator->mCurAnim.cstr();
-            if (!al::isEqualSubString(cur, "SpinCap")) state->mAnimator->endSubAnim();
-            
+            //state->mAnimator->endSubAnim(); //Kills Cappy after Spin Cap
             if (!isSpinning) {
                 if (didSpin) {
-                    state->mAnimator->startSubAnim(spinDir > 0 ? "SpinAttackAirLeft" : "SpinAttackAirRight");
                     state->mAnimator->startAnim(spinDir > 0 ? "SpinAttackAirLeft" : "SpinAttackAirRight");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
                     attackSensorRemaining = 41;
                 } else if (isRotatingAirL || isRotatingAirR) {
-                    state->mAnimator->startSubAnim(isRotatingAirL ? "SpinAttackAirLeft" : "SpinAttackAirRight");
                     state->mAnimator->startAnim(isRotatingAirL ? "SpinAttackAirLeft" : "SpinAttackAirRight");
                     al::validateHitSensor(state->mActor, "DoubleSpin");
                     attackSensorRemaining = 41;
@@ -280,7 +306,7 @@ public:
 
             if (isMarioActive == 1) anim->startAnim("TauntSuper");
             else if (isMarioActive == -1) anim->startAnim("AreaWaitSigh");
-            else if (tauntRightAlt) {
+            else if (player->mInput->isHoldSquat()) {
                 if (isBrawl) {
                     if (cape && al::isDead(cape)) anim->startAnim("LandJump3");
                     else anim->startAnim("TauntFeather");
@@ -326,7 +352,7 @@ public:
                 if (isFire || isSuper || isMarioActive == 1) { al::tryEmitEffect(effect, "BonfireSuper", nullptr); al::tryStartSe(player, "FireOn"); }
                 if (isSuper) {
                     al::tryEmitEffect(player, "InvincibleStart", nullptr);
-                    al::tryEmitEffect(effect, "ChargeSuper", nullptr);
+                    al::tryEmitEffect(effect, "LandFall", nullptr);
                     al::tryStartSe(player, "StartInvincible");
                 }
             }
@@ -335,7 +361,6 @@ public:
         if (anim->isAnimEnd()
         ) {
             isMarioActive = 0;
-            tauntRightAlt = false;
             al::tryDeleteEffect(effect, "BonfireSuper");
             al::tryDeleteEffect(effect, "IceEffect");
             al::tryStopSe(player, "FireOn", -1, nullptr);

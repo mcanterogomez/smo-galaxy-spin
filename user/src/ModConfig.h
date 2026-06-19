@@ -34,6 +34,8 @@ struct ModConfig : public mallow::config::ConfigBase {
     #ifdef ALLOW_POWERUPS
         bool enableMario;
     #endif
+    // Hide UI by default on mod load.
+    bool isHide;
 
     void read(const ArduinoJson::JsonObject& config) override {
         mallow::config::ConfigBase::read(config);
@@ -43,6 +45,7 @@ struct ModConfig : public mallow::config::ConfigBase {
         #ifdef ALLOW_POWERUPS
             enableMario = config["enableMario"] | false;
         #endif
+        isHide = config["isHide"] | false;
     }
 
     void write(ArduinoJson::JsonObject config) override {
@@ -52,5 +55,6 @@ struct ModConfig : public mallow::config::ConfigBase {
         #ifdef ALLOW_POWERUPS
             config["enableMario"] = enableMario;
         #endif
+        config["isHide"] = isHide;
     }
 };

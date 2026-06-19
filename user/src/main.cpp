@@ -1,11 +1,11 @@
-#include "custom/_Globals.h"
-#include "custom/CustomAnimation.h"
 #include "custom/KoopaBattle.h"
 #include "custom/PlayerKart.h"
-#include "custom/AttackSensor.h"
-#include "custom/PlayerCore.h"
-#include "custom/PlayerSpinAttack.h"
 #include "custom/PowerUps.h"
+
+#include "custom/AttackSensor.h"
+#include "custom/CustomAnimation.h"
+#include "custom/PlayerSpinAttack.h"
+#include "custom/PlayerCore.h"
 
 struct TriggerCameraReset : public mallow::hook::Trampoline<TriggerCameraReset> {
     static bool Callback(al::LiveActor* actor, int port) {
@@ -25,10 +25,20 @@ struct TriggerAmiibo : public mallow::hook::Trampoline<TriggerAmiibo> {
     }
 };
 
-extern "C" void userMain() {
-    exl::hook::Initialize();
-    mallow::init::installHooks();
+struct AppRun : public mallow::hook::Trampoline<AppRun> {
+    static void Callback(void* thisPtr) {
+        nn::fs::MountSdCardForDebug("sd");
+        if (!mallow::config::loadConfig(true)) {
+            mallow::config::useDefaultConfig();
+            mallow::config::saveConfig();
+        }
+        mallow::config::readConfigToStruct();
+        Orig(thisPtr);
+    }
+};
 
+extern "C" void userMain() {
+    AppRun::InstallAtSymbol("_ZN11Application3runEv");
     PlayerCore::Install();
     PlayerSpinAttack::Install();
     AttackSensor::Install();

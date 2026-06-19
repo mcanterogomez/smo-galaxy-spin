@@ -1,6 +1,5 @@
 #pragma once
 
-#include "ModConfig.h"
 #include "custom/_Globals.h"
 #include "headers/PlayerIceCube.h"
 #include "Library/Collision/CollisionParts.h"
@@ -29,9 +28,7 @@ namespace PlayerFreeze {
         return nullptr;
     }
 
-    inline bool isFrozen(al::LiveActor* actor) {
-        return actor && findEntry(actor);
-    }
+    inline bool isFrozen(al::LiveActor* actor) { return actor && findEntry(actor); }
 
     // Raycast down from actor to find what platform it's standing on
     inline const al::CollisionParts* findFloorParts(al::LiveActor* actor, sead::Vector3f* outFloorPos) {
@@ -39,10 +36,8 @@ namespace PlayerFreeze {
         sead::Vector3f rayStart = al::getTrans(actor);
         sead::Vector3f hitPos;
         al::Triangle tri;
-
         if (alCollisionUtil::getFirstPolyOnArrow(actor, &hitPos, &tri, rayStart, rayDir, nullptr, nullptr) && tri.mCollisionParts) {
-            if (outFloorPos)
-                *outFloorPos = tri.mCollisionParts->getBaseMtx().getTranslation();
+            if (outFloorPos) *outFloorPos = tri.mCollisionParts->getBaseMtx().getTranslation();
             return tri.mCollisionParts;
         }
         return nullptr;
@@ -56,67 +51,24 @@ namespace PlayerFreeze {
     inline void unfreezeActor(al::LiveActor* actor) {
         FrozenEntry* entry = findEntry(actor);
         if (!entry) return;
-
-        if (entry->cube && al::isAlive(entry->cube))
-            entry->cube->unfreeze();
-
+        if (entry->cube && al::isAlive(entry->cube)) entry->cube->unfreeze();
         if (actor && al::isAlive(actor)) {
             al::setActionFrameRate(actor, 1.0f);
             al::validateHitSensors(actor);
         }
-
         removeEntry(entry);
-    }
-
-    inline bool sendAttackToEnemy(al::LiveActor* enemy, al::HitSensor* attacker) {
-        if (!attacker || !enemy || !al::isAlive(enemy)) return false;
-
-        al::HitSensor* target = al::getHitSensor(enemy, "Body");
-        if (!target && enemy->getHitSensorKeeper())
-            target = enemy->getHitSensorKeeper()->getSensor(0);
-        if (!target) return false;
-
-        al::LiveActor* attackerActor = al::getSensorHost(attacker);
-
-        // Projectile attacks
-        if (attackerActor && al::isEqualSubString(typeid(*attackerActor).name(), "FireBrosFireBall")) {
-            if (al::sendMsgPlayerFireBallAttack(target, attacker) ||
-                rs::sendMsgFireBrosFireBallCollide(target, attacker))
-                return true;
-
-            if (rs::sendMsgHackAttack(target, attacker) ||
-                al::sendMsgExplosion(target, attacker, nullptr)) {
-                sead::Vector3f effectPos = (al::getSensorPos(attacker) + al::getTrans(enemy)) * 0.5f;
-                effectPos.y += 20.0f;
-                if (!al::isEffectEmitting(attackerActor, "Hit"))
-                    al::tryEmitEffect(isHakoniwa, "Hit", &effectPos);
-                return true;
-            }
-            return false;
-        }
-
-        // Standard attacks
-        return rs::sendMsgHackAttack(target, attacker) ||
-            rs::sendMsgCapReflect(target, attacker) ||
-            rs::sendMsgCapAttack(target, attacker) ;
     }
 
     inline void freezeActor(al::LiveActor* actor, s32 duration) {
         if (!actor || isFrozen(actor) || sFrozenCount >= kMaxFrozen) return;
-
         PlayerIceCube* cube = nullptr;
         if (iceCubes) {
             cube = static_cast<PlayerIceCube*>(iceCubes->getDeadActor());
             if (cube) cube->freeze(actor);
         }
-
         sead::Vector3f floorPos = {0.0f, 0.0f, 0.0f};
         const al::CollisionParts* floor = findFloorParts(actor, &floorPos);
-
-        sFrozenList[sFrozenCount++] = {
-            actor, cube, duration, floor, floorPos
-        };
-
+        sFrozenList[sFrozenCount++] = { actor, cube, duration, floor, floorPos };
         al::setActionFrameRate(actor, 0.0f);
         al::invalidateHitSensors(actor);
         al::deleteEffectAll(actor);
@@ -129,8 +81,7 @@ namespace PlayerFreeze {
 
         // Actor died externally
         if (!actor || !al::isAlive(actor)) {
-            if (entry->cube && al::isAlive(entry->cube))
-                entry->cube->makeActorDead();
+            if (entry->cube && al::isAlive(entry->cube)) entry->cube->makeActorDead();
             removeEntry(entry);
             return false;
         }
@@ -146,16 +97,35 @@ namespace PlayerFreeze {
         if (entry->cube && entry->cube->wasHit()) {
             al::HitSensor* attacker = entry->cube->getAttacker();
             unfreezeActor(actor);
-            sendAttackToEnemy(actor, attacker);
-            return false;
+            al::HitSensor* body = al::getHitSensor(actor, "Body");
+            if (!body) { hitBuffer[hitBufferCount++] = actor; return false; }
+
+            const al::Nerve* nrvBefore = actor->getNerveKeeper()->getCurrentNerve();
+            if (al::sendMsgPlayerFireBallAttack(body, body)
+                || rs::sendMsgFireBrosFireBallCollide(body, body)
+                || rs::sendMsgHackAttack(body, body)
+                || rs::sendMsgCapReflect(body, body)
+                || rs::sendMsgCapAttack(body, body)
+                || al::sendMsgPlayerObjHipDropReflect(body, body, nullptr)
+                || al::sendMsgExplosion(body, body, nullptr)
+            ) {
+                sead::Vector3f dir = al::getTrans(actor) - al::getTrans(isHakoniwa);
+                al::tryNormalizeOrZero(&dir);
+                tryKnockback(actor, nrvBefore, dir, 12.5f);
+                
+                sead::Vector3f pos = (al::getTrans(actor) + al::getSensorPos(attacker)) * 0.5f;
+                al::tryEmitEffect(isHakoniwa, "Hit", &pos);
+
+                hitBuffer[hitBufferCount++] = actor;
+                return false;
+            }
         }
 
         // Follow moving platform
         if (entry->floorParts) {
             sead::Vector3f curPos = entry->floorParts->getBaseMtx().getTranslation();
             sead::Vector3f delta = curPos - entry->lastFloorPos;
-            if (delta.squaredLength() > 0.0f)
-                al::setTrans(actor, al::getTrans(actor) + delta);
+            if (delta.squaredLength() > 0.0f) al::setTrans(actor, al::getTrans(actor) + delta);
             entry->lastFloorPos = curPos;
         }
 
@@ -170,7 +140,6 @@ namespace PlayerFreeze {
 
     inline bool handleReceiveMsg(const al::SensorMsg* msg, al::HitSensor* source) {
         if (!msg || !source) return false;
-
         al::LiveActor* attacker = al::getSensorHost(source);
         return attacker && isFrozen(attacker) && al::isMsgEnemyAttack(msg);
     }

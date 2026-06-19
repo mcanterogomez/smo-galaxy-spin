@@ -190,13 +190,11 @@ bool isActionBusy() { return fireStep >= 0 || drillStep >= 0; }
 // Action flags
 bool canAction = false;
 bool nextThrowLeft = true;
-bool tauntRightAlt = false;
 bool prevIsCarry = false;
 
 // Player state flags
 bool isSpinActive = false;
 bool isSpinRethrow = false;
-bool isPunchActive = false;
 bool isPunchRight = false;
 bool isJumpPunchActive = false;
 bool isDoubleJump = false;
@@ -244,16 +242,6 @@ inline void updateAttackSensor(al::LiveActor* actor, const char* name, bool acti
     was = active;
 }
 
-// Reduce momentum and lunge forward (shared by punch and blast)
-inline void applyLunge(PlayerActorHakoniwa* player) {
-    sead::Vector3f* vel = al::getVelocityPtr(player);
-    *vel *= 0.5f;
-    sead::Vector3f fwd;
-    al::calcQuatFront(&fwd, player);
-    fwd.normalize();
-    *vel += fwd * 5.0f;
-}
-
 // Zero horizontal velocity if no floor geometry ahead
 inline void applyEdgeGuard(al::LiveActor* player) {
     sead::Vector3f front;
@@ -285,6 +273,11 @@ inline al::LiveActor* findNearestTarget(al::LiveActor* player, f32 maxDist) {
         if (d < best) { best = d; nearest = actor; }
     }
     return nearest;
+}
+
+inline void tryKnockback(al::LiveActor* actor, const al::Nerve* nrvBefore, const sead::Vector3f& dir, f32 speed) {
+    if (actor->getNerveKeeper()->getCurrentNerve() != nrvBefore)
+        al::addVelocity(actor, dir * speed);
 }
 
 // Spin state
@@ -322,6 +315,7 @@ enum class SpinPre { Fallthrough, Accept, Reject };
 inline bool isBaseSpinAnim(PlayerAnimator* anim) {
     return al::isEqualString(anim->mCurAnim, "SpinSeparate")
         || al::isEqualString(anim->mCurAnim, "SpinSeparateSwim")
+        || al::isEqualString(anim->mCurAnim, "SpinLow")
         || al::isEqualString(anim->mCurAnim, "CapeAttack")
         || al::isEqualString(anim->mCurAnim, "TailAttack")
         || al::isEqualString(anim->mCurAnim, "BlastAttack");

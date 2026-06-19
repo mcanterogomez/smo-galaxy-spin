@@ -4,10 +4,82 @@
 #include "custom/PlayerFreeze.h"
 #include "headers/PlayerIceCube.h"
 
+template<typename... Models>
+inline bool isType(al::LiveActor* actor, const char* name, Models... models) {
+    if (!al::isEqualSubString(typeid(*actor).name(), name)) return false;
+    if constexpr (sizeof...(models) == 0) return true;
+    else return ((models[0] == '!' ? !al::isModelName(actor, models + 1) : al::isModelName(actor, models)) || ...);
+}
+
+template<typename... Names>
+inline bool isAnyType(al::LiveActor* actor, Names... names) {
+    const char* type = typeid(*actor).name();
+    return (al::isEqualSubString(type, names) || ...);
+}
+
 // Guard Mario against attacks
 inline bool isValidAttackTarget(al::HitSensor* target) {
     al::LiveActor* targetHost = al::getSensorHost(target);
     return targetHost && targetHost != isHakoniwa;
+}
+
+// Handle stacked enemies
+inline bool handleStacked(al::LiveActor*& actor, al::HitSensor* target, al::HitSensor* source) {
+	if (!actor->getNerveKeeper()) return false;
+	if (isType(actor, "KuriboHack")) {
+		if (al::isNerve(actor, getNerveAt(0x1C9D8B0))) {
+			al::LiveActor* base = *reinterpret_cast<al::LiveActor**>((char*)actor + 0x160);
+			if (base && al::isAlive(base)) actor = base;
+		}
+		if (*reinterpret_cast<int*>((char*)actor + 0x2F8) > 0) {
+			al::HitSensor* baseSensor = al::getHitSensor(actor, "Body");
+			if (baseSensor) rs::sendMsgHackAttack(baseSensor, source);
+			al::setNerve(actor, getNerveAt(0x1C9D888));
+			return true;
+		}
+		return false;
+	}
+	if (isType(actor, "StackerCap")) {
+		bool isOnHead = al::isNerve(actor, getNerveAt(0x1C7B7F0)) // OnHead
+			|| al::isNerve(actor, getNerveAt(0x1C7B7F8)) // OnHeadAttack
+			|| al::isNerve(actor, getNerveAt(0x1C7B800)) // RestStart
+			|| al::isNerve(actor, getNerveAt(0x1C7B808)) // Rest
+			|| al::isNerve(actor, getNerveAt(0x1C7B810)); // RestEnd
+		if (!isOnHead) return false;
+		al::LiveActor* base = *reinterpret_cast<al::LiveActor**>((char*)actor + 0x108);
+		if (!base || !al::isAlive(base)) return false;
+		actor = base;
+		return true;
+	}
+	return false;
+}
+
+// Handle swooning enemies
+inline bool trySwoon(al::LiveActor* actor) {
+	if (isType(actor, "FireBros") || isType(actor, "HammerBros")) { al::setNerve(*reinterpret_cast<al::IUseNerve**>((char*)actor + 0x130), getNerveAt(0x1C85DD0)); return true; }
+	if (isType(actor, "Imomu")) { al::setNerve(*reinterpret_cast<al::IUseNerve**>((char*)actor + 0x118), getNerveAt(0x1C94EB0)); return true; }
+	if (isType(actor, "Senobi")) { al::setNerve(*reinterpret_cast<al::IUseNerve**>((char*)actor + 0x128), getNerveAt(0x1CA83A8)); return true; }
+	if (isType(actor, "BreedaWanwan")) { al::setNerve(actor, getNerveAt(0x1C621D0)); return true; }
+	if (isType(actor, "Bull")) { al::setNerve(actor, getNerveAt(0x1C87D18)); return true; }
+	if (isType(actor, "Byugo")) { al::setNerve(actor, getNerveAt(0x1C887B0)); return true; }
+	if (isType(actor, "Frog")) { al::setNerve(actor, getNerveAt(0x1D58028)); return true; }
+	if (isType(actor, "Gamane")) { al::setNerve(actor, getNerveAt(0x1C8ED38)); return true; }
+	if (isType(actor, "Hosui")) { al::setNerve(actor, getNerveAt(0x1C938E0)); return true; }
+	if (isType(actor, "Kakku")) { al::setNerve(actor, getNerveAt(0x1C99D68)); return true; }
+	if (isType(actor, "KaronWing")) { al::setNerve(actor, getNerveAt(0x1C9A920)); return true; }
+	if (isType(actor, "Killer")) { al::setNerve(actor, getNerveAt(0x1C9B248)); return true; }
+    if (isType(actor, "KuriboHack")) { if (!actor->getNerveKeeper() || al::isNerve(actor, getNerveAt(0x1C9D8B0))) return false; al::setNerve(actor, getNerveAt(0x1C9D888)); return true; }    if (isType(actor, "KuriboWing")) { al::setNerve(actor, getNerveAt(0x1C9F298)); return true; }
+	if (isType(actor, "Megane")) { al::setNerve(actor, getNerveAt(0x1CA0D68)); return true; }
+	if (isType(actor, "PackunFire")) { al::setNerve(actor, getNerveAt(0x1CA35F0)); return true; }
+	if (isType(actor, "Pukupuku")) { al::setNerve(actor, getNerveAt(0x1CA6028)); return true; }
+	if (isType(actor, "Tank")) { al::setNerve(actor, getNerveAt(0x1CA9430)); return true; }
+	if (isType(actor, "Tsukkun")) { al::setNerve(actor, getNerveAt(0x1CAE360)); return true; }
+	if (isType(actor, "Wanwan")) { al::setNerve(actor, getNerveAt(0x1CAFD68)); return true; }
+	return false;
+}
+
+inline bool checkIsCar(al::LiveActor* targetHost, al::HitSensor* target) {
+    return !al::isSensorName(target, "Brake") && isType(targetHost, "Car", "Car", "CarBreakable");
 }
 
 namespace AttackSensor {
@@ -19,8 +91,7 @@ namespace AttackSensor {
 
             al::LiveActor* targetHost = al::getSensorHost(target);
 
-            if (al::isEqualSubString(typeid(*targetHost).name(), "KoopaCap")
-                && al::isModelName(targetHost, "KoopaCap")) return;
+            if (isType(targetHost, "KoopaCap", "KoopaCap")) return;
 
             Orig(thisPtr, source, target);
         }
@@ -33,8 +104,7 @@ namespace AttackSensor {
 
             al::LiveActor* targetHost = al::getSensorHost(target);
 
-            if (al::isEqualSubString(typeid(*targetHost).name(), "KoopaCap")
-                && al::isModelName(targetHost, "KoopaCap")) return;
+            if (isType(targetHost, "KoopaCap", "KoopaCap")) return;
             
             if (!al::isSensorName(source, "GalaxySpin")
                 && !al::isSensorName(source, "DoubleSpin")
@@ -48,7 +118,7 @@ namespace AttackSensor {
             sead::Vector3f spawnPos = getHitSpawnPos(source, target);
             sead::Vector3f fireDir = getFireDir(thisPtr, targetHost);
 
-            if (al::isEqualSubString(typeid(*targetHost).name(), "FireBall")
+            if (isType(targetHost, "FireBall")
                 && al::calcSpeedH(thisPtr) >= thisPtr->mConst->getDashFastBorderSpeed()) return;
 
             bool isSpinAttack = al::isSensorName(source, "GalaxySpin")
@@ -74,8 +144,6 @@ namespace AttackSensor {
             bool canTrample = rs::isEnableSendTrampleMsg(thisPtr, foot, target);
             bool isHipDropAttack = isHipDrop && !canTrample;
 
-            if (isSpinAttack || isDoubleSpinAttack) rs::sendMsgPaint(target, source, paintClear, 150, 0);
-
             if(isSpinAttack || isDoubleSpinAttack 
                 || isPunchAttack || isHipDropAttack
                 || isSpinFallback
@@ -83,11 +151,25 @@ namespace AttackSensor {
                 bool inBuffer = isInHitBuffer(targetHost);
 
                 // Handle ice cubes
-                if (al::isEqualSubString(typeid(*targetHost).name(), "PlayerIceCube")
+                if (isType(targetHost, "PlayerIceCube")
                 ) {
                     ((PlayerIceCube*)targetHost)->markHit(source);
+                    if (!inBuffer) hitBuffer[hitBufferCount++] = targetHost; // Prevent wall bounce
                     return;
                 }
+
+                if (isSpinAttack || isDoubleSpinAttack || isSpinFallback) {
+                    if (isAnyType(targetHost, "BlockQuestion", "BlockBrick", "BossForestBlock")
+                    ) {
+                        if (!inBuffer) hitBuffer[hitBufferCount++] = targetHost; // Prevent wall bounce
+                        rs::sendMsgHammerBrosHammerHackAttack(target, source);
+                        return;
+                    }
+                    rs::sendMsgPaint(target, source, paintClear, 150, 0);
+                }
+
+                if (inBuffer) { Orig(thisPtr, source, target); return; }
+
                 if (!targetHost->getNerveKeeper()) return;
 
                 const al::Nerve* sourceNrv = targetHost->getNerveKeeper()->getCurrentNerve();
@@ -95,68 +177,25 @@ namespace AttackSensor {
                 inBuffer |= sourceNrv == getNerveAt(0x1D00EC8); // GrowFlowerSeedNrvHold
                 inBuffer |= sourceNrv == getNerveAt(0x1D22B78); // RadishNrvHold
 
-                if (isPunchAttack && !isPunchActive
+                bool isStake = isType(targetHost, "Stake") && sourceNrv == getNerveAt(0x1D36D20);
+                bool isRadish = isType(targetHost, "Radish") && sourceNrv == getNerveAt(0x1D22B70);
+                bool isRivet = isType(targetHost, "BossRaidRivet") && sourceNrv == getNerveAt(0x1C5F330);
+                if (isStake || isRadish || isRivet
                 ) {
-                    if (al::isEqualSubString(typeid(*targetHost).name(),"Stake")
-                        && sourceNrv == getNerveAt(0x1D36D20)
+                    hitBuffer[hitBufferCount++] = targetHost;
+                    if (thisPtr->mAnimator->isAnim("RabbitGet") && targetHost == isNearTarget
                     ) {
-                        hitBuffer[hitBufferCount++] = targetHost;
-                        al::setNerve(targetHost, getNerveAt(0x1D36D30));
+                        if (isRivet) { al::invalidateCollisionParts(targetHost); al::setVelocity(targetHost, al::getGravity(targetHost) * -44.0f); }
+                        al::setNerve(targetHost, isStake ? getNerveAt(0x1D36D30) : isRadish ? getNerveAt(0x1D22BD8) : getNerveAt(0x1C5F338));
                         al::tryEmitEffect(thisPtr, "Hit", &spawnPos);
-                        return;
+                        isNearCollectible = false;
+                        isNearTarget = nullptr;
                     }
-                    if (al::isEqualSubString(typeid(*targetHost).name(),"Radish")
-                        && sourceNrv == getNerveAt(0x1D22B70)
-                    ) {
-                        hitBuffer[hitBufferCount++] = targetHost;
-                        al::setNerve(targetHost, getNerveAt(0x1D22BD8));
-                        al::tryEmitEffect(thisPtr, "Hit", &spawnPos);
-                        return;
-                    }
-                    if (al::isEqualSubString(typeid(*targetHost).name(),"BossRaidRivet")
-                        && sourceNrv == getNerveAt(0x1C5F330)
-                    ) {
-                        hitBuffer[hitBufferCount++] = targetHost;
-                        al::invalidateCollisionParts(targetHost);
-                        al::setVelocity(targetHost, al::getGravity(targetHost) * -44.0f);
-                        al::setNerve(targetHost, getNerveAt(0x1C5F338));
-                        al::tryEmitEffect(thisPtr, "Hit", &spawnPos);
-                        return;
-                    }
-                    if (al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
-                        && !al::isModelName(targetHost, "TreasureBoxWood")
-                    ) {
-                        if (rs::sendMsgCapAttack(target, source)
-                        ) {
-                            hitBuffer[hitBufferCount++] = targetHost;
-                            if (!al::isEffectEmitting(thisPtr, "Hit")) al::tryEmitEffect(thisPtr, "Hit", &spawnPos);
-                            return;
-                        }
-                    }
-                }
-
-                if (isSpinAttack || isDoubleSpinAttack || isSpinFallback
-                ) {
-                    if (al::isEqualSubString(typeid(*targetHost).name(), "BlockQuestion")
-                        || al::isEqualSubString(typeid(*targetHost).name(), "BlockBrick")
-                        || al::isEqualSubString(typeid(*targetHost).name(), "BossForestBlock")
-                    ) {
-                        rs::sendMsgHammerBrosHammerHackAttack(target, source);
-                        return;
-                    }
-                }
-                if (inBuffer) { Orig(thisPtr, source, target); return; }
-
-                if (al::isEqualSubString(typeid(*targetHost).name(), "Koopa")
-                    && al::isModelName(targetHost, "KoopaBig")
-                ) {
-                    KoopaBattle::attack(thisPtr, source, target);
                     return;
                 }
-                if (al::isEqualSubString(typeid(*targetHost).name(), "BlockHard")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "BossForestBlock")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "GolemClimb")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "MarchingCubeBlock")
+                if (isType(targetHost, "Koopa", "KoopaBig")) { KoopaBattle::attack(thisPtr, source, target); return; }
+
+                if (isAnyType(targetHost, "BlockHard", "GolemClimb", "MarchingCubeBlock")
                 ) {
                     if (rs::sendMsgHammerBrosHammerHackAttack(target, source)
                     ){
@@ -164,18 +203,8 @@ namespace AttackSensor {
                         return;
                     }
                 }
-                if (al::isEqualSubString(typeid(*targetHost).name(), "BreakMapParts")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "BreakableWall")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "CatchBomb")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "DamageBall")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "KickStone")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "KoopaDamageBall")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "MoonBasement")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "PlayGuideBoard")
-                    || (al::isEqualSubString(typeid(*targetHost).name(), "SignBoard")
-                        && !al::isModelName(targetHost, "SignBoardNormal"))
-                    || (al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
-                        && al::isModelName(targetHost, "TreasureBoxWood"))
+                if (isAnyType(targetHost, "BreakMapParts", "BreakableWall", "CatchBomb", "DamageBall", "KickStone", "KoopaDamageBall", "MoonBasement", "PlayGuideBoard")
+                    || isType(targetHost, "SignBoard", "!SignBoardNormal")
                 ) {
                     if (al::sendMsgExplosion(target, source, nullptr)
                         || rs::sendMsgStatueDrop(target, source)
@@ -188,8 +217,7 @@ namespace AttackSensor {
                         return;
                     }
                 }
-                if (al::isEqualSubString(typeid(*targetHost).name(), "BreedaWanwan")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "TRex")
+                if (isAnyType(targetHost, "BreedaWanwan", "TRex", "YoshiFruit")
                 ) {
                     if (al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
                         || al::sendMsgPlayerHipDrop(target, source, nullptr)
@@ -198,46 +226,37 @@ namespace AttackSensor {
                         return;
                     }
                 }
-                if (al::isEqualSubString(typeid(*targetHost).name(), "CapSwitch")
-                ) {
-                    al::setNerve(targetHost, getNerveAt(0x1CE3E18));
+                bool isCapSwitch = isType(targetHost, "CapSwitch");
+                bool isCapSwitchTimer = isType(targetHost, "CapSwitchTimer");
+                if (isCapSwitch || isCapSwitchTimer) {
+                    if (isCapSwitchTimer) al::invalidateClipping(targetHost);
+                    al::setNerve(targetHost, isCapSwitch ? getNerveAt(0x1CE3E18) : getNerveAt(0x1CE4338));
                     hitBuffer[hitBufferCount++] = targetHost;
                     al::tryEmitEffect(thisPtr, "Hit", &spawnPos);
                     return;
                 }
-                if (al::isEqualSubString(typeid(*targetHost).name(), "CapSwitchTimer")
-                ) {
-                    al::setNerve(targetHost, getNerveAt(0x1CE4338));
-                    al::invalidateClipping(targetHost);
-                    hitBuffer[hitBufferCount++] = targetHost;
-                    al::tryEmitEffect(thisPtr, "Hit", &spawnPos);
-                    return;
-                }
-                if ((al::isEqualSubString(typeid(*targetHost).name(), "Car")
-                    && (al::isModelName(targetHost, "Car") || al::isModelName(targetHost, "CarBreakable"))
-                    && !al::isSensorName(target, "Brake"))
-                    || al::isEqualSubString(typeid(*targetHost).name(), "ChurchDoor")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "CollapseSandHill")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "Doshi")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "ReactionObject")
-                    || (al::isEqualSubString(typeid(*targetHost).name(), "SignBoard")
-                        && al::isModelName(targetHost, "SignBoardNormal"))
+                if (checkIsCar(targetHost, target) || isAnyType(targetHost, "ChurchDoor", "CollapseSandHill", "Doshi", "ReactionObject")
+                    || isType(targetHost, "SignBoard", "SignBoardNormal")
                 ) {
                     if (rs::sendMsgCapReflect(target, source)
+                        || rs::sendMsgCapReflectCollide(target, source)
                         || rs::sendMsgCapAttack(target, source)
                         || rs::sendMsgCapAttackCollide(target, source)
-                        || rs::sendMsgCapReflectCollide(target, source)
                         || rs::sendMsgCapTouchWall(target, source, sead::Vector3f{0,0,0}, sead::Vector3f{0,0,0})
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
                         return;
                     }
                 }
-                if (al::isEqualSubString(typeid(*targetHost).name(), "YoshiFruit")
+                if (isType(targetHost, "TreasureBox")
                 ) {
-                    if (al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
+                    bool isWood = al::isModelName(targetHost, "TreasureBoxWood");
+                    bool isExplosion = isWood && al::sendMsgExplosion(target, source, nullptr);
+                    if (isExplosion || rs::sendMsgCapAttack(target, source)
+                        || rs::sendMsgCapTouchWall(target, source, sead::Vector3f::zero, sead::Vector3f::zero)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
+                        if (isExplosion) al::tryEmitEffect(thisPtr, "Hit", &spawnPos);
                         return;
                     }
                 }
@@ -255,32 +274,47 @@ namespace AttackSensor {
                 }
                 if (al::isSensorEnemyBody(target)
                 ) {
+                    if (thisPtr->mAnimator->isAnim("SpinLow")
+                    ) {
+                        bool capHit = rs::sendMsgCapReflect(target, source) || rs::sendMsgCapAttack(target, source);
+                        bool scattered = handleStacked(targetHost, target, source);
+                        if (trySwoon(targetHost) || capHit) {
+                            if (!capHit && !scattered) { al::addVelocity(targetHost, fireDir * 12.5f - al::getGravity(targetHost) * 25.0f); al::tryEmitEffect(thisPtr, "Hit", &spawnPos); }
+                            hitBuffer[hitBufferCount++] = targetHost;
+                            return;
+                        }
+                    }
+                    bool isHit = false;
+                    const al::Nerve* nrvBefore = targetHost->getNerveKeeper()->getCurrentNerve();
                     if (rs::sendMsgHackAttack(target, source)
                         || rs::sendMsgCapReflect(target, source)
                         || rs::sendMsgCapAttack(target, source)
                         || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
-                        || rs::sendMsgTsukkunThrust(target, source, fireDir, 0, true)
+                        || (isHit = rs::sendMsgTsukkunThrust(target, source, fireDir, 0, true)
+                            || rs::sendMsgBullHackAttack(target, source))
                     ) {
+                        tryKnockback(targetHost, nrvBefore, fireDir, 25.0f);
                         hitBuffer[hitBufferCount++] = targetHost;
+                        if(isHit) al::tryEmitEffect(thisPtr, "Hit", &spawnPos);
                         al::tryStartSe(thisPtr, "HitImpact");
                         return;
                     }
                 }
-                if (al::isSensorMapObj(target)
-                    && !al::isEqualSubString(typeid(*targetHost).name(), "HipDrop")
-                    && !al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
+                if (al::isSensorMapObj(target) && !isType(targetHost, "HipDrop")
                 ) {
                     bool isHitImpact = false;
                     if (rs::sendMsgHackAttack(target, source)
                         || al::sendMsgPlayerSpinAttack(target, source, nullptr)
                         || rs::sendMsgCapReflect(target, source)
+                        || rs::sendMsgCapReflectCollide(target, source)
                         || al::sendMsgPlayerHipDrop(target, source, nullptr)
                         || rs::sendMsgCapAttack(target, source)
+                        || rs::sendMsgCapAttackCollide(target, source)
                         || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr)
                         || (isHitImpact = rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero))
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
-                        if (!isHitImpact) al::tryStartSe(thisPtr, "HitImpact");
+                        if (!isHitImpact && !isType(targetHost, "Target")) al::tryStartSe(thisPtr, "HitImpact");
                         return;
                     }
                 }
@@ -306,21 +340,10 @@ namespace AttackSensor {
                 rs::sendMsgPaint(target, source, paintClear, 300, 0);
                 if (isInHitBuffer(targetHost)) { Orig(thisPtr, source, target); return; }
                 
-                if (al::isEqualSubString(typeid(*targetHost).name(), "BlockHard")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "BossForestBlock")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "BreakMapParts")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "CatchBomb")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "DamageBall")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "FrailBox")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "KoopaDamageBall")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "MarchingCubeBlock")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "MoonBasement")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "PlayGuideBoard")
-                    || (al::isEqualSubString(typeid(*targetHost).name(), "ReactionObject")
-                        && al::isSensorCollision(target))
-                    || (al::isEqualSubString(typeid(*targetHost).name(), "SignBoard")
-                        && !al::isModelName(targetHost, "SignBoardNormal"))
-                    || al::isEqualSubString(typeid(*targetHost).name(), "TreasureBox")
+                bool isBlock = isType(targetHost, "BossForestBlock");
+                if (isBlock || isAnyType(targetHost, "BlockHard", "BreakMapParts", "CatchBomb", "DamageBall", "FrailBox", "KoopaDamageBall", "MarchingCubeBlock", "MoonBasement", "PlayGuideBoard")
+                    || (isType(targetHost, "ReactionObject") && al::isSensorCollision(target))
+                    || isType(targetHost, "SignBoard", "!SignBoardNormal")
                 ) {
                     if (al::sendMsgExplosion(target, source, nullptr)
                         || rs::sendMsgStatueDrop(target, source)
@@ -330,13 +353,11 @@ namespace AttackSensor {
                         || rs::sendMsgCapAttack(target, source)
                     ) {
                         hitBuffer[hitBufferCount++] = targetHost;
-                        if (!al::isEqualSubString(typeid(*targetHost).name(), "BossForestBlock")) al::tryEmitEffect(thisPtr, "HammerHit", &spawnPos);
+                        if (!isBlock) al::tryEmitEffect(thisPtr, "HammerHit", &spawnPos);
                         return;
                     }
                 }
-                if (al::isEqualSubString(typeid(*targetHost).name(), "Car")
-                    && (al::isModelName(targetHost, "Car") || al::isModelName(targetHost, "CarBreakable"))
-                    && !al::isSensorName(target,"Brake")
+                if (checkIsCar(targetHost, target)
                 ) {
                     if (rs::sendMsgPlayerTouchFloorJumpCode(target, source)
                         || al::sendMsgExplosion(target, source, nullptr)
@@ -346,10 +367,7 @@ namespace AttackSensor {
                         return;
                     }
                 }
-                if (al::isEqualSubString(typeid(*targetHost).name(), "CollapseSandHill")
-                    || al::isEqualSubString(typeid(*targetHost).name(), "Doshi")
-                    || (al::isEqualSubString(typeid(*targetHost).name(), "SignBoard")
-                        && al::isModelName(targetHost, "SignBoardNormal"))
+                if (isAnyType(targetHost, "CollapseSandHill", "Doshi") || isType(targetHost, "SignBoard", "SignBoardNormal")
                 ) {
                     if (rs::sendMsgCapAttack(target, source)
                         || rs::sendMsgCapAttackCollide(target, source)
@@ -359,8 +377,7 @@ namespace AttackSensor {
                         return;
                     }
                 }
-                if (al::isEqualSubString(typeid(*targetHost).name(), "Koopa")
-                    && al::isModelName(targetHost, "KoopaBig")
+                if (isType(targetHost, "Koopa", "KoopaBig")
                 ) {
                     if (rs::sendMsgKoopaCapPunchFinishL(target, source)
                     ) {
@@ -369,7 +386,19 @@ namespace AttackSensor {
                         return;
                     }
                 }
-                if (al::isEqualSubString(typeid(*targetHost).name(), "TRex")
+                if (isType(targetHost, "TreasureBox")
+                ) {
+                    bool isWood = al::isModelName(targetHost, "TreasureBoxWood");
+                    bool isExplosion = isWood && al::sendMsgExplosion(target, source, nullptr);
+                    if (isExplosion || rs::sendMsgCapAttack(target, source)
+                        || rs::sendMsgCapTouchWall(target, source, sead::Vector3f::zero, sead::Vector3f::zero)
+                    ) {
+                        hitBuffer[hitBufferCount++] = targetHost;
+                        if (isExplosion) al::tryEmitEffect(thisPtr, "Hit", &spawnPos);
+                        return;
+                    }
+                }
+                if (isType(targetHost, "TRex")
                 ) {
                     if (al::sendMsgPlayerHipDrop(target, source, nullptr)
                         || rs::sendMsgSeedAttackBig(target, source)
@@ -379,7 +408,7 @@ namespace AttackSensor {
                         return;
                     }
                 }
-                if (al::isEqualSubString(typeid(*targetHost).name(), "Wanwan")
+                if (isType(targetHost, "Wanwan")
                 ) {
                     if (rs::sendMsgWanwanReboundAttack(target, source)
                     ) {
@@ -387,6 +416,8 @@ namespace AttackSensor {
                         return;
                     }
                 }
+                bool isSouvenir = isType(targetHost, "Souvenir");
+                bool isReaction = isType(targetHost, "ReactionObject");
                 if (rs::sendMsgTRexAttack(target, source)
                     || al::sendMsgPlayerHipDrop(target, source, nullptr)
                     || al::sendMsgPlayerObjHipDrop(target, source, nullptr)
@@ -395,10 +426,9 @@ namespace AttackSensor {
                     || rs::sendMsgHackAttack(target, source)
                     || rs::sendMsgSphinxRideAttackTouchThrough(target, source, fireDir, fireDir)
                     || rs::sendMsgCapReflect(target, source)
-                    || (!al::isEqualSubString(typeid(*targetHost).name(),"Souvenir")
-                        && rs::sendMsgCapAttack(target, source))
-                    || (!al::isEqualSubString(typeid(*targetHost).name(),"ReactionObject")
-                        && rs::sendMsgTsukkunThrust(target, source, fireDir, 0, true))
+                    || rs::sendMsgCapReflectCollide(target, source)
+                    || (!isSouvenir && (rs::sendMsgCapAttack(target, source) || rs::sendMsgCapAttackCollide(target, source)))
+                    || (!isReaction && rs::sendMsgTsukkunThrust(target, source, fireDir, 0, true))
                     || al::sendMsgExplosion(target, source, nullptr)
                 ) {
                     hitBuffer[hitBufferCount++] = targetHost;
@@ -424,7 +454,7 @@ namespace AttackSensor {
 
             sead::Vector3f sourcePos = al::getSensorPos(source);
 
-            if (al::isEqualSubString(typeid(*targetHost).name(), "PlayerIceCube")
+            if (isType(targetHost, "PlayerIceCube")
             ) {
                 ((PlayerIceCube*)targetHost)->markHit(source);
                 al::tryEmitEffect(thisPtr, "Disappear", &sourcePos);
@@ -434,8 +464,7 @@ namespace AttackSensor {
 
             if (isInHitBuffer(targetHost)) { Orig(thisPtr, source, target); return; }
 
-            if (al::isEqualSubString(typeid(*targetHost).name(), "FireSwitch")
-                || al::isEqualSubString(typeid(*targetHost).name(), "Candlestand")
+            if (isAnyType(targetHost, "FireSwitch", "Candlestand")
             ) {
                 if (rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero)) {
                     al::tryEmitEffect(thisPtr, "Disappear", &sourcePos);
@@ -443,11 +472,10 @@ namespace AttackSensor {
                 }
                 return;
             }
-            if ((al::isSensorEnemyBody(target) || al::isEqualSubString(typeid(*targetHost).name(), "Rabbit"))
-                && !al::isHideModel(targetHost)
-                && !al::isEqualSubString(typeid(*targetHost).name(), "Boss") && !al::isEqualSubString(typeid(*targetHost).name(), "Koopa")
-                && !(al::isEqualSubString(typeid(*targetHost).name(), "Stacker") && al::isNoCollide(targetHost))
+            if ((al::isSensorEnemyBody(target) || isType(targetHost, "Rabbit"))
+                && !al::isHideModel(targetHost) && !isAnyType(targetHost, "Boss", "Breeda", "Koopa")
             ) {
+                handleStacked(targetHost, target, source);
                 hitBuffer[hitBufferCount++] = targetHost;
                 PlayerFreeze::freezeActor(targetHost, 1800);
                 al::tryEmitEffect(thisPtr, "Disappear", &sourcePos);
@@ -475,6 +503,7 @@ namespace AttackSensor {
             if (!ctx->W[0]) {
                 if (al::sendMsgExplosion(target, source, nullptr)
                     || al::sendMsgKickStoneAttackReflect(target, source)
+                    || rs::sendMsgBullHackAttack(target, source)
                     || rs::sendMsgKoopaCapPunchL(target, source)
                 ) {
                     ctx->W[0] = true;
@@ -494,6 +523,7 @@ namespace AttackSensor {
             rs::sendMsgSphinxRideAttack(target, source)
             || rs::sendMsgSphinxRideAttackReflect(target, source)
             || rs::sendMsgHackAttack(target, source)
+            || rs::sendMsgBullHackAttack(target, source)
             || rs::sendMsgKoopaCapPunchL(target, source);
         }
     };
@@ -514,6 +544,7 @@ namespace AttackSensor {
                 || al::sendMsgPlayerFireBallAttack(target, source)
                 || rs::sendMsgCapAttack(target, source)
                 || al::sendMsgKickStoneAttackReflect(target, source)
+                || rs::sendMsgBullHackAttack(target, source)
                 || rs::sendMsgKoopaCapPunchL(target, source);
 
             rs::sendMsgWeaponItemGet(target, source);

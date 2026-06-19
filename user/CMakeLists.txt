@@ -7,9 +7,11 @@
 #    ${CMAKE_CURRENT_SOURCE_DIR}/*.c
 #)
 
+set(MAIN_SOURCE main.cpp CACHE STRING "")
+
 target_sources(subsdk9 PRIVATE
         ${SUBSDK9_SOURCES}
-        src/main.cpp
+        src/${MAIN_SOURCE}
         src/mallowConfig.cpp
 )
 

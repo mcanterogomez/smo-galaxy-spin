@@ -146,7 +146,7 @@ namespace PlayerCore {
                 al::HitSensor* sensorHack = al::getHitSensor(isHammer, "AttackHack");
                 if (sensorHack && sensorHack->mIsValid) activeSensor = sensorHack;
             }
-
+            // Wall bounce setup
             static int attackFrames = 0;
             if (activeSensor) attackFrames++;
             else attackFrames = 0;
@@ -155,18 +155,25 @@ namespace PlayerCore {
             bool isHammerWall = isHammerActive && al::isCollidedWall(isHammer);
             bool wallHit = rs::isCollidedWall(thisPtr->mCollider) || isHammerWall;
 
-            if (activeSensor && attackFrames >= 2 
-                && wallHit && hitBufferCount == 0 
+            if (activeSensor && attackFrames >= 2
+                && wallHit && hitBufferCount == 0
                 && !isDrillAnim(thisPtr->mAnimator)
             ) {
-                sead::Vector3f wallPos = isHammerWall ? al::getCollidedWallPos(isHammer)    : rs::getCollidedWallPos(thisPtr->mCollider);
+                sead::Vector3f wallPos = isHammerWall ? al::getCollidedWallPos(isHammer) : rs::getCollidedWallPos(thisPtr->mCollider);
                 sead::Vector3f wallNormal = isHammerWall ? al::getCollidedWallNormal(isHammer) : rs::getCollidedWallNormal(thisPtr->mCollider);
                 al::tryNormalizeOrZero(&wallNormal);
 
+                if (isHammerActive) {
+                    al::tryEmitEffect(isHammer, "Break", &wallPos);
+                    al::tryStartSe(isHammer, "Hit");
+                    al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
+                } else {
+                    auto* spinCap = *reinterpret_cast<PlayerStateSpinCap**>(reinterpret_cast<uintptr_t>(thisPtr) + 0x300);
+                    al::setNerve(spinCap, getNerveAt(nrvSpinCapFall));
+                }
+
                 al::tryEmitEffect(thisPtr, "HitSmall", &wallPos);
                 al::tryStartSe(thisPtr, "HitImpact");
-                if (isHammerActive) { al::tryEmitEffect(isHammer, "Break", &wallPos); al::tryStartSe(isHammer, "Hit"); }
-                al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
                 al::setVelocity(thisPtr, wallNormal * (thisPtr->mInput->isMove() ? 15.0f : 5.0f) - al::getGravity(thisPtr) * 10.0f);
                 attackFrames = 0;
             }
@@ -183,28 +190,27 @@ namespace PlayerCore {
                 for (int i = 0; i < carrySensor->mSensorCount; i++) {
                     al::HitSensor* other = carrySensor->mSensors[i];
                     al::LiveActor* actor = al::getSensorHost(other);
-                    
-                    if (actor) {
-                        if (al::isEqualSubString(typeid(*actor).name(), "Radish")
-                            || al::isEqualSubString(typeid(*actor).name(), "Stake")
-                            || al::isEqualSubString(typeid(*actor).name(), "BossRaidRivet")
-                        ) {
-                            isNearCollectible = true;
-                            break;
-                        } else if (al::isEqualSubString(typeid(*actor).name(), "TreasureBox")
-                            && !al::isModelName(actor, "TreasureBoxWood")
-                        ) {
-                            isNearTreasure = true;
-                            break;
-                        } else if (al::isSensorEnemyBody(other)
-                            && (al::isActionPlaying(actor, "SwoonStart")
-                                || al::isActionPlaying(actor, "SwoonStartLand")
-                                || al::isActionPlaying(actor, "SwoonLoop")
-                                || al::isActionPlaying(actor, "Swoon"))
-                        ) {
-                            isNearSwoonedEnemy = true;
-                            break;
-                        }
+
+                    if (!actor) continue;
+                    if (al::isEqualSubString(typeid(*actor).name(), "Radish")
+                        || al::isEqualSubString(typeid(*actor).name(), "BossRaidRivet")
+                        || al::isEqualSubString(typeid(*actor).name(), "Stake")
+                    ) {
+                        isNearCollectible = true;
+                        break;
+                    }
+                    if (al::isEqualSubString(typeid(*actor).name(), "TreasureBox")
+                        && !al::isModelName(actor, "TreasureBoxWood")
+                    ) {
+                        isNearTreasure = true;
+                        break;
+                    }
+                    if (al::isSensorEnemyBody(other)
+                        && (al::isActionPlaying(actor, "SwoonStart") || al::isActionPlaying(actor, "SwoonStartLand")
+                            || al::isActionPlaying(actor, "SwoonLoop") || al::isActionPlaying(actor, "Swoon"))
+                    ) {
+                        isNearSwoonedEnemy = true;
+                        break;
                     }
                 }
             }
@@ -230,17 +236,8 @@ namespace PlayerCore {
                     && !al::isNerve(thisPtr, &TauntRightNrv)
                     && !isActionBusy()
                 ) {
-                    if (al::isPadTriggerLeft(-1)
-                    ) {
-                        al::setNerve(thisPtr, &TauntLeftNrv);
-                        return;
-                    }
-                    if (al::isPadTriggerRight(-1)
-                    ) {
-                        tauntRightAlt = al::isPadHoldZR(-1) || al::isPadTriggerZR(-1) || al::isPadHoldZL(-1) || al::isPadTriggerZL(-1);
-                        al::setNerve(thisPtr, &TauntRightNrv);
-                        return;
-                    }
+                    if (al::isPadTriggerLeft(-1)) al::setNerve(thisPtr, &TauntLeftNrv);
+                    else if (al::isPadTriggerRight(-1)) al::setNerve(thisPtr, &TauntRightNrv);
                 }
                 if (al::isNerve(thisPtr, &TauntLeftNrv)
                 ) {

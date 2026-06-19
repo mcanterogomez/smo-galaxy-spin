@@ -55,7 +55,8 @@ namespace KoopaBattle {
         // Pushback Mario when Bowser accepts knockback
         if (isKnockBack) {
             al::tryStartSe(mario, "DamageHit");
-            al::setNerve(mario, getNerveAt(nrvHakoniwaFall));
+            auto* spinCap = *reinterpret_cast<PlayerStateSpinCap**>(reinterpret_cast<uintptr_t>(mario) + 0x300);
+            al::setNerve(spinCap, getNerveAt(nrvSpinCapFall));
 
             sead::Vector3f away = al::getTrans(mario) - al::getTrans(bowser);
             al::tryNormalizeOrZero(&away);

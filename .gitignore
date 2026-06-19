@@ -1,5 +1,6 @@
 cmake-build-*/
 build/
+build-alt/
 tools/clang/
 tools/curl/
 tools/tmp/
