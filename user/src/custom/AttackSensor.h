@@ -27,30 +27,21 @@ inline bool isValidAttackTarget(al::HitSensor* target) {
 inline bool handleStacked(al::LiveActor*& actor, al::HitSensor* target, al::HitSensor* source) {
 	if (!actor->getNerveKeeper()) return false;
 	if (isType(actor, "KuriboHack")) {
-		if (al::isNerve(actor, getNerveAt(0x1C9D8B0))) {
-			al::LiveActor* base = *reinterpret_cast<al::LiveActor**>((char*)actor + 0x160);
-			if (base && al::isAlive(base)) actor = base;
-		}
-		if (*reinterpret_cast<int*>((char*)actor + 0x2F8) > 0) {
-			al::HitSensor* baseSensor = al::getHitSensor(actor, "Body");
-			if (baseSensor) rs::sendMsgHackAttack(baseSensor, source);
-			al::setNerve(actor, getNerveAt(0x1C9D888));
-			return true;
-		}
-		return false;
-	}
-	if (isType(actor, "StackerCap")) {
-		bool isOnHead = al::isNerve(actor, getNerveAt(0x1C7B7F0)) // OnHead
-			|| al::isNerve(actor, getNerveAt(0x1C7B7F8)) // OnHeadAttack
-			|| al::isNerve(actor, getNerveAt(0x1C7B800)) // RestStart
-			|| al::isNerve(actor, getNerveAt(0x1C7B808)) // Rest
-			|| al::isNerve(actor, getNerveAt(0x1C7B810)); // RestEnd
-		if (!isOnHead) return false;
-		al::LiveActor* base = *reinterpret_cast<al::LiveActor**>((char*)actor + 0x108);
-		if (!base || !al::isAlive(base)) return false;
-		actor = base;
+		rs::sendMsgYoshiTongueEatBind(target, source, nullptr, nullptr, nullptr);
+		al::setNerve(actor, getNerveAt(0x1C9D888));
 		return true;
 	}
+	if (isType(actor, "StackerCap")) {
+        if (!al::isNerve(actor, getNerveAt(0x1C7B7F0)) && !al::isNerve(actor, getNerveAt(0x1C7B7F8))) return false; // OnHead, OnHeadAttack
+        al::LiveActor* host = *reinterpret_cast<al::LiveActor**>((char*)actor + 0x108);
+        if (!host || !al::isAlive(host)) return false;
+        int count = *reinterpret_cast<int*>((char*)host + 0x154);
+        if (count <= 0) return false;
+        actor = (*reinterpret_cast<al::LiveActor***>(*reinterpret_cast<char**>((char*)host + 0x108) + 0x18))[count - 1]; // topCap
+        using BlowFn = void(*)(al::LiveActor*, const sead::Vector3f&, const sead::Vector3f&);
+        reinterpret_cast<BlowFn>(reinterpret_cast<uintptr_t>(getNerveAt(0)) + 0xBCC3C)(host, al::getSensorPos(source), sead::Vector3f::zero); // Stacker::blowCapOnHead
+        return true;
+    }
 	return false;
 }
 
@@ -277,9 +268,9 @@ namespace AttackSensor {
                     if (thisPtr->mAnimator->isAnim("SpinLow")
                     ) {
                         bool capHit = rs::sendMsgCapReflect(target, source) || rs::sendMsgCapAttack(target, source);
-                        bool scattered = handleStacked(targetHost, target, source);
+                        handleStacked(targetHost, target, source);
                         if (trySwoon(targetHost) || capHit) {
-                            if (!capHit && !scattered) { al::addVelocity(targetHost, fireDir * 12.5f - al::getGravity(targetHost) * 25.0f); al::tryEmitEffect(thisPtr, "Hit", &spawnPos); }
+                            if (!capHit) { al::addVelocity(targetHost, fireDir * 12.5f - al::getGravity(targetHost) * 25.0f); al::tryEmitEffect(thisPtr, "Hit", &spawnPos); }
                             hitBuffer[hitBufferCount++] = targetHost;
                             return;
                         }
