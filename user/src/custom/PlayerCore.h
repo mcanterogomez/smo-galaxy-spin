@@ -47,7 +47,8 @@ namespace PlayerCore {
                     && (cap && al::isEqualString(cap, "MarioColorBrawl"));
                 isSuper = (costume && al::isEqualString(costume, "MarioColorSuper"))
                     && (cap && al::isEqualString(cap, "MarioColorSuper"));
-
+                isKnight = (costume && al::isEqualString(costume, "MarioKnight"))
+                    && (cap && al::isEqualString(cap, "MarioKnight"));
                 // Set Cap sounds
                 if (isMetal && thisPtr->mHackCap) al::setSeKeeperPlayNamePrefix(thisPtr->mHackCap, "Iron");
 

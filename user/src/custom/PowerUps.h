@@ -186,29 +186,27 @@ namespace PowerUps {
             }
         }
 
-        // Handle blaster spawning
+        // Handle weapon spawning
         static int holdRightFrames = 0;
         if (al::isPadHoldRight(-1)) holdRightFrames++;
         else holdRightFrames = 0;
 
         auto* blaster = al::tryGetSubActor(model, "Blaster");
+        auto* axe = al::tryGetSubActor(model, "Axe");
+
         isBlasterOn = blaster && al::isAlive(blaster);
-        bool blasterToggle = isMario && isActive && holdRightFrames == 30;
+        isAxeOn = axe && al::isAlive(axe);
+        bool weaponToggle = isActive && holdRightFrames == 30;
 
-        if (blaster && isBlasterOn && (blasterToggle || isMarioActive == -1)) {
-            blaster->kill();
-            al::tryEmitEffect(model, "BlasterDisappear", nullptr);
-            al::tryStartSe(thisPtr, "BlasterOpen");
-        }
-        else if (blaster && !isBlasterOn && blasterToggle) {
-            blaster->appear();
-            al::tryEmitEffect(model, "BlasterAppear", nullptr);
-            al::tryStartSe(thisPtr, "BlasterOpen");
-        }
+        if (blaster && isBlasterOn && ((isMario && weaponToggle) || isMarioActive == -1)) { blaster->kill(); al::tryEmitEffect(model, "BlasterDisappear", nullptr); al::tryStartSe(thisPtr, "BlasterOpen"); }
+        else if (blaster && !isBlasterOn && isMario && weaponToggle) { blaster->appear(); al::tryEmitEffect(model, "BlasterAppear", nullptr); al::tryStartSe(thisPtr, "BlasterOpen"); }
 
+        if (axe && isAxeOn && isKnight && weaponToggle) { axe->kill(); al::tryEmitEffect(model, "BlasterDisappear", nullptr); al::tryStartSe(thisPtr, "BlasterOpen"); }
+        else if (axe && !isAxeOn && isKnight && weaponToggle) { axe->appear(); al::tryEmitEffect(model, "BlasterAppear", nullptr); al::tryStartSe(thisPtr, "BlasterOpen"); }
+    
         auto* hand = al::tryGetSubActor(model, "右手");
-        if (isBlasterOn && hand && !al::isActionPlayingSubActor(model, "右手", "AreaWaitDance03"))
-            al::startActionSubActor(model, "右手", "AreaWaitDance03");
+        if (isBlasterOn && hand && !al::isActionPlayingSubActor(model, "右手", "AreaWaitDance03")) al::startActionSubActor(model, "右手", "AreaWaitDance03");
+        if (isAxeOn && hand && !al::isActionPlayingSubActor(model, "右手", "GrabCeilWait")) al::startActionSubActor(model, "右手", "GrabCeilWait");
             
         // Handle fireball/iceball/blaster attack
         const char* jointName;

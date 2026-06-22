@@ -155,8 +155,10 @@ bool isMetal = false;
 bool isFly = false;
 bool isBrawl = false;
 bool isSuper = false;
+bool isKnight = false;
 bool isCapeOn = false;
 bool isBlasterOn = false;
+bool isAxeOn = false;
 
 // Actor pointers
 inline PlayerActorHakoniwa* isHakoniwa = nullptr;
