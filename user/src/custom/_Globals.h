@@ -49,6 +49,7 @@
 // Game-specific utilities
 #include "Project/HitSensor/HitSensor.h"
 #include "Util/DemoUtil.h"
+#include "Util/ObjUtil.h"
 #include "Util/PlayerCollisionUtil.h"
 #include "Util/PlayerUtil.h"
 #include "Util/SensorMsgFunction.h"

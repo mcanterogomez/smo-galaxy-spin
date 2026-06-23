@@ -4,23 +4,24 @@
 
 inline bool isLunge = false;
 
-inline void applyLunge(PlayerActorHakoniwa* player) {
+inline void lunge(PlayerActorHakoniwa* player, f32 impulse = 0.0f) {
+	if (impulse == 0.0f && !isLunge) return;
 	sead::Vector3f* vel = al::getVelocityPtr(player);
-	*vel *= 0.5f;
-	sead::Vector3f fwd;
-	al::calcQuatFront(&fwd, player);
-	fwd.normalize();
-	*vel += fwd * 5.0f;
-	isLunge = true;
-}
-
-inline void updateLunge(PlayerActorHakoniwa* player) {
-	if (!isLunge) return;
-	sead::Vector3f& normal = static_cast<PlayerColliderHakoniwa*>(player->mCollider)->mGroundNormal;
-	sead::Vector3f* vel = al::getVelocityPtr(player);
+	sead::Vector3f normal;
+	rs::calcGroundNormalOrUpDir(&normal, player, player->mCollider);
+	if (impulse > 0.0f) {
+		*vel *= 0.5f;
+		sead::Vector3f fwd;
+		al::calcQuatFront(&fwd, player);
+		fwd -= normal * fwd.dot(normal);
+		fwd.normalize();
+		*vel += fwd * impulse;
+		isLunge = true;
+		return;
+	}
 	sead::Vector3f hVel = *vel - normal * vel->dot(normal);
-	f32 hSpeed = hVel.length();
-	if (hSpeed > 0.25f) hVel *= (hSpeed - 0.25f) / hSpeed;
+	f32 hLen = hVel.length();
+	if (hLen > 0.25f) hVel *= (hLen - 0.25f) / hLen;
 	else { hVel = sead::Vector3f::zero; isLunge = false; }
 	*vel = hVel + normal * vel->dot(normal);
 }
@@ -37,23 +38,23 @@ public:
     void execute(al::NerveKeeper* keeper) const override {
         PlayerStateSpinCap* state = keeper->getParent<PlayerStateSpinCap>();
         PlayerActorHakoniwa* player = static_cast<PlayerActorHakoniwa*>(state->mActor);
-
-        bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
-        bool isRotatingL = state->mAnimator->isAnim("SpinGroundL");
-        bool isRotatingR = state->mAnimator->isAnim("SpinGroundR");
-        bool isCarrying = player->mCarryKeeper->isCarry();
-        bool didSpin = player->mInput->isSpinInput();
-        int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
-
-        isSpinActive = true;
         static sead::Vector3f punchDir; // Cache direction
         static sead::Vector3f punchPos; // Cache position
 
+        isSpinActive = true;
+
         if (al::isFirstStep(state)
         ) {
+            bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
+            bool isRotatingL = state->mAnimator->isAnim("SpinGroundL");
+            bool isRotatingR = state->mAnimator->isAnim("SpinGroundR");
+            bool isCarrying = player->mCarryKeeper->isCarry();
+            bool didSpin = player->mInput->isSpinInput();
+            int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
             isNearTarget = findNearestTarget(player, 250.0f);
-            state->mAnimator->endSubAnim();
             isPunchRight = !isPunchRight;
+
+            state->mAnimator->endSubAnim();
 
             if (!isSpinning) {
                 if (didSpin) {
@@ -136,61 +137,51 @@ public:
 
         bool isPunch = state->mAnimator->isAnim("KoopaCapPunchR") || state->mAnimator->isAnim("KoopaCapPunchL");
         bool isLow = state->mAnimator->isAnim("SpinLow");
-        bool isBlast = state->mAnimator->isAnim("BlastAttack");
         bool isJumpPunch = state->mAnimator->isAnim("JumpPunchL") || state->mAnimator->isAnim("JumpPunchR");
         bool isBowserPunch = state->mAnimator->isAnim("JumpPunchEndL") || state->mAnimator->isAnim("JumpPunchEndR");
         float isFrame = state->mAnimator->getAnimFrame();
 
-        // Cancel punch with punch
-        if (isPunch && isFrame >= state->mAnimator->getAnimFrameMax() - 5.0f
-            && isPadTriggerGalaxySpin(-1)
-        ) {
-            hitBufferCount = 0;
-            al::setNerve(state, &GalaxySpinGround);
-            return;
-        }
-        // Cancel punch into jump punch
-        if (isPunch && !al::isFirstStep(state) && player->mInput->isTriggerJump()
-        ) {
-            hitBufferCount = 0;
-            state->mAnimator->startAnim(isPunchRight ? "JumpPunchL" : "JumpPunchR");
-        }
-        if (isJumpPunch) {
-            if (isFrame < 17.0f) {
-                // Slow down during wind-up
+        if (isPunch) {
+            if (player->mInput->isTriggerJump() && rs::isOnGround(player, player->mCollider)) { // cancel to jump punch
+                hitBufferCount = 0;
+                state->mAnimator->startAnim(isPunchRight ? "JumpPunchL" : "JumpPunchR");
+                return;
+            }
+            if (isFrame >= state->mAnimator->getAnimFrameMax() - 5.0f && isPadTriggerGalaxySpin(-1)) { // cancel with punch
+                hitBufferCount = 0;
+                al::setNerve(state, &GalaxySpinGround);
+                return;
+            }
+            if (isFrame == 5.0f) { lunge(player, 5.0f); al::validateHitSensor(state->mActor, "Punch"); attackSensorRemaining = 10; }
+        } else if (isJumpPunch) {
+            if (isFrame < 17.0f) { // decay jump punch
                 sead::Vector3f vel = al::getVelocity(player);
                 vel *= 0.8f;
                 al::setVelocity(player, vel);
-            } else {
-                // Launch on frame 17
+            } else if (isFrame == 17.0f) { // launch jump punch
                 sead::Vector3f up = -al::getGravity(player);
                 up.normalize();
                 sead::Vector3f fwd;
                 al::calcQuatFront(&fwd, player);
+                fwd -= up * fwd.dot(up);
                 fwd.normalize();
                 al::setVelocity(player, up * 30.0f + fwd * 5.0f);
-
                 al::validateHitSensor(state->mActor, "GalaxySpin");
                 attackSensorRemaining = 13;
-                al::setNerve(state, getNerveAt(nrvSpinCapFall));
-                return;
-            }
-        }
-        // Bowser finisher locked in place
-        if (isBowserPunch) {
+            } else { al::setNerve(state, getNerveAt(nrvSpinCapFall)); return; } // kill jump punch
+        } else if (isBowserPunch) {
             al::faceToDirection(player, punchDir);
             al::setTrans(player, punchPos);
             al::setVelocity(player, al::getGravity(player));
             if (isFrame == 20.0f) { al::validateHitSensor(state->mActor, "GalaxySpin"); attackSensorRemaining = 10; }
             if (isFrame == 60.0f) al::tryEmitEffect(player, "Land", nullptr);
+        } else if (isLow || state->mAnimator->isAnim("BlastAttack")) {
+            if (isFrame == 2.0f) lunge(player, 5.0f);
+            if (isLow && !rs::isOnGround(player, player->mCollider)) { al::setNerve(state, getNerveAt(nrvSpinCapFall)); return;}
         }
-        if (!isBowserPunch && !isLow) state->updateSpinGroundNerve();
 
-        if ((isLow || isBlast) && isFrame == 2.0f) applyLunge(player);
-        //if (isLow && isFrame > 2.0f) state->mActionGroundMoveControl->mMaxSpeed = 0.0f;
-        if (isLow && !rs::isOnGround(player, player->mCollider)) al::setNerve(state, getNerveAt(nrvSpinCapFall));
-        if (isPunch && isFrame == 5.0f) { applyLunge(player); al::validateHitSensor(state->mActor, "Punch"); attackSensorRemaining = 10; }
-        updateLunge(player);
+        if (!isJumpPunch && !isBowserPunch && !isLow) state->updateSpinGroundNerve();
+        lunge(player);
 
         if (state->mAnimator->isAnimEnd()) { state->kill(); isSpinActive = false; }
     }
@@ -201,22 +192,19 @@ public:
     void execute(al::NerveKeeper* keeper) const override {
         PlayerStateSpinCap* state = keeper->getParent<PlayerStateSpinCap>();
         PlayerActorHakoniwa* player = static_cast<PlayerActorHakoniwa*>(state->mActor);
-        bool isCape = (isMario && isCapeOn) || isFeather;
 
-        bool isRotatingAirL  = state->mAnimator->isAnim("StartSpinJumpL")
-            || state->mAnimator->isAnim("RestartSpinJumpL");
-        bool isRotatingAirR  = state->mAnimator->isAnim("StartSpinJumpR")
-            || state->mAnimator->isAnim("RestartSpinJumpR");
-        bool isCarrying = player->mCarryKeeper->isCarry();
-        bool didSpin = player->mInput->isSpinInput();
-        int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
         bool isSpinning = state->mAnimator->isAnim("SpinSeparate");
-
         isSpinActive = true;
         
         if(al::isFirstStep(state)
         ) {
-            //state->mAnimator->endSubAnim(); //Kills Cappy after Spin Cap
+            bool isRotatingAirL = state->mAnimator->isAnim("StartSpinJumpL") || state->mAnimator->isAnim("RestartSpinJumpL");
+            bool isRotatingAirR = state->mAnimator->isAnim("StartSpinJumpR") || state->mAnimator->isAnim("RestartSpinJumpR");
+            bool isCarrying = player->mCarryKeeper->isCarry();
+            bool didSpin = player->mInput->isSpinInput();
+            int spinDir = player->mInput->mSpinInputAnalyzer->mSpinDirection;
+            bool isCape = (isMario && isCapeOn) || isFeather;
+
             if (!isSpinning) {
                 if (didSpin) {
                     state->mAnimator->startAnim(spinDir > 0 ? "SpinAttackAirLeft" : "SpinAttackAirRight");
@@ -252,11 +240,10 @@ public:
         
         state->updateSpinAirNerve();
 
-        bool shouldFall = state->mAnimator->isAnimEnd()
+        if (state->mAnimator->isAnimEnd()
             || (!isSpinning && al::isGreaterStep(state, 41))
-            || (isSpinning && al::isGreaterStep(state, 21));
-
-        if (shouldFall) {
+            || (isSpinning && al::isGreaterStep(state, 21))
+        ) {
             al::setNerve(state, getNerveAt(nrvSpinCapFall));
             isSpinActive = false;
             return;
@@ -281,11 +268,7 @@ public:
             else anim->startAnim("WearEnd");
         }
 
-        if (anim->isAnimEnd()
-        ) {
-            al::setNerve(player, getNerveAt(nrvHakoniwaWait));
-            return;
-        }
+        if (anim->isAnimEnd()) { al::setNerve(player, getNerveAt(nrvHakoniwaWait)); return; }
     }
 };
 
