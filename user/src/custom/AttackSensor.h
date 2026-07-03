@@ -492,7 +492,8 @@ namespace AttackSensor {
             sead::Vector3f spawnPos = getHitSpawnPos(source, target);
 
             if (!ctx->W[0]) {
-                if (al::sendMsgExplosion(target, source, nullptr)
+                if (rs::sendMsgCapAttack(target, source)
+                    || al::sendMsgExplosion(target, source, nullptr)
                     || al::sendMsgKickStoneAttackReflect(target, source)
                     || rs::sendMsgBullHackAttack(target, source)
                     || rs::sendMsgKoopaCapPunchL(target, source)
@@ -511,7 +512,8 @@ namespace AttackSensor {
 
             if (!isValidAttackTarget(target)) return;
 
-            rs::sendMsgSphinxRideAttack(target, source)
+            rs::sendMsgCapAttack(target, source)
+            || rs::sendMsgSphinxRideAttack(target, source)
             || rs::sendMsgSphinxRideAttackReflect(target, source)
             || rs::sendMsgHackAttack(target, source)
             || rs::sendMsgBullHackAttack(target, source)

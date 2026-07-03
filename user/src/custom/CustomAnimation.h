@@ -88,7 +88,12 @@ namespace CustomAnimation {
     struct PlayerAnimatorIsAnimHook : public mallow::hook::Trampoline<PlayerAnimatorIsAnimHook> {
         static bool Callback(PlayerAnimator* thisPtr, const sead::SafeString& animName) {
             const char* swapped = remapAnim(animName.cstr(), thisPtr);
-            return Orig(thisPtr, animName) || (swapped && Orig(thisPtr, swapped));
+
+            if (swapped) {
+                if (al::isEqualString(animName.cstr(), "Wait")) return false;
+                return Orig(thisPtr, swapped);
+            }
+            return Orig(thisPtr, animName);
         }
     };
 

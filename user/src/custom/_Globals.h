@@ -49,6 +49,7 @@
 // Game-specific utilities
 #include "Project/HitSensor/HitSensor.h"
 #include "Util/DemoUtil.h"
+#include "Util/ObjUtil.h"
 #include "Util/PlayerCollisionUtil.h"
 #include "Util/PlayerUtil.h"
 #include "Util/SensorMsgFunction.h"
@@ -113,12 +114,17 @@ public:
 
 using mallow::log::logLine;
 
+// =========================================================
+//                        CORE
+// =========================================================
+
 // Helper: nerve pointer from binary offset
 const al::Nerve* getNerveAt(uintptr_t offset) {
     return (const al::Nerve*)((((u64)malloc) - 0x00724b94) + offset);
 }
 
 inline ModConfig* isConfig() { return mallow::config::getConfg<ModConfig>(); }
+
 // Spin button config
 bool isPadTriggerGalaxySpin(int port) {
     switch (isConfig()->attackButton) {
@@ -126,6 +132,7 @@ bool isPadTriggerGalaxySpin(int port) {
         default: return al::isPadTriggerY(port);
     }
 }
+
 // Galaxy SFX config
 inline void isGalaxySfx(PlayerActorHakoniwa* player) {
     if (!isConfig()->galaxySfx) return;
@@ -134,7 +141,27 @@ inline void isGalaxySfx(PlayerActorHakoniwa* player) {
     al::tryStartSe(model, "SpinAttack");
 }
 
-// Nerve offsets
+// =========================================================
+//                     TYPE CHECKS
+// =========================================================
+
+template<typename... Models>
+inline bool isType(al::LiveActor* actor, const char* name, Models... models) {
+    if (!al::isEqualSubString(typeid(*actor).name(), name)) return false;
+    if constexpr (sizeof...(models) == 0) return true;
+    else return ((models[0] == '!' ? !al::isModelName(actor, models + 1) : al::isModelName(actor, models)) || ...);
+}
+
+template<typename... Names>
+inline bool isAnyType(al::LiveActor* actor, Names... names) {
+    const char* type = typeid(*actor).name();
+    return ((names[0] == '!' ? !al::isEqualSubString(type, names + 1) : al::isEqualSubString(type, names)) || ...);
+}
+
+// =========================================================
+//                    NERVE OFFSETS
+// =========================================================
+
 const uintptr_t spinCapNrvOffset = 0x1D78940;
 const uintptr_t nrvSpinCapFall = 0x1D7ff70;
 const uintptr_t nrvHakoniwaWait = 0x01D78918;
@@ -142,6 +169,10 @@ const uintptr_t nrvHakoniwaSquat = 0x01D78920;
 const uintptr_t nrvHakoniwaFall = 0x01D78910;
 const uintptr_t nrvHakoniwaHipDrop = 0x1D78978;
 const uintptr_t nrvHakoniwaJump = 0x1D78948;
+
+// =========================================================
+//                        FLAGS
+// =========================================================
 
 // Suit flags
 bool isMario = false;
@@ -159,35 +190,6 @@ bool isKnight = false;
 bool isCapeOn = false;
 bool isBlasterOn = false;
 bool isAxeOn = false;
-
-// Actor pointers
-inline PlayerActorHakoniwa* isHakoniwa = nullptr;
-inline HammerBrosHammer* isHammer = nullptr;
-inline HammerBrosHammer* isSmashHammer = nullptr;
-inline CustomGauge* isGauge = nullptr;
-inline Motorcycle* isKart = nullptr;
-inline al::LiveActor* isKoopa = nullptr;
-inline al::LiveActor* isNearTarget = nullptr; // nearest homing target this frame
-
-// Actor groups
-inline al::LiveActorGroup* fireBalls = nullptr;
-inline al::LiveActorGroup* iceBalls = nullptr;
-inline al::LiveActorGroup* iceCubes = nullptr;
-inline al::LiveActorGroup* tankBullets = nullptr;
-
-// Hit buffer
-al::LiveActor* hitBuffer[0x40];
-int hitBufferCount = 0;
-
-// Attack counters (-1 = inactive)
-int attackSensorRemaining = -1;
-int fireStep = -1;
-int drillStep = -1;
-int drillSensorRemaining = -1; // hitbox lingers N frames after drill pop
-int isCapeActive = -1;
-int isMarioActive = 0; // 0 = none, 1 = enabling, -1 = disabling
-
-bool isActionBusy() { return fireStep >= 0 || drillStep >= 0; }
 
 // Action flags
 bool canAction = false;
@@ -208,6 +210,42 @@ bool isNearCollectible = false;
 bool isNearTreasure = false;
 bool isNearSwoonedEnemy = false;
 
+// =========================================================
+//                       ACTORS
+// =========================================================
+
+inline PlayerActorHakoniwa* isHakoniwa = nullptr;
+inline HammerBrosHammer* isHammer = nullptr;
+inline HammerBrosHammer* isSmashHammer = nullptr;
+inline CustomGauge* isGauge = nullptr;
+inline Motorcycle* isKart = nullptr;
+inline al::LiveActor* isKoopa = nullptr;
+inline al::LiveActor* isNearTarget = nullptr; // nearest homing target this frame
+
+// Actor groups
+inline al::LiveActorGroup* fireBalls = nullptr;
+inline al::LiveActorGroup* iceBalls = nullptr;
+inline al::LiveActorGroup* iceCubes = nullptr;
+inline al::LiveActorGroup* tankBullets = nullptr;
+
+// =========================================================
+//                        STATE
+// =========================================================
+
+// Hit buffer
+al::LiveActor* hitBuffer[0x40];
+int hitBufferCount = 0;
+
+// Attack counters (-1 = inactive)
+int attackSensorRemaining = -1;
+int fireStep = -1;
+int drillStep = -1;
+int drillSensorRemaining = -1; // hitbox lingers N frames after drill pop
+int isCapeActive = -1;
+int isMarioActive = 0; // 0 = none, 1 = enabling, -1 = disabling
+
+bool isActionBusy() { return fireStep >= 0 || drillStep >= 0; }
+
 // Glide
 float glideLean = 0.0f;
 float glidePitch = 0.0f;
@@ -217,11 +255,19 @@ const f32 MIN_SPEED_RUN_ON_WATER = 15.0f;
 const sead::Color4u8 paintClear(0, 0, 0, 0);
 inline sead::Vector3f legScale = {1.0f, 1.0f, 1.0f};
 
-// Inline helpers
-inline sead::Vector3f getHitSpawnPos(al::HitSensor* a, al::HitSensor* b) {
-    sead::Vector3f pos = (al::getSensorPos(a) + al::getSensorPos(b)) * 0.5f;
-    pos.y += 20.0f;
-    return pos;
+// =========================================================
+//                       HELPERS
+// =========================================================
+
+// Hit effect state — set by EmitEffectHook when "Hit" fires on any actor
+inline bool isEffect = false;
+inline sead::Vector3f isSpawnPos;
+
+inline sead::Vector3f setupHitEffect(al::HitSensor* a, al::HitSensor* b) {
+	isEffect = false;
+	isSpawnPos = (al::getSensorPos(a) + al::getSensorPos(b)) * 0.5f;
+	isSpawnPos.y += 20.0f;
+	return isSpawnPos;
 }
 
 inline sead::Vector3f getFireDir(al::LiveActor* from, al::LiveActor* to) {
@@ -230,11 +276,24 @@ inline sead::Vector3f getFireDir(al::LiveActor* from, al::LiveActor* to) {
     return dir;
 }
 
+// nullptr = guarded Hit, any string = forced emit with that effect
+inline void isHitEffect(al::LiveActor* thisPtr, al::LiveActor* targetHost, const char* effect = nullptr) {
+	bool handled = isEffect;
+	isEffect = false;
+	if (handled) return;
+	al::tryEmitEffect(thisPtr, effect ? effect : "Hit", &isSpawnPos);
+}
+
 inline bool isInHitBuffer(al::LiveActor* actor) {
     for (int i = 0; i < hitBufferCount; i++) {
         if (hitBuffer[i] == actor) return true;
     }
     return false;
+}
+
+inline void tryKnockback(al::LiveActor* actor, const al::Nerve* nrvBefore, const sead::Vector3f& dir, f32 speed) {
+    if (actor->getNerveKeeper()->getCurrentNerve() != nrvBefore)
+        al::addVelocity(actor, dir * speed);
 }
 
 // Validate/invalidate a hit sensor and reset the hit buffer on activation
@@ -267,9 +326,9 @@ inline al::LiveActor* findNearestTarget(al::LiveActor* player, f32 maxDist) {
     for (int i = 0; i < eye->mSensorCount; i++) {
         al::HitSensor* s = eye->mSensors[i];
         al::LiveActor* actor = al::getSensorHost(s);
-        if (!actor || actor == player || !al::isAlive(actor)) continue;
-        if (!al::isSensorNpc(s) && !(al::isSensorEnemyBody(s) && al::isEqualSubString(s->mName, "Body"))) continue;
-        if (isInHitBuffer(actor)) continue;
+        if (!actor || actor == player
+            || (!al::isSensorNpc(s) && !al::isSensorEnemyBody(s) && !al::isSensorMapObj(s))
+            || !al::isAlive(actor) || isInHitBuffer(actor)) continue;
 
         f32 d = al::calcDistance(player, actor);
         if (d < best) { best = d; nearest = actor; }
@@ -277,12 +336,10 @@ inline al::LiveActor* findNearestTarget(al::LiveActor* player, f32 maxDist) {
     return nearest;
 }
 
-inline void tryKnockback(al::LiveActor* actor, const al::Nerve* nrvBefore, const sead::Vector3f& dir, f32 speed) {
-    if (actor->getNerveKeeper()->getCurrentNerve() != nrvBefore)
-        al::addVelocity(actor, dir * speed);
-}
+// =========================================================
+//                      SPIN STATE
+// =========================================================
 
-// Spin state
 struct SpinState {
     bool isGalaxy = false;
     bool canGalaxy = true;
@@ -313,7 +370,10 @@ struct SpinState {
 inline SpinState spin;
 enum class SpinPre { Fallthrough, Accept, Reject };
 
-// Animation checks
+// =========================================================
+//                   ANIMATION CHECKS
+// =========================================================
+
 inline bool isBaseSpinAnim(PlayerAnimator* anim) {
     return al::isEqualString(anim->mCurAnim, "SpinSeparate")
         || al::isEqualString(anim->mCurAnim, "SpinSeparateSwim")
