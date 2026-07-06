@@ -8,7 +8,7 @@ namespace CustomAnimation {
         if (!isHakoniwa || (anim && anim != isHakoniwa->mAnimator)
             || rs::isPlayer2D(isHakoniwa)) return nullptr;
 
-        if (isBlasterOn || isAxeOn) {
+        if (isWeaponOn) {
             if (al::isEqualString(name, "Wait")) return "BattleWait";
         }
         if (isTanooki) {

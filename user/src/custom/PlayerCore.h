@@ -50,7 +50,7 @@ namespace PlayerCore {
                 isKnight = (costume && al::isEqualString(costume, "MarioKnight"))
                     && (cap && al::isEqualString(cap, "MarioKnight"));
                 // Set Cap sounds
-                if (isMetal && thisPtr->mHackCap) al::setSeKeeperPlayNamePrefix(thisPtr->mHackCap, "Iron");
+                if ((isMetal || isKnight) && thisPtr->mHackCap) al::setSeKeeperPlayNamePrefix(thisPtr->mHackCap, "Iron");
 
                 PowerUps::executeInitPlayer(thisPtr, actorInfo, playerInfo);
             #endif
@@ -179,6 +179,27 @@ namespace PlayerCore {
                 attackFrames = 0;
             }
 
+            // Push wind-blow map parts while doing the wall-push animation or attacking
+            static bool wasPushing = false;
+            al::HitSensor* wallSensor = isHammerWall ? al::tryGetCollidedWallSensor(isHammer) : rs::tryGetCollidedWallSensor(thisPtr->mCollider);
+            if (wallSensor && isType(al::getSensorHost(wallSensor), "WindBlowMapParts")
+            ) {
+                sead::Vector3f front;
+                al::calcFrontDir(&front, thisPtr);
+                if (thisPtr->mAnimator->isAnim("Push")) rs::sendMsgByugoBlow(wallSensor, wallSensor, front * 1.0f);
+                else if (activeSensor) {
+                    float pushForce = (al::getSensorHost(activeSensor) == isHammer) ? 150.0f : 50.0f;
+                    rs::sendMsgByugoBlow(wallSensor, wallSensor, front * pushForce);
+                    if (!wasPushing) {
+                        sead::Vector3f hitPos = isHammerWall ? al::getCollidedWallPos(isHammer) : rs::getCollidedWallPos(thisPtr->mCollider);
+                        al::tryEmitEffect(thisPtr, "HitSmall", &hitPos);
+                        al::tryStartSe(thisPtr, "HitImpact");
+                        wasPushing = true;
+                    }
+                }
+            }
+            if (!activeSensor) wasPushing = false;
+
             // Reset proximity flag
             isNearCollectible = false;
             isNearTreasure = false;
@@ -223,10 +244,10 @@ namespace PlayerCore {
             // Change face animations
             al::LiveActor* face = al::tryGetSubActor(model, "顔");
             if (face) {
-                if ((thisPtr->mAnimator->isAnim("BattleWait") || isBrawl || isSuper) && !al::isActionPlayingSubActor(model, "顔", "WaitAngry"))
-                    al::startActionSubActor(model, "顔", "WaitAngry");
-                if (isMetal && !al::isActionPlayingSubActor(model, "顔", "AreaWaitFight"))
-                    al::startActionSubActor(model, "顔", "AreaWaitFight");
+                if ((thisPtr->mAnimator->isAnim("BattleWait") || isBrawl || isSuper)
+                    && !al::isActionPlayingSubActor(model, "顔", "WaitAngry")) al::startActionSubActor(model, "顔", "WaitAngry");
+                if (isMetal
+                    && !al::isActionPlayingSubActor(model, "顔", "AreaWaitFight")) al::startActionSubActor(model, "顔", "AreaWaitFight");
             }
 
             #ifdef ALLOW_TAUNT // Handle Taunt actions
@@ -282,18 +303,36 @@ namespace PlayerCore {
     struct EndSubAnimGuard : public mallow::hook::Trampoline<EndSubAnimGuard> {
         static void Callback(PlayerAnimator* anim) {
             if (isDrillAnim(anim) && !anim->isSubAnimEnd()) return;
-
             Orig(anim);
         }
     };
 
-    struct TryEmitEffectHook : public mallow::hook::Trampoline<TryEmitEffectHook> {
-        static bool Callback(al::EffectKeeper* keeper, const char* name, const sead::Vector3f* pos) {
-            if (isConfig()->galaxySfx
-                && al::isEqualString(name, "SpinCapStart2Right")
-                && isHakoniwa && al::isEqualSubString(isHakoniwa->mAnimator->mCurAnim, "SpinSeparate")) return false;
+    struct EmitEffectHook : public mallow::hook::Trampoline<EmitEffectHook> {
+        static void Callback(al::IUseEffectKeeper* keeper, const char* name, const sead::Vector3f* pos) {
+            if (al::isEqualSubString(name, "Hit")) isEffect = true;
+            Orig(keeper, name, pos);
+        }
+    };
 
+    struct TryEmitEffectHook : public mallow::hook::Trampoline<TryEmitEffectHook> {
+        static bool Callback(al::IUseEffectKeeper* keeper, const char* name, const sead::Vector3f* pos) {
+            if (isConfig()->galaxySfx && al::isEqualString(name, "SpinCapStart2Right")
+                && isHakoniwa && al::isEqualSubString(isHakoniwa->mAnimator->mCurAnim, "SpinSeparate")) return false;
             return Orig(keeper, name, pos);
+        }
+    };
+
+    struct EffectHitReactionLimitHook : public mallow::hook::Inline<EffectHitReactionLimitHook> {
+        static void Callback(exl::hook::InlineCtx* ctx) {
+            static u8 sNodes[32 * 0xE8] = {};
+            static void* sBuf[64] = {};
+
+            for (int i = 0; i < 31; i++)
+                *(void**)(sNodes + i * 0xE8) = sNodes + (i + 1) * 0xE8;
+
+            *(void**)(ctx->X[2] - 0xE8) = sNodes;
+            ctx->X[1] = 0x40;
+            ctx->X[2] = (u64)sBuf;
         }
     };
 
@@ -305,7 +344,10 @@ namespace PlayerCore {
         // Handles control/movement
         PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
         PlayerActorHakoniwaReceiveMsgHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa10receiveMsgEPKN2al9SensorMsgEPNS0_9HitSensorES5_");
+
         EndSubAnimGuard::InstallAtSymbol("_ZN14PlayerAnimator10endSubAnimEv");
+        EmitEffectHook ::InstallAtSymbol("_ZN2al10emitEffectEPNS_16IUseEffectKeeperEPKcPKN4sead7Vector3IfEE");
         TryEmitEffectHook::InstallAtSymbol("_ZN2al13tryEmitEffectEPNS_16IUseEffectKeeperEPKcPKN4sead7Vector3IfEE");
+        EffectHitReactionLimitHook::InstallAtOffset(0xA5B938);
     }
 }

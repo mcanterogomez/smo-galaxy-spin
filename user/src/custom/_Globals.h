@@ -188,8 +188,7 @@ bool isBrawl = false;
 bool isSuper = false;
 bool isKnight = false;
 bool isCapeOn = false;
-bool isBlasterOn = false;
-bool isAxeOn = false;
+bool isWeaponOn = false;
 
 // Action flags
 bool canAction = false;
@@ -291,11 +290,6 @@ inline bool isInHitBuffer(al::LiveActor* actor) {
     return false;
 }
 
-inline void tryKnockback(al::LiveActor* actor, const al::Nerve* nrvBefore, const sead::Vector3f& dir, f32 speed) {
-    if (actor->getNerveKeeper()->getCurrentNerve() != nrvBefore)
-        al::addVelocity(actor, dir * speed);
-}
-
 // Validate/invalidate a hit sensor and reset the hit buffer on activation
 inline void updateAttackSensor(al::LiveActor* actor, const char* name, bool active, bool& was) {
     if (active && !was) { al::validateHitSensor(actor, name); hitBufferCount = 0; }
@@ -380,7 +374,8 @@ inline bool isBaseSpinAnim(PlayerAnimator* anim) {
         || al::isEqualString(anim->mCurAnim, "SpinLow")
         || al::isEqualString(anim->mCurAnim, "CapeAttack")
         || al::isEqualString(anim->mCurAnim, "TailAttack")
-        || al::isEqualString(anim->mCurAnim, "BlastAttack");
+        || al::isEqualString(anim->mCurAnim, "SwingAttack")
+        || al::isEqualString(anim->mCurAnim, "SwingAirAttack");
 }
 
 inline bool isDoubleSpinAnim(PlayerAnimator* anim) {

@@ -193,27 +193,33 @@ namespace PowerUps {
 
         auto* blaster = al::tryGetSubActor(model, "Blaster");
         auto* axe = al::tryGetSubActor(model, "Axe");
+        auto* weapon = isKnight ? axe : blaster;
 
-        isBlasterOn = blaster && al::isAlive(blaster);
-        isAxeOn = axe && al::isAlive(axe);
+        isWeaponOn = weapon && al::isAlive(weapon);
         bool weaponToggle = isActive && holdRightFrames == 30;
+        bool canToggle = (isMario || isKnight) && weaponToggle;
 
-        if (blaster && isBlasterOn && ((isMario && weaponToggle) || isMarioActive == -1)) { blaster->kill(); al::tryEmitEffect(model, "BlasterDisappear", nullptr); al::tryStartSe(thisPtr, "BlasterOpen"); }
-        else if (blaster && !isBlasterOn && isMario && weaponToggle) { blaster->appear(); al::tryEmitEffect(model, "BlasterAppear", nullptr); al::tryStartSe(thisPtr, "BlasterOpen"); }
-
-        if (axe && isAxeOn && isKnight && weaponToggle) { axe->kill(); al::tryEmitEffect(model, "BlasterDisappear", nullptr); al::tryStartSe(thisPtr, "BlasterOpen"); }
-        else if (axe && !isAxeOn && isKnight && weaponToggle) { axe->appear(); al::tryEmitEffect(model, "BlasterAppear", nullptr); al::tryStartSe(thisPtr, "BlasterOpen"); }
-    
+        if (weapon && isWeaponOn && (canToggle || (!isKnight && isMarioActive == -1))) {
+            weapon->kill();
+            al::tryEmitEffect(model, "BlasterDisappear", nullptr);
+            al::tryStartSe(thisPtr, "BlasterOpen");
+        }
+        else if (weapon && !isWeaponOn && canToggle) {
+            weapon->appear();
+            al::tryEmitEffect(model, "BlasterAppear", nullptr);
+            al::tryStartSe(thisPtr, "BlasterOpen");
+        }
+        
         auto* hand = al::tryGetSubActor(model, "右手");
-        if (isBlasterOn && hand && !al::isActionPlayingSubActor(model, "右手", "AreaWaitDance03")) al::startActionSubActor(model, "右手", "AreaWaitDance03");
-        if (isAxeOn && hand && !al::isActionPlayingSubActor(model, "右手", "GrabCeilWait")) al::startActionSubActor(model, "右手", "GrabCeilWait");
-            
+        if (isWeaponOn && hand && isMario && !al::isActionPlayingSubActor(model, "右手", "AreaWaitDance03")) al::startActionSubActor(model, "右手", "AreaWaitDance03");
+        if (isWeaponOn && hand && isKnight && !al::isActionPlayingSubActor(model, "右手", "GrabCeilWait")) al::startActionSubActor(model, "右手", "GrabCeilWait");
+
         // Handle fireball/iceball/blaster attack
         const char* jointName;
         const char* fireAnim;
         al::LiveActorGroup* currentPool;
 
-        if (isBlasterOn) {
+        if (isWeaponOn && !isKnight) {
             jointName = "HandR";
             fireAnim = "BlastShoot";
             currentPool = tankBullets;
@@ -228,7 +234,7 @@ namespace PowerUps {
         bool isFullBody = (!isMove && onGround && (!isWater || isSurface));
         bool isFloating = al::isActionPlaying(model, "GlideFloat") || al::isActionPlaying(model, "GlideFloatSuper");
 
-        if ((isBlasterOn || isMario || isFire || isIce || isBrawl || isSuper)
+        if ((isMario || isFire || isIce || isBrawl || isSuper)
             && fireStep < 0 && (canAction || isFloating)
             && al::isPadTriggerR(-1)
         ) {
@@ -237,11 +243,11 @@ namespace PowerUps {
                 fireStep = 0;
                 canAction = false;
                 // Increase Eye sensor range for blaster homing
-                if (isBlasterOn) al::setSensorRadius(thisPtr, "Eye", 1600.0f);
+                if (isWeaponOn && !isKnight) al::setSensorRadius(thisPtr, "Eye", 1600.0f);
 
                 anim->startUpperBodyAnim(fireAnim);
                 if (isFullBody) anim->startAnim(fireAnim);
-                if (isBlasterOn) al::tryStartSe(thisPtr, "BlasterShoot");
+                if (isWeaponOn && !isKnight) al::tryStartSe(thisPtr, "BlasterShoot");
             }
         }
         if (fireStep >= 0) {
@@ -253,10 +259,10 @@ namespace PowerUps {
                 al::setSensorRadius(thisPtr, "Eye", 800.0f); // Restore default
                 return;
             }
-            if ((fireStep == 2 && !isBlasterOn) || (fireStep == 40 && isBlasterOn)
+            if ((fireStep == 2 && !(isWeaponOn && !isKnight)) || (fireStep == 40 && isWeaponOn && !isKnight)
             ) {
                 // Home in on nearest target
-                isNearTarget = findNearestTarget(thisPtr, isBlasterOn ? 1600.0f : 800.0f);
+                isNearTarget = findNearestTarget(thisPtr, (isWeaponOn && !isKnight) ? 1600.0f : 800.0f);
                 if (isNearTarget) {
                     sead::Vector3f dir = al::getTrans(isNearTarget) - al::getTrans(thisPtr);
                     dir.normalize();
@@ -270,7 +276,7 @@ namespace PowerUps {
                 sead::Vector3f startPos;
                 al::calcJointPos(&startPos, model, jointName);
 
-                if (isBlasterOn) {
+                if (isWeaponOn && !isKnight) {
                     sead::Vector3f fwd;
                     al::calcQuatFront(&fwd, model);
                     fwd.normalize();
@@ -288,7 +294,7 @@ namespace PowerUps {
                     else al::tryStartSe(projectile, "FireBallShoot");
                 }
 
-                if (!isBlasterOn) nextThrowLeft = !nextThrowLeft;
+                if (!(isWeaponOn && !isKnight)) nextThrowLeft = !nextThrowLeft;
             }
             if (anim->isUpperBodyAnimEnd()
             ) {
@@ -730,7 +736,7 @@ namespace PowerUps {
 
     struct TryUpdateSeMaterialCodeHook : public mallow::hook::Trampoline<TryUpdateSeMaterialCodeHook> {
         static void Callback(al::IUseAudioKeeper* keeper, const char* material) {
-            if (isMetal) return Orig(keeper, "Metal");
+            if ((isMetal || isKnight)) return Orig(keeper, "Metal");
             Orig(keeper, material);
         }
     };

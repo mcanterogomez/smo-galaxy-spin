@@ -100,7 +100,6 @@ namespace PlayerFreeze {
             al::HitSensor* body = al::getHitSensor(actor, "Body");
             if (!body) { hitBuffer[hitBufferCount++] = actor; return false; }
 
-            const al::Nerve* nrvBefore = actor->getNerveKeeper()->getCurrentNerve();
             if (al::sendMsgPlayerFireBallAttack(body, body)
                 || rs::sendMsgFireBrosFireBallCollide(body, body)
                 || rs::sendMsgHackAttack(body, body)
@@ -111,7 +110,7 @@ namespace PlayerFreeze {
             ) {
                 sead::Vector3f dir = al::getTrans(actor) - al::getTrans(isHakoniwa);
                 al::tryNormalizeOrZero(&dir);
-                tryKnockback(actor, nrvBefore, dir, 12.5f);
+                al::addVelocity(actor, dir * 12.5f);
                 
                 sead::Vector3f pos = (al::getTrans(actor) + al::getSensorPos(attacker)) * 0.5f;
                 al::tryEmitEffect(isHakoniwa, "Hit", &pos);
