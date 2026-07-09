@@ -3,30 +3,29 @@
 #include "custom/_Globals.h"
 
 // Handle lunging
-inline void applyLunge(PlayerActorHakoniwa* player, float frame, float launchFrame, float speed, float decay = 0.25f) {
+inline void applyLunge(PlayerActorHakoniwa* player, float launchFrame, float speed) {
+	float frame = player->mAnimator->getAnimFrame();
 	if (frame < launchFrame) return;
 
 	sead::Vector3f normal;
 	rs::calcGroundNormalOrUpDir(&normal, player, player->mCollider);
+	sead::Vector3f vel = al::getVelocity(player);
 
 	if (frame == launchFrame) {
-		sead::Vector3f vel = al::getVelocity(player);
 		vel *= 0.5f;
 		sead::Vector3f fwd;
 		al::calcQuatFront(&fwd, player);
 		fwd -= normal * fwd.dot(normal);
 		fwd.normalize();
 		vel += fwd * speed;
-		al::setVelocity(player, vel);
-		return;
+	} else {
+		f32 vComp = vel.dot(normal);
+		sead::Vector3f hVel = vel - normal * vComp;
+		hVel *= 0.95f; // sheds 5% of horizontal speed per frame
+		vel = hVel + normal * vComp;
 	}
 
-	sead::Vector3f vel = al::getVelocity(player);
-	sead::Vector3f hVel = vel - normal * vel.dot(normal);
-	f32 hLen = hVel.length();
-	if (hLen > decay) hVel *= (hLen - decay) / hLen;
-	else hVel = sead::Vector3f::zero;
-	al::setVelocity(player, hVel + normal * vel.dot(normal));
+	al::setVelocity(player, vel);
 }
 
 // Home in on nearest target
@@ -158,7 +157,7 @@ public:
                 al::setNerve(state, &GalaxySpinGround);
                 return;
             }
-            applyLunge(player, isFrame, 5.0f, 5.0f);
+            applyLunge(player, 2.0f, 5.0f);
             if (isFrame == 5.0f) { al::validateHitSensor(state->mActor, "Punch"); attackSensorRemaining = 10; }
         }
         else if (isJumpPunch) {
@@ -186,7 +185,7 @@ public:
             if (isFrame == 60.0f) al::tryEmitEffect(player, "Land", nullptr);
         }
         else if (isLow || state->mAnimator->isAnim("SwingAttack")) {
-            applyLunge(player, isFrame, 2.0f, 5.0f);
+            applyLunge(player, 2.0f, 5.0f);
             if (isLow && !rs::isOnGround(player, player->mCollider)) { al::setNerve(state, getNerveAt(nrvSpinCapFall)); return;}
         }
         else if ((state->mAnimator->isAnim("RabbitGet") && isFrame == 7.0f) || (state->mAnimator->isAnim("Kick") && isFrame == 2.0f)) al::validateHitSensor(state->mActor, "Punch");

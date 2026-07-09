@@ -32,8 +32,9 @@ namespace PlayerFreeze {
 
     // Raycast down from actor to find what platform it's standing on
     inline const al::CollisionParts* findFloorParts(al::LiveActor* actor, sead::Vector3f* outFloorPos) {
-        sead::Vector3f rayDir = al::getGravity(actor) * 500.0f;
-        sead::Vector3f rayStart = al::getTrans(actor);
+        sead::Vector3f gravity = al::getGravity(actor);
+        sead::Vector3f rayStart = al::getTrans(actor) - gravity;
+        sead::Vector3f rayDir = gravity * 500.0f;
         sead::Vector3f hitPos;
         al::Triangle tri;
         if (alCollisionUtil::getFirstPolyOnArrow(actor, &hitPos, &tri, rayStart, rayDir, nullptr, nullptr) && tri.mCollisionParts) {
@@ -98,35 +99,36 @@ namespace PlayerFreeze {
             al::HitSensor* attacker = entry->cube->getAttacker();
             unfreezeActor(actor);
             al::HitSensor* body = al::getHitSensor(actor, "Body");
-            if (!body) { hitBuffer[hitBufferCount++] = actor; return false; }
 
-            if (al::sendMsgPlayerFireBallAttack(body, body)
+            if (body && (al::sendMsgPlayerFireBallAttack(body, body)
                 || rs::sendMsgFireBrosFireBallCollide(body, body)
                 || rs::sendMsgHackAttack(body, body)
                 || rs::sendMsgCapReflect(body, body)
                 || rs::sendMsgCapAttack(body, body)
                 || al::sendMsgPlayerObjHipDropReflect(body, body, nullptr)
                 || al::sendMsgExplosion(body, body, nullptr)
-            ) {
+            )) {
                 sead::Vector3f dir = al::getTrans(actor) - al::getTrans(isHakoniwa);
                 al::tryNormalizeOrZero(&dir);
                 al::addVelocity(actor, dir * 12.5f);
-                
+
                 sead::Vector3f pos = (al::getTrans(actor) + al::getSensorPos(attacker)) * 0.5f;
                 al::tryEmitEffect(isHakoniwa, "Hit", &pos);
-
-                hitBuffer[hitBufferCount++] = actor;
-                return false;
             }
+
+            hitBuffer[hitBufferCount++] = actor;
+            return false;
         }
 
         // Follow moving platform
-        if (entry->floorParts) {
-            sead::Vector3f curPos = entry->floorParts->getBaseMtx().getTranslation();
-            sead::Vector3f delta = curPos - entry->lastFloorPos;
+        sead::Vector3f curFloorPos = entry->lastFloorPos;
+        const al::CollisionParts* curFloor = findFloorParts(actor, &curFloorPos);
+        if (curFloor && curFloor == entry->floorParts) {
+            sead::Vector3f delta = curFloorPos - entry->lastFloorPos;
             if (delta.squaredLength() > 0.0f) al::setTrans(actor, al::getTrans(actor) + delta);
-            entry->lastFloorPos = curPos;
         }
+        entry->floorParts = curFloor;
+        entry->lastFloorPos = curFloorPos;
 
         al::setActionFrameRate(actor, 0.0f);
 

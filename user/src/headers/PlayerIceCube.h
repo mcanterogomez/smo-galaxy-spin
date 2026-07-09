@@ -44,6 +44,7 @@ public:
         mAttacker = nullptr;
         mIsBreaking = false;
 
+        calcScale(); // target's size can't change while frozen, so this only needs to run once
         syncToTarget();
         makeActorAlive();
         al::tryStartAction(this, "Appear");
@@ -64,7 +65,7 @@ public:
         if (mIsBreaking) {
             f32 effectScale = mScale * kEffectScaleMult;
             al::setEffectAllScale(this, "Break", sead::Vector3f(effectScale, effectScale, effectScale));
-        } else 
+        } else
             makeActorDead();
     }
 
@@ -81,12 +82,11 @@ private:
     static constexpr f32 kMinScale = 0.5f;
     static constexpr f32 kEffectScaleMult = 0.5f;
     static constexpr f32 kGroundRayLength = 500.0f;
-    static constexpr f32 kAOERadius = 500.0f;
 
-    void syncToTarget() {
+    // Get cube's base bounding box and derive scale/sensor size from the frozen target.
+    void calcScale() {
         if (!mTarget) return;
 
-        // Get cube's base bounding box (used for scaling, sensor, and positioning)
         sead::BoundBox3f cubeBox;
         al::calcModelBoundingBox(&cubeBox, this);
         f32 cubeMaxDim = sead::Mathf::max(cubeBox.getSizeX(),
@@ -132,20 +132,25 @@ private:
         // Sensor matches cube visual
         al::setSensorRadius(this, "Body", cubeMaxDim * mScale * 0.5f);
 
-        // Position cube on ground
+        // Cache for the per-frame ground snap in syncToTarget()
+        mHalfHeight = cubeBox.getSizeY() * mScale * 0.5f;
+    }
+
+    // Runs every frame via control()
+    void syncToTarget() {
+        if (!mTarget) return;
+
         sead::Vector3f pos = al::getTrans(mTarget);
         sead::Vector3f gravity = al::getGravity(mTarget);
-        f32 halfHeight = cubeBox.getSizeY() * mScale * 0.5f;
 
         sead::Vector3f rayStart = pos - gravity;
         sead::Vector3f rayDelta = gravity * kGroundRayLength;
         sead::Vector3f groundPos;
 
-        if (alCollisionUtil::getHitPosOnArrow(mTarget, &groundPos, rayStart, rayDelta, nullptr, nullptr)
-        ) {
-            if ((groundPos - pos).dot(gravity) < halfHeight) pos = groundPos - (gravity * halfHeight);
+        if (alCollisionUtil::getHitPosOnArrow(mTarget, &groundPos, rayStart, rayDelta, nullptr, nullptr)) {
+            if ((groundPos - pos).dot(gravity) < mHalfHeight) pos = groundPos - (gravity * mHalfHeight);
         } else
-            pos = pos - (gravity * halfHeight);
+            pos = pos - (gravity * mHalfHeight);
 
         al::setTrans(this, pos);
     }
@@ -153,6 +158,7 @@ private:
     al::LiveActor* mTarget = nullptr;
     al::HitSensor* mAttacker = nullptr;
     f32 mScale = 1.0f;
+    f32 mHalfHeight = 0.0f;
     bool mWasHit = false;
     bool mIsBreaking = false;
 };

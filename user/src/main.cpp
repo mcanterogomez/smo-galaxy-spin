@@ -19,8 +19,8 @@ struct TriggerCameraReset : public mallow::hook::Trampoline<TriggerCameraReset> 
 struct TriggerAmiibo : public mallow::hook::Trampoline<TriggerAmiibo> {
     static bool Callback(const al::IUseSceneObjHolder* holder) {
         auto* model = isHakoniwa->mModelHolder->findModelActor("Normal");
-        for (auto [flag, name] : {std::pair{isMario, "Blaster"}, {isKnight, "Axe"}})
-            if (flag && al::tryGetSubActor(model, name)) return false;
+        if (isMario && al::tryGetSubActor(model, "Blaster")) return false;
+        if (isKnight && al::tryGetSubActor(model, "Axe")) return false;
         return Orig(holder);
     }
 };

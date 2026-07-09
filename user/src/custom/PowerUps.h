@@ -209,7 +209,7 @@ namespace PowerUps {
             al::tryEmitEffect(model, "BlasterAppear", nullptr);
             al::tryStartSe(thisPtr, "BlasterOpen");
         }
-        
+
         auto* hand = al::tryGetSubActor(model, "右手");
         if (isWeaponOn && hand && isMario && !al::isActionPlayingSubActor(model, "右手", "AreaWaitDance03")) al::startActionSubActor(model, "右手", "AreaWaitDance03");
         if (isWeaponOn && hand && isKnight && !al::isActionPlayingSubActor(model, "右手", "GrabCeilWait")) al::startActionSubActor(model, "右手", "GrabCeilWait");
@@ -218,8 +218,9 @@ namespace PowerUps {
         const char* jointName;
         const char* fireAnim;
         al::LiveActorGroup* currentPool;
+        bool isBlast = isWeaponOn && weapon == blaster;
 
-        if (isWeaponOn && !isKnight) {
+        if (isBlast) {
             jointName = "HandR";
             fireAnim = "BlastShoot";
             currentPool = tankBullets;
@@ -230,24 +231,23 @@ namespace PowerUps {
         }
 
         if (!currentPool) return;
-        auto* projectile = currentPool->getDeadActor();
         bool isFullBody = (!isMove && onGround && (!isWater || isSurface));
-        bool isFloating = al::isActionPlaying(model, "GlideFloat") || al::isActionPlaying(model, "GlideFloatSuper");
+        auto restoreEyeRadius = [&]() { al::setSensorRadius(thisPtr, "Eye", 800.0f); }; // Restore default
 
         if ((isMario || isFire || isIce || isBrawl || isSuper)
-            && fireStep < 0 && (canAction || isFloating)
+            && fireStep < 0 && (canAction || al::isActionPlaying(model, "GlideFloat") || al::isActionPlaying(model, "GlideFloatSuper"))
             && al::isPadTriggerR(-1)
         ) {
-            if (projectile && al::isDead(projectile)
-            ) {
+            auto* projectile = currentPool->getDeadActor();
+            if (projectile && al::isDead(projectile)) {
                 fireStep = 0;
                 canAction = false;
                 // Increase Eye sensor range for blaster homing
-                if (isWeaponOn && !isKnight) al::setSensorRadius(thisPtr, "Eye", 1600.0f);
+                if (isBlast) al::setSensorRadius(thisPtr, "Eye", 1600.0f);
 
                 anim->startUpperBodyAnim(fireAnim);
                 if (isFullBody) anim->startAnim(fireAnim);
-                if (isWeaponOn && !isKnight) al::tryStartSe(thisPtr, "BlasterShoot");
+                if (isBlast) al::tryStartSe(thisPtr, "BlasterShoot");
             }
         }
         if (fireStep >= 0) {
@@ -256,13 +256,12 @@ namespace PowerUps {
 
             if (!isShooting) {
                 fireStep = -1;
-                al::setSensorRadius(thisPtr, "Eye", 800.0f); // Restore default
+                restoreEyeRadius();
                 return;
             }
-            if ((fireStep == 2 && !(isWeaponOn && !isKnight)) || (fireStep == 40 && isWeaponOn && !isKnight)
-            ) {
+            if ((fireStep == 2 && !isBlast) || (fireStep == 40 && isBlast)) {
                 // Home in on nearest target
-                isNearTarget = findNearestTarget(thisPtr, (isWeaponOn && !isKnight) ? 1600.0f : 800.0f);
+                isNearTarget = findNearestTarget(thisPtr, isBlast ? 1600.0f : 800.0f);
                 if (isNearTarget) {
                     sead::Vector3f dir = al::getTrans(isNearTarget) - al::getTrans(thisPtr);
                     dir.normalize();
@@ -275,8 +274,9 @@ namespace PowerUps {
                 hitBufferCount = 0;
                 sead::Vector3f startPos;
                 al::calcJointPos(&startPos, model, jointName);
+                auto* projectile = currentPool->getDeadActor();
 
-                if (isWeaponOn && !isKnight) {
+                if (isBlast) {
                     sead::Vector3f fwd;
                     al::calcQuatFront(&fwd, model);
                     fwd.normalize();
@@ -294,26 +294,22 @@ namespace PowerUps {
                     else al::tryStartSe(projectile, "FireBallShoot");
                 }
 
-                if (!(isWeaponOn && !isKnight)) nextThrowLeft = !nextThrowLeft;
+                if (!isBlast) nextThrowLeft = !nextThrowLeft;
             }
-            if (anim->isUpperBodyAnimEnd()
-            ) {
+            if (anim->isUpperBodyAnimEnd()) {
                 if (isFullBody) al::setNerve(thisPtr, getNerveAt(nrvHakoniwaFall));
                 anim->clearUpperBodyAnim();
                 fireStep = -1;
-                al::setSensorRadius(thisPtr, "Eye", 800.0f); // Restore default
+                restoreEyeRadius();
             }
             else fireStep++;
         }
         canAction = false;
 
         // Handle cape logic for Mario/Brawl suit
-        bool isGliding = al::isActionPlaying(model, "Glide")
-            || al::isActionPlaying(model, "GlideAlt")
-            || al::isActionPlaying(model, "GlideFloatStart")
-            || al::isActionPlaying(model, "JumpBroad8")
-            || al::isActionPlaying(model, "JumpBroad8Alt")
-            || isFloating;
+        bool isGliding = al::isActionPlaying(model, "Glide") || al::isActionPlaying(model, "GlideAlt")
+            || al::isActionPlaying(model, "GlideFloatStart") || al::isActionPlaying(model, "GlideFloat") || al::isActionPlaying(model, "GlideFloatSuper")
+            || al::isActionPlaying(model, "JumpBroad8") || al::isActionPlaying(model, "JumpBroad8Alt");
 
         // Handle glide gauge
         if (isGauge && !isSuper) {
