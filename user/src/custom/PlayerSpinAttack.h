@@ -211,16 +211,23 @@ namespace PlayerSpinAttack {
 
     // Shared swim spin logic
     static void SwimSpinAttackLogic(PlayerStateSwim* thisPtr) {
-        if(spin.trigger && al::isFirstStep(thisPtr)
-        ) {
-            al::validateHitSensor(thisPtr->mActor, "GalaxySpin");
+        auto* anim = isHakoniwa->mAnimator;
+        bool isPunch = anim->isAnim("PunchR") || anim->isAnim("PunchL");
+
+        if (spin.trigger && al::isFirstStep(thisPtr)) {
             hitBufferCount = 0;
-            spin.isGalaxy = true;
             spin.trigger = false;
             isSpinActive = true;
+            spin.isGalaxy = !isPunch;
 
             if (isNearCollectible || isNearTreasure || isNearSwoonedEnemy) { al::validateHitSensor(thisPtr->mActor, "Punch"); attackSensorRemaining = 15; }
-            else { al::validateHitSensor(thisPtr->mActor, "GalaxySpin"); attackSensorRemaining = 32; }
+            else if (!isPunch) { al::validateHitSensor(thisPtr->mActor, "GalaxySpin"); attackSensorRemaining = 32; }
+        }
+
+        if (anim->isAnim("SwingAttack")) applyLunge(isHakoniwa, 2.0f, 5.0f);
+        else if (isPunch) {
+            applyLunge(isHakoniwa, 5.0f, 5.0f);
+            if (anim->getAnimFrame() >= 6.0f) { al::validateHitSensor(thisPtr->mActor, "Punch"); attackSensorRemaining = 6; }
         }
     }
 
@@ -241,14 +248,23 @@ namespace PlayerSpinAttack {
 
     // Shared swim anim selection
     static void SwimSpinAnimSelect(PlayerSpinCapAttack* thisPtr, PlayerAnimator* animator) {
+        bool isGround = rs::isOnGround(isHakoniwa, isHakoniwa->mCollider);
+
         if (isNearCollectible) animator->startAnim("RabbitGet");
         else if (isNearTreasure || isNearSwoonedEnemy) animator->startAnim("Kick");
-        else if (isFeather) animator->startAnim("CapeAttack");
+        else if (isFeather || (!isGround && isMario && isCapeOn)) animator->startAnim("CapeAttack");
         else if (isTanooki) animator->startAnim("TailAttack");
+        else if (isGround) {
+            if (isWeaponOn) animator->startAnim("SwingAttack");
+            else { isPunchRight = !isPunchRight; animator->startAnim(isPunchRight ? "PunchR" : "PunchL"); }
+        }
+        else if (isWeaponOn) animator->startAnim("SwingAirAttack");
         else {
             animator->startAnim("SpinSeparateSwim");
             isGalaxySfx(isHakoniwa);
+            return;
         }
+        animator->setAnimRate(0.5f);
     }
 
     struct PlayerSpinCapAttackStartSpinSeparateSwimSurface : public mallow::hook::Trampoline<PlayerSpinCapAttackStartSpinSeparateSwimSurface> {

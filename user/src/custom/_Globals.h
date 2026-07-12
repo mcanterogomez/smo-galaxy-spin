@@ -147,15 +147,31 @@ inline void isGalaxySfx(PlayerActorHakoniwa* player) {
 
 template<typename... Models>
 inline bool isType(al::LiveActor* actor, const char* name, Models... models) {
-    if (!al::isEqualSubString(typeid(*actor).name(), name)) return false;
-    if constexpr (sizeof...(models) == 0) return true;
-    else return ((models[0] == '!' ? !al::isModelName(actor, models + 1) : al::isModelName(actor, models)) || ...);
+	if (!al::isEqualSubString(typeid(*actor).name(), name)) return false;
+	if constexpr (sizeof...(models) == 0) return true;
+	bool matched = false, excluded = false;
+	((models[0] == '!' ? excluded |= al::isModelName(actor, models + 1) : matched |= al::isModelName(actor, models)), ...);
+	return matched && !excluded;
 }
 
 template<typename... Names>
 inline bool isAnyType(al::LiveActor* actor, Names... names) {
-    const char* type = typeid(*actor).name();
-    return ((names[0] == '!' ? !al::isEqualSubString(type, names + 1) : al::isEqualSubString(type, names)) || ...);
+	const char* type = typeid(*actor).name();
+	bool matched = false, excluded = false;
+	((names[0] == '!' ? excluded |= al::isEqualSubString(type, names + 1) : matched |= al::isEqualSubString(type, names)), ...);
+	return matched && !excluded;
+}
+
+// Check if has sensor type(s), each checked independently across all sensors
+template<typename... Fns>
+inline bool hasSensor(al::LiveActor* actor, Fns... checks) {
+	al::HitSensorKeeper* keeper = actor->getHitSensorKeeper();
+	auto any = [&](auto check) {
+		for (s32 i = 0; keeper && i < keeper->getSensorNum(); i++)
+			if (check(keeper->getSensor(i))) return true;
+		return false;
+	};
+	return (any(checks) && ...);
 }
 
 // =========================================================
@@ -392,8 +408,8 @@ inline bool isSpinAnim(PlayerAnimator* anim) {
 
 inline bool isPunchAnim(PlayerAnimator* anim) {
     if (!anim) return false;
-    return al::isEqualString(anim->mCurAnim, "KoopaCapPunchL")
-        || al::isEqualString(anim->mCurAnim, "KoopaCapPunchR")
+    return al::isEqualString(anim->mCurAnim, "PunchL")
+        || al::isEqualString(anim->mCurAnim, "PunchR")
         || al::isEqualString(anim->mCurAnim, "RabbitGet")
         || al::isEqualString(anim->mCurAnim, "Kick");
 }

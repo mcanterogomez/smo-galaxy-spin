@@ -8,16 +8,17 @@
 // Guard Mario against attacks
 inline bool isValidAttackTarget(al::HitSensor* target) {
     al::LiveActor* targetHost = al::getSensorHost(target);
-    return targetHost && targetHost != isHakoniwa;
+    return targetHost && !al::isSensorPlayerAll(target);
 }
 
-// Check if has sensor type
-inline bool hasSensor(al::LiveActor* actor, bool(*check)(const al::HitSensor*)) {
-	al::HitSensorKeeper* keeper = actor->getHitSensorKeeper();
-	for (s32 i = 0; keeper && i < keeper->getSensorNum(); i++) {
-		if (check(keeper->getSensor(i))) return true;
-	}
-	return false;
+// Check if HitImpact should play for this target/sensor pair
+inline bool isHitImpact(al::LiveActor* targetHost, al::HitSensor* target) {
+	if (isAnyType(targetHost, "CapRack")) return true;
+	if (isAnyType(targetHost, "Gunetter")) return false;
+	if (hasSensor(targetHost, al::isSensorMapObj)) return hasSensor(targetHost, al::isSensorCollision) && !hasSensor(targetHost, al::isSensorEnemyAttack);
+	al::HitSensor* body = al::getHitSensor(targetHost, "Body");
+	if (al::isSensorEnemy(target) && body) return target->getRadius() <= body->getRadius();
+	return true;
 }
 
 namespace AttackSensor {
@@ -38,15 +39,12 @@ namespace AttackSensor {
         static void Callback(PlayerActorHakoniwa* thisPtr, al::HitSensor* source, al::HitSensor* target) {
             if (!thisPtr || !source || !target) return;
 
-            if (!al::isSensorName(source, "GalaxySpin") && !al::isSensorName(source, "DoubleSpin")
-                && !al::isSensorName(source, "Punch") && !al::isSensorName(source, "HipDropKnockDown")) { Orig(thisPtr, source, target); return; }
-
             al::LiveActor* targetHost = al::getSensorHost(target);
-            if (!isValidAttackTarget(target) || al::isSensorName(target, "Brake")
-                || isType(targetHost, "KoopaCap", "KoopaCap")
-                || (isType(targetHost, "FireBall") && al::calcSpeedH(thisPtr) >= thisPtr->mConst->getDashFastBorderSpeed())) return;
+            bool isAttackSensor = al::isSensorName(source, "GalaxySpin") || al::isSensorName(source, "DoubleSpin") || al::isSensorName(source, "Punch") || al::isSensorName(source, "HipDropKnockDown");
 
-            if (isInHitBuffer(targetHost)) { Orig(thisPtr, source, target); return; }
+            if (!isAttackSensor || isInHitBuffer(targetHost)) { Orig(thisPtr, source, target); return; }
+            if (!isValidAttackTarget(target) || al::isSensorName(target, "Brake") || isType(targetHost, "KoopaCap", "KoopaCap")
+                || (isType(targetHost, "FireBall") && al::calcSpeedH(thisPtr) >= thisPtr->mConst->getDashFastBorderSpeed())) return;
 
             setupHitEffect(source, target);
             sead::Vector3f fireDir = getFireDir(thisPtr, targetHost);
@@ -120,17 +118,19 @@ namespace AttackSensor {
                     return;
                 }
                 if (thisPtr->mAnimator->isAnim("SpinLow")
-                    && (trySwoon(targetHost, false) || isAnyType(targetHost, "Ball", "Bomb", "Togezo"))
+                    && (trySwoon(targetHost, false) || isAnyType(targetHost, "Ball", "Bomb", "Togezo", "!Damage"))
                 ) {
                     bool isHit = trySendCapMsg(targetHost, source);
-                    if (isHit || trySwoon(targetHost, false)) {
+                    if (isHit || isType(targetHost, "FireBall") || trySwoon(targetHost, false)
+                    ) {
                         if (trySwoon(targetHost, false)) trySwoon(targetHost);
                         handleStacked(targetHost, target, source);
-                        if (!isHit) { sead::Vector3f bump = fireDir * 12.5f; if (al::isCollidedGround(targetHost)) bump -= al::getGravity(targetHost) * 25.0f; al::addVelocity(targetHost, bump); }
+                        if (!isHit && al::isCollidedGround(targetHost)
+                            && al::isExistAction(targetHost, "Walk")) al::addVelocity(targetHost, fireDir * 12.5f - al::getGravity(targetHost) * 25.0f);
                         hitBuffer[hitBufferCount++] = targetHost;
                         isHitEffect(thisPtr, targetHost);
+                        return;
                     }
-                    return;
                 }
                 bool isBlock = isAnyType(targetHost, "BlockHard", "Marching");
                 if (isBlock || isAnyType(targetHost, "Ball", "Board", "Bomb", "Break", "Bull", "Church", "Golem", "KickStone", "Moon", "Souvenir", "TreasureBox")
@@ -153,11 +153,12 @@ namespace AttackSensor {
                     || rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero)
                 ) {
                     hitBuffer[hitBufferCount++] = targetHost;
-                    if (hasSensor(targetHost, al::isSensorEnemyBody) && hasSensor(targetHost, al::isSensorEnemyAttack)) al::addVelocity(targetHost, fireDir * 25.0f);
-                    if (!hasSensor(targetHost, al::isSensorMapObj) || (hasSensor(targetHost, al::isSensorCollision) && !hasSensor(targetHost, al::isSensorEnemyAttack))) al::tryStartSe(thisPtr, "HitImpact");
+                    if (isHitImpact(targetHost, target)) al::tryStartSe(thisPtr, "HitImpact");
+                    if (al::isExistAction(targetHost, "BlowDown")) al::addVelocity(targetHost, fireDir * 25.0f);
                     return;
                 }
             }
+            Orig(thisPtr, source, target);
         }
     };
 
@@ -165,14 +166,11 @@ namespace AttackSensor {
         static void Callback(HammerBrosHammer* thisPtr, al::HitSensor* source, al::HitSensor* target) {
             if (!thisPtr || !source || !target) return;
 
-            if (!al::isNerve(isHakoniwa, &HammerNrv)
-                || !al::isSensorName(source, "AttackHack")) { Orig(thisPtr, source, target); return; }
-
             al::LiveActor* targetHost = al::getSensorHost(target);
-            if (!isValidAttackTarget(target) || al::isSensorName(target, "Brake")
-                || isType(targetHost, "KoopaCap", "KoopaCap")) return;
+            bool isAttackSensor = al::isNerve(isHakoniwa, &HammerNrv) && al::isSensorName(source, "AttackHack");
 
-            if (isInHitBuffer(targetHost)) { Orig(thisPtr, source, target); return; }
+            if (!isAttackSensor || isInHitBuffer(targetHost)) { Orig(thisPtr, source, target); return; }
+            if (!isValidAttackTarget(target) || al::isSensorName(target, "Brake") || isType(targetHost, "KoopaCap", "KoopaCap")) return;
 
             setupHitEffect(source, target);
             sead::Vector3f fireDir = getFireDir(thisPtr, targetHost);
@@ -180,7 +178,7 @@ namespace AttackSensor {
             rs::sendMsgPaint(target, source, paintClear, 300, 0);
 
             bool isBlock = isAnyType(targetHost, "BlockHard", "Marching");
-            if (isBlock || isAnyType(targetHost, "Ball", "Board", "Bomb", "Break", "Cactus", "Church", "Golem", "Koopa", "KickStone", "Moon", "Souvenir", "TreasureBox", "TRex", "Wanwan")
+            if (isBlock || isAnyType(targetHost, "Ball", "Board", "Bomb", "Break", "Cactus", "Church", "Golem", "Koopa", "KickStone", "Moon", "TreasureBox", "TRex", "Wanwan")
             ) {
                 if ((!isBlock || al::isSensorCollision(target))
                     && (rs::sendMsgSeedAttackBig(target, source) || rs::sendMsgWanwanReboundAttack(target, source)
@@ -196,9 +194,9 @@ namespace AttackSensor {
                     return;
                 } else if (isBlock) return;
             }
-            if (rs::sendMsgHackAttack(target, source) || al::sendMsgPlayerSpinAttack(target, source, nullptr)
-                || al::sendMsgPlayerHipDrop(target, source, nullptr) || al::sendMsgPlayerObjHipDrop(target, source, nullptr)
+            if (al::sendMsgPlayerHipDrop(target, source, nullptr) || al::sendMsgPlayerObjHipDrop(target, source, nullptr)
                 || al::sendMsgPlayerObjHipDropReflect(target, source, nullptr) || rs::sendMsgPlayerHipDropHipDropSwitch(target, source)
+                || rs::sendMsgHackAttack(target, source) || al::sendMsgPlayerSpinAttack(target, source, nullptr)
                 || rs::sendMsgCapReflect(target, source) || rs::sendMsgCapReflectCollide(target, source)
                 || rs::sendMsgCapAttack(target, source) || rs::sendMsgCapAttackCollide(target, source)
                 || rs::sendMsgByugoBlow(target, source, sead::Vector3f::zero)
@@ -206,6 +204,7 @@ namespace AttackSensor {
                 hitBuffer[hitBufferCount++] = targetHost;
                 return;
             }
+            Orig(thisPtr, source, target);
         }
     };
 
@@ -213,13 +212,11 @@ namespace AttackSensor {
         static void Callback(FireBrosFireBall* thisPtr, al::HitSensor* source, al::HitSensor* target) {
             if (!thisPtr || !source || !target) return;
 
-            if (!al::isSensorName(source, "AttackHack")
-                || !al::isEqualString(thisPtr->getName(), "MarioIceBall")) { Orig(thisPtr, source, target); return; }
-
             al::LiveActor* targetHost = al::getSensorHost(target);
-            if (!isValidAttackTarget(target) || al::isEqualString(targetHost->getName(), "MarioIceBall")) return;
+            bool isAttackSensor = al::isSensorName(source, "AttackHack") && al::isEqualString(thisPtr->getName(), "MarioIceBall");
 
-            if (isInHitBuffer(targetHost)) { Orig(thisPtr, source, target); return; }
+            if (!isAttackSensor || isInHitBuffer(targetHost)) { Orig(thisPtr, source, target); return; }
+            if (!isValidAttackTarget(target) || al::isEqualString(targetHost->getName(), "MarioIceBall")) return;
 
             sead::Vector3f sourcePos = al::getSensorPos(source);
 
@@ -248,6 +245,7 @@ namespace AttackSensor {
                 thisPtr->kill();
                 return;
             }
+            Orig(thisPtr, source, target);
         }
     };
 
@@ -322,8 +320,8 @@ namespace AttackSensor {
             PlayerAttackSensorHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa12attackSensorEPN2al9HitSensorES2_");
         #endif
         HammerAttackSensorHook::InstallAtSymbol("_ZN16HammerBrosHammer12attackSensorEPN2al9HitSensorES2_");
-        FireballAttackSensorInline::InstallAtOffset(0x100E70);
         FireballAttackSensorHook::InstallAtSymbol("_ZN16FireBrosFireBall12attackSensorEPN2al9HitSensorES2_");
+        FireballAttackSensorInline::InstallAtOffset(0x100E70);
         TankBulletAttackSensorInline::InstallAtOffset(0x189C7C);
         MotorcycleAttackSensorInline::InstallAtOffset(0x2C77EC);
     }

@@ -11,7 +11,7 @@ inline void applyLunge(PlayerActorHakoniwa* player, float launchFrame, float spe
 	rs::calcGroundNormalOrUpDir(&normal, player, player->mCollider);
 	sead::Vector3f vel = al::getVelocity(player);
 
-	if (frame == launchFrame) {
+	if (frame - player->mAnimator->getAnimFrameRate() < launchFrame) {
 		vel *= 0.5f;
 		sead::Vector3f fwd;
 		al::calcQuatFront(&fwd, player);
@@ -133,14 +133,14 @@ public:
 
                     if (isKoopa && KoopaBattle::isKillReady(isKoopa)) state->mAnimator->startAnim(isPunchRight ? "JumpPunchEndR" : "JumpPunchEndL");
                     else {
-                        state->mAnimator->startSubAnim(isPunchRight ? "KoopaCapPunchRStart" : "KoopaCapPunchLStart");
-                        state->mAnimator->startAnim(isPunchRight ? "KoopaCapPunchR" : "KoopaCapPunchL");
+                        state->mAnimator->startSubAnim(isPunchRight ? "PunchR" : "PunchL");
+                        state->mAnimator->startAnim(isPunchRight ? "PunchR" : "PunchL");
                     }
                 }
             }
         }
 
-        bool isPunch = state->mAnimator->isAnim("KoopaCapPunchR") || state->mAnimator->isAnim("KoopaCapPunchL");
+        bool isPunch = state->mAnimator->isAnim("PunchR") || state->mAnimator->isAnim("PunchL");
         bool isLow = state->mAnimator->isAnim("SpinLow");
         bool isJumpPunch = state->mAnimator->isAnim("JumpPunchL") || state->mAnimator->isAnim("JumpPunchR");
         bool isBowserPunch = state->mAnimator->isAnim("JumpPunchEndL") || state->mAnimator->isAnim("JumpPunchEndR");
@@ -152,13 +152,13 @@ public:
                 state->mAnimator->startAnim(isPunchRight ? "JumpPunchL" : "JumpPunchR");
                 return;
             }
-            if (isFrame >= state->mAnimator->getAnimFrameMax() - 5.0f && isPadTriggerGalaxySpin(-1)) { // cancel with punch
+            if (isFrame >= state->mAnimator->getAnimFrameMax() - 8.0f && isPadTriggerGalaxySpin(-1)) { // cancel with punch
                 hitBufferCount = 0;
                 al::setNerve(state, &GalaxySpinGround);
                 return;
             }
-            applyLunge(player, 2.0f, 5.0f);
-            if (isFrame == 5.0f) { al::validateHitSensor(state->mActor, "Punch"); attackSensorRemaining = 10; }
+            applyLunge(player, 5.0f, 5.0f);
+            if (isFrame == 6.0f) { al::validateHitSensor(state->mActor, "Punch"); attackSensorRemaining = 6; }
         }
         else if (isJumpPunch) {
             if (isFrame < 17.0f) { // decay jump punch
@@ -270,9 +270,8 @@ public:
         auto* player = keeper->getParent<PlayerActorHakoniwa>();
         auto* anim = player->mAnimator;
 
-        al::setVelocity(player, sead::Vector3f::zero);
-
         if (al::isFirstStep(player)) {
+            //al::setVelocity(player, sead::Vector3f::zero);
             anim->endSubAnim();
 
             if (isFire || isIce || isBrawl) anim->startAnim("WearEndBrawl");
@@ -293,9 +292,8 @@ public:
         auto* cape = al::tryGetSubActor(model, "ケープ");
         auto* effect = static_cast<al::IUseEffectKeeper*>(model);
 
-        al::setVelocity(player, sead::Vector3f::zero);
-
         if (al::isFirstStep(player)) {
+            //al::setVelocity(player, sead::Vector3f::zero);
             anim->endSubAnim();
 
             if (isMarioActive == 1) anim->startAnim("TauntSuper");

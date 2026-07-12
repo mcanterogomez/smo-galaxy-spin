@@ -244,10 +244,17 @@ namespace PlayerCore {
             // Change face animations
             al::LiveActor* face = al::tryGetSubActor(model, "顔");
             if (face) {
-                if ((thisPtr->mAnimator->isAnim("BattleWait") || isBrawl || isSuper)
-                    && !al::isActionPlayingSubActor(model, "顔", "WaitAngry")) al::startActionSubActor(model, "顔", "WaitAngry");
-                if (isMetal
-                    && !al::isActionPlayingSubActor(model, "顔", "AreaWaitFight")) al::startActionSubActor(model, "顔", "AreaWaitFight");
+                bool isWater = !thisPtr->mWaterSurfaceFinder->isFoundSurface() && al::isInWater(thisPtr);
+                const char* actionName = al::getActionName(face);
+
+                if (isWater && (!al::isEqualSubString(actionName, "Swim") || al::isEqualSubString(actionName, "Spin")))
+                    al::startActionSubActor(model, "顔", "SwimStand");
+
+                if ((thisPtr->mAnimator->isAnim("BattleWait") || isBrawl || isSuper) && !al::isActionPlayingSubActor(model, "顔", "WaitAngry"))
+                    al::startActionSubActor(model, "顔", "WaitAngry");
+
+                if (isMetal && !al::isActionPlayingSubActor(model, "顔", "AreaWaitFight"))
+                    al::startActionSubActor(model, "顔", "AreaWaitFight");
             }
 
             #ifdef ALLOW_TAUNT // Handle Taunt actions
@@ -291,7 +298,7 @@ namespace PlayerCore {
                 auto* anim = thisPtr->mAnimator;
                 const float frame = anim->getAnimFrame();
 
-                if ((al::isEqualSubString(anim->mCurAnim, "CapPunch")  && frame <= 5.0f) || (al::isEqualSubString(anim->mCurAnim, "JumpPunch") && frame <= 17.0f)) return false;
+                if ((al::isEqualSubString(anim->mCurAnim, "Punch")  && frame <= 6.0f) || (al::isEqualSubString(anim->mCurAnim, "JumpPunch") && frame <= 17.0f)) return false;
                 if (isHipDropAnim(anim) || isMetal || isSuper) return false;
                 if (source && al::isEqualString(al::getSensorHost(source)->getName(), "MarioTankBullet")) return false;
             }
@@ -307,18 +314,14 @@ namespace PlayerCore {
         }
     };
 
-    struct EmitEffectHook : public mallow::hook::Trampoline<EmitEffectHook> {
-        static void Callback(al::IUseEffectKeeper* keeper, const char* name, const sead::Vector3f* pos) {
+    struct EmitEmittersHook : public mallow::hook::Trampoline<EmitEmittersHook> {
+        static bool Callback(al::Effect* effect, const sead::Vector3f* pos, bool useCurrentPos) {
+            const char* name = *reinterpret_cast<const char**>(effect);
             if (al::isEqualSubString(name, "Hit")) isEffect = true;
-            Orig(keeper, name, pos);
-        }
-    };
 
-    struct TryEmitEffectHook : public mallow::hook::Trampoline<TryEmitEffectHook> {
-        static bool Callback(al::IUseEffectKeeper* keeper, const char* name, const sead::Vector3f* pos) {
             if (isConfig()->galaxySfx && al::isEqualString(name, "SpinCapStart2Right")
                 && isHakoniwa && al::isEqualSubString(isHakoniwa->mAnimator->mCurAnim, "SpinSeparate")) return false;
-            return Orig(keeper, name, pos);
+            return Orig(effect, pos, useCurrentPos);
         }
     };
 
@@ -340,14 +343,12 @@ namespace PlayerCore {
         // Initialize player actor
         PlayerActorHakoniwaInitPlayer::InstallAtSymbol("_ZN19PlayerActorHakoniwa10initPlayerERKN2al13ActorInitInfoERK14PlayerInitInfo");
         PlayerActorHakoniwaInitAfterPlacement::InstallAtSymbol("_ZN19PlayerActorHakoniwa18initAfterPlacementEv");
-
         // Handles control/movement
         PlayerMovementHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa8movementEv");
         PlayerActorHakoniwaReceiveMsgHook::InstallAtSymbol("_ZN19PlayerActorHakoniwa10receiveMsgEPKN2al9SensorMsgEPNS0_9HitSensorES5_");
-
+        // Handles effect logic
         EndSubAnimGuard::InstallAtSymbol("_ZN14PlayerAnimator10endSubAnimEv");
-        EmitEffectHook ::InstallAtSymbol("_ZN2al10emitEffectEPNS_16IUseEffectKeeperEPKcPKN4sead7Vector3IfEE");
-        TryEmitEffectHook::InstallAtSymbol("_ZN2al13tryEmitEffectEPNS_16IUseEffectKeeperEPKcPKN4sead7Vector3IfEE");
+        EmitEmittersHook::InstallAtSymbol("_ZN2al6Effect15tryEmitEmittersEPKN4sead7Vector3IfEEb");
         EffectHitReactionLimitHook::InstallAtOffset(0xA5B938);
     }
 }
