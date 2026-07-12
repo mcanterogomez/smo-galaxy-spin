@@ -309,6 +309,12 @@ inline bool isInHitBuffer(al::LiveActor* actor) {
     return false;
 }
 
+// Guard Mario against attacks
+inline bool isValidAttackTarget(al::HitSensor* target) {
+    al::LiveActor* targetHost = al::getSensorHost(target);
+    return targetHost && !al::isSensorPlayerAll(target);
+}
+
 // Validate/invalidate a hit sensor and reset the hit buffer on activation
 inline void updateAttackSensor(al::LiveActor* actor, const char* name, bool active, bool& was) {
     if (active && !was) { al::validateHitSensor(actor, name); hitBufferCount = 0; }

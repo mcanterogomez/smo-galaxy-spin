@@ -1,5 +1,4 @@
 #include "custom/KoopaBattle.h"
-#include "custom/PlayerKart.h"
 #include "custom/PowerUps.h"
 
 #include "custom/AttackSensor.h"
@@ -44,7 +43,6 @@ extern "C" void userMain() {
     AttackSensor::Install();
     CustomAnimation::Install();
     KoopaBattle::Install();
-    PlayerKart::Install();
 
     #ifdef ALLOW_POWERUPS
         PowerUps::Install();

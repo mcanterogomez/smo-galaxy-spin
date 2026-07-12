@@ -5,12 +5,6 @@
 #include "custom/PlayerFreeze.h"
 #include "headers/PlayerIceCube.h"
 
-// Guard Mario against attacks
-inline bool isValidAttackTarget(al::HitSensor* target) {
-    al::LiveActor* targetHost = al::getSensorHost(target);
-    return targetHost && !al::isSensorPlayerAll(target);
-}
-
 // Check if HitImpact should play for this target/sensor pair
 inline bool isHitImpact(al::LiveActor* targetHost, al::HitSensor* target) {
 	if (isAnyType(targetHost, "CapRack")) return true;
@@ -298,22 +292,6 @@ namespace AttackSensor {
         }
     };
 
-    struct MotorcycleAttackSensorInline : public mallow::hook::Inline<MotorcycleAttackSensorInline> {
-        static void Callback(exl::hook::InlineCtx* ctx) {
-            auto* source = reinterpret_cast<al::HitSensor*>(ctx->X[19]);
-            auto* target = reinterpret_cast<al::HitSensor*>(ctx->X[20]);
-
-            if (!isValidAttackTarget(target)) return;
-
-            rs::sendMsgCapAttack(target, source)
-            || rs::sendMsgSphinxRideAttack(target, source)
-            || rs::sendMsgSphinxRideAttackReflect(target, source)
-            || rs::sendMsgHackAttack(target, source)
-            || rs::sendMsgBullHackAttack(target, source)
-            || rs::sendMsgKoopaCapPunchL(target, source);
-        }
-    };
-
     inline void Install() {
         #ifndef ALLOW_CAPPY_ONLY
             HackCapAttackSensorHook::InstallAtSymbol("_ZN7HackCap12attackSensorEPN2al9HitSensorES2_");
@@ -323,6 +301,5 @@ namespace AttackSensor {
         FireballAttackSensorHook::InstallAtSymbol("_ZN16FireBrosFireBall12attackSensorEPN2al9HitSensorES2_");
         FireballAttackSensorInline::InstallAtOffset(0x100E70);
         TankBulletAttackSensorInline::InstallAtOffset(0x189C7C);
-        MotorcycleAttackSensorInline::InstallAtOffset(0x2C77EC);
     }
 }

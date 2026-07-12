@@ -1,6 +1,7 @@
 cmake-build-*/
 build/
-build-alt/
+build-kart/
+build-ui/
 tools/clang/
 tools/curl/
 tools/tmp/

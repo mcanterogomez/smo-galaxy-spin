@@ -4,7 +4,6 @@
 #include "custom/_Nerves.h"
 #include "custom/PowerUps.h"
 #include "custom/PlayerFreeze.h"
-#include "custom/PlayerKart.h"
 
 inline bool detectIsMario(const char* costume, const char* cap) {
     return (costume && al::isEqualString(costume, "Mario"))
@@ -54,17 +53,13 @@ namespace PlayerCore {
 
                 PowerUps::executeInitPlayer(thisPtr, actorInfo, playerInfo);
             #endif
-
-            PlayerKart::executeInitPlayer(thisPtr, actorInfo, playerInfo);
         }
     };
 
     struct PlayerActorHakoniwaInitAfterPlacement : public mallow::hook::Trampoline<PlayerActorHakoniwaInitAfterPlacement> {
         static void Callback(PlayerActorHakoniwa* thisPtr) {
             Orig(thisPtr);
-
             PowerUps::executeInitAfterPlacement();
-            PlayerKart::executeInitAfterPlacement();            
         }
     };
 
@@ -75,7 +70,6 @@ namespace PlayerCore {
             #ifdef ALLOW_POWERUPS
                 PowerUps::executeMovement(thisPtr);
             #endif
-            PlayerKart::executeMovement(thisPtr);
             auto* model  = thisPtr->mModelHolder->findModelActor("Normal");
 
             // Toggle configs

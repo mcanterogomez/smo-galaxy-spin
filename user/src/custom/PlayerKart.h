@@ -76,26 +76,30 @@ namespace PlayerKart {
 
     struct MotorcycleMovementHook : public mallow::hook::Trampoline<MotorcycleMovementHook> {
         static void Callback(al::LiveActor* actor) {
-            if (typeid(*actor) != typeid(Motorcycle) || !al::isAlive(actor)) { Orig(actor); return; }
+            if (actor != (al::LiveActor*)isKart || !al::isAlive(actor)) { Orig(actor); return; }
 
             auto* kart = static_cast<Motorcycle*>(actor);
             auto* collider = static_cast<IUsePlayerCollision*>(kart);
-            static bool isHover = false;
+            static bool isHovering = false;
 
+            // Are we currently over something that forces hover mode?
             bool isHazard = isKartSubmerged(kart) || rs::isCollisionCodeDamageFireGround(collider) || rs::isCollisionCodePoisonTouch(collider);
-            bool isNormalGround = rs::isOnGround(kart, kart) && !isHazard;
+            bool isSafeGround = rs::isOnGround(kart, kart) && !isHazard;
 
             if (isHazard) isAntiGravity = true;
-            else if (isNormalGround) isAntiGravity = false;
+            else if (isSafeGround) isAntiGravity = false;
 
-            if (isAntiGravity && !isHover) { al::tryStartSe(kart, "HoverStart"); isHover = true; }
-            else if (!isAntiGravity && isHover) { al::tryStartSe(kart, "HoverFinish"); isHover = false; }
+            // Play hover SE once on each state change, not every frame
+            if (isAntiGravity && !isHovering) { al::tryStartSe(kart, "HoverStart"); isHovering = true; }
+            else if (!isAntiGravity && isHovering) { al::tryStartSe(kart, "HoverFinish"); isHovering = false; }
 
+            // Tilt wheels up while hovering, back down otherwise
             float targetL = isAntiGravity ? -90.0f : 0.0f;
             float targetR = isAntiGravity ? 90.0f : 0.0f;
             wheelFlipL = al::lerpValue(wheelFlipL, targetL, 0.08f);
             wheelFlipR = al::lerpValue(wheelFlipR, targetR, 0.08f);
 
+            // While hovering, land/run should look like swimming instead
             const char* actionName = al::getActionName(kart);
             if (isAntiGravity && !al::isEqualSubString(actionName, "Swim")) {
                 if (al::isEqualSubString(actionName, "Land")) al::tryStartAction(kart, "SwimLand");
@@ -108,7 +112,7 @@ namespace PlayerKart {
 
     struct CalcAnimHook : public mallow::hook::Trampoline<CalcAnimHook> {
         static void Callback(al::LiveActor* actor) {
-            if (typeid(*actor) != typeid(Motorcycle) || !al::isAlive(actor)) { Orig(actor); return; }
+            if (actor != (al::LiveActor*)isKart || !al::isAlive(actor)) { Orig(actor); return; }
 
             auto* kart = static_cast<Motorcycle*>(actor);
 
