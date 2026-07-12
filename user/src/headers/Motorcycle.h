@@ -14,9 +14,9 @@ public:
     virtual void movement() override;
     virtual void calcAnim() override;
     virtual void updateCollider() override;
-    
+
     virtual PlayerCollider* getPlayerCollider() const override;
-    
+
     void exeWait();
     void exeCreep();
     void exeJump();
@@ -47,6 +47,11 @@ public:
     void exeRideRunWheelie();
     void endRideRunWheelie();
 
+    char gap0[0x138 - sizeof(al::LiveActor) - sizeof(IUsePlayerCollision)];
+    f32 mLean; // AllRoot Z-rotation input; al::initJointLocalZRotator(this, &mLean, "AllRoot") in Motorcycle::init, written each frame in exeRideRun
+
 private:
-    char size[0x250 - sizeof(al::LiveActor)];
+    char gap1[0x258 - 0x138 - sizeof(f32)];
 };
+
+static_assert(sizeof(Motorcycle) == 0x258, "Motorcycle Size");

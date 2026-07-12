@@ -219,6 +219,7 @@ bool isJumpPunchActive = false;
 bool isDoubleJump = false;
 bool isDoubleJumpConsume = false;
 bool isSuperRunningOnSurface = false;
+bool isAntiGravity = false;
 
 // Proximity flags
 bool isNearCollectible = false;
@@ -261,9 +262,11 @@ int isMarioActive = 0; // 0 = none, 1 = enabling, -1 = disabling
 
 bool isActionBusy() { return fireStep >= 0 || drillStep >= 0; }
 
-// Glide
-float glideLean = 0.0f;
-float glidePitch = 0.0f;
+// Joints
+inline float glideLean = 0.0f;
+inline float glidePitch = 0.0f;
+inline float wheelFlipL = 0.0f;
+inline float wheelFlipR = 0.0f;
 
 // Constants
 const f32 MIN_SPEED_RUN_ON_WATER = 15.0f;
