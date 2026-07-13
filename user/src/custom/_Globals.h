@@ -267,6 +267,9 @@ inline float glideLean = 0.0f;
 inline float glidePitch = 0.0f;
 inline float wheelFlipL = 0.0f;
 inline float wheelFlipR = 0.0f;
+inline float propellerSpin = 0.0f;
+inline float propellerSpeed = 0.0f;
+inline sead::Vector3f propellerScale = {0.0f, 0.0f, 0.0f};
 
 // Constants
 const f32 MIN_SPEED_RUN_ON_WATER = 15.0f;
