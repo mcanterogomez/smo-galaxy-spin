@@ -256,10 +256,8 @@ namespace AttackSensor {
 
             setupHitEffect(source, target);
 
-            if (!ctx->W[0] && (rs::sendMsgCapAttack(target, source)
-                || al::sendMsgExplosion(target, source, nullptr)
-                || al::sendMsgKickStoneAttackReflect(target, source)
-                || rs::sendMsgBullHackAttack(target, source)
+            if (!ctx->W[0] && (rs::sendMsgHackAttack(target, source) || al::sendMsgExplosion(target, source, nullptr)
+                || al::sendMsgKickStoneAttackReflect(target, source) || rs::sendMsgBullHackAttack(target, source)
                 || rs::sendMsgKoopaCapPunchL(target, source))
             ) {
                 ctx->W[0] = true;
@@ -281,12 +279,9 @@ namespace AttackSensor {
             rs::sendMsgSeedAttackBig(target, source);
 
             ctx->W[0] = ctx->W[0]
-                || al::sendMsgPlayerFireBallAttack(target, source)
-                || rs::sendMsgCapAttack(target, source)
-                || al::sendMsgKickStoneAttackReflect(target, source)
-                || rs::sendMsgBullHackAttack(target, source)
-                || rs::sendMsgKoopaCapPunchL(target, source)
-                || rs::sendMsgKoopaHackPunch(target, source);
+                || al::sendMsgPlayerFireBallAttack(target, source) || rs::sendMsgHackAttack(target, source)
+                || al::sendMsgKickStoneAttackReflect(target, source) || rs::sendMsgBullHackAttack(target, source)
+                || rs::sendMsgKoopaCapPunchL(target, source) || rs::sendMsgKoopaHackPunch(target, source);
 
             rs::sendMsgWeaponItemGet(target, source);
         }
